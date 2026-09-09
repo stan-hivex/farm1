@@ -1,0 +1,727 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '/backend/services/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+// Removed unused import
+import '/flutter_flow/flutter_flow_icon_button.dart';
+import '/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
+import '/components/kyc_required_widget.dart';
+
+class DepositpageWidget extends StatefulWidget {
+  const DepositpageWidget({super.key});
+
+  static String routeName = 'DepositPage';
+  static String routePath = '/depositpage';
+
+  @override
+  State<DepositpageWidget> createState() => _DepositpageWidgetState();
+}
+
+class _DepositpageWidgetState extends State<DepositpageWidget> {
+  final scaffoldKey = GlobalKey<ScaffoldState>();
+  final TextEditingController amountController = TextEditingController();
+
+  String selectedCurrency = 'KES';
+  String selectedMethod = 'CARD'; // CARD | MOBILE_MONEY | CRYPTO
+
+  bool isLoading = false;
+  bool loadingWallet = true;
+
+  double walletBalance = 0;
+  List<dynamic> recentDeposits = [];
+
+  // Deposit fees are disabled. The amount entered by the user is the amount credited.
+  final Map<String, double> _feeRates = {
+    'CARD': 0.0,
+    'BANK_TRANSFER': 0.0,
+    'MOBILE_MONEY': 0.0,
+    'CRYPTO': 0.0,
+  };
+
+  final Map<String, Map<String, double?>> _depositLimits = {
+    'CARD': {'min': 10, 'max': 19999},
+    'BANK_TRANSFER': {'min': 10, 'max': 999999},
+    'MOBILE_MONEY': {'min': 10, 'max': 249000},
+    'CRYPTO': {'min': 100, 'max': null},
+  };
+
+  double get amount => double.tryParse(amountController.text.trim()) ?? 0;
+  double get feeRate => _feeRates[selectedMethod] ?? 0.02;
+  double get fee => amount * feeRate;
+  double get total => amount + fee;
+
+  Map<String, double?> get _activeDepositLimits =>
+      _depositLimits[selectedMethod] ?? _depositLimits['CARD']!;
+  double get _activeDepositMin => _activeDepositLimits['min'] ?? 10;
+  double? get _activeDepositMax => _activeDepositLimits['max'];
+  bool get _hasValidDepositAmount =>
+      amount > 0 &&
+      amount >= _activeDepositMin &&
+      (_activeDepositMax == null || amount <= _activeDepositMax!);
+  String _formatAmount(double value) {
+    final formatter = NumberFormat('#,##0', 'en_US');
+    return formatter.format(value);
+  }
+
+  String get _depositValidationMessage {
+    if (amount <= 0) {
+      return 'Range: KES ${_formatAmount(_activeDepositMin)}${_activeDepositMax == null ? '+' : ' - KES ${_formatAmount(_activeDepositMax!)}'}';
+    }
+    if (_hasValidDepositAmount) {
+      return 'Range: KES ${_formatAmount(_activeDepositMin)}${_activeDepositMax == null ? '+' : ' - KES ${_formatAmount(_activeDepositMax!)}'}';
+    }
+    final maxText = _activeDepositMax == null
+        ? ' and above'
+        : ' and KES ${_formatAmount(_activeDepositMax!)}';
+    return 'Amount must be between KES ${_formatAmount(_activeDepositMin)}$maxText';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchWallet();
+    _fetchHistory();
+  }
+
+  @override
+  void dispose() {
+    amountController.dispose();
+    super.dispose();
+  }
+
+  bool get isKycApproved {
+    final status = FFAppState().kycStatus.trim().toLowerCase();
+    return ['verified', 'approved', 'complete', 'success'].contains(status);
+  }
+
+  // ── Fetch wallet balance ─────────────────────────────────────────────────────────────────
+  Future<void> _fetchWallet() async {
+    try {
+      final resp = await ApiService.getWallet();
+      if (!mounted) return;
+      final data = resp['data'] as Map<String, dynamic>? ?? resp;
+      final bal = (data['balance'] ?? data['available_balance'] ?? 0).toString();
+      setState(() => walletBalance = double.tryParse(bal) ?? 0);
+    } catch (e) {
+      debugPrint('fetchWallet error: $e');
+    } finally {
+      if (mounted) setState(() => loadingWallet = false);
+    }
+  }
+
+  // ── Fetch deposit history ────────────────────────────────────────────────
+  Future<void> _fetchHistory() async {
+    try {
+      final resp = await ApiService.getDepositHistory();
+      if (!mounted) return;
+      final items = resp['data'] is List ? resp['data'] as List : [];
+      setState(() => recentDeposits = items);
+    } catch (e) {
+      debugPrint('fetchHistory error: $e');
+    }
+  }
+
+  // ── Create deposit (Paystack for CARD/MOBILE_MONEY, Ivorypay for CRYPTO) ─
+  Future<void> _createDeposit() async {
+    if (isLoading) return;
+
+    if (!_hasValidDepositAmount) {
+      _snack(_depositValidationMessage);
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+        final paymentMethodRaw = selectedMethod == 'CARD'
+          ? 'card'
+          : selectedMethod == 'BANK_TRANSFER'
+              ? 'bank_transfer'
+              : selectedMethod == 'MOBILE_MONEY'
+                  ? 'mobile_money'
+                  : 'crypto';
+
+      final body = {
+        'amount_fiat': amount,
+        'currency': selectedCurrency,
+        'paymentMethod': selectedMethod,
+        'payment_method': paymentMethodRaw,
+        'method': paymentMethodRaw,
+        'payment_channel': paymentMethodRaw,
+        'payment_provider':
+            selectedMethod == 'CRYPTO' ? 'ivorypay' : 'paystack',
+        'provider': selectedMethod == 'CRYPTO' ? 'ivorypay' : 'paystack',
+      };
+
+      if (selectedMethod == 'MOBILE_MONEY' && FFAppState().phone.isNotEmpty) {
+        body['phone'] = FFAppState().phone;
+      }
+
+      final path = selectedMethod == 'CRYPTO' ? '/crypto/deposit' : '/deposit/create';
+
+      if (!mounted) return;
+
+      final data = await ApiService.request(
+        method: 'POST',
+        path: path,
+        body: body,
+        requiresAuth: true,
+      );
+
+      if (!mounted) return;
+
+      // ApiService.request returns a non-null map on success; handle unexpected types elsewhere.
+
+      final paymentUrl = (data['authorization_url'] ??
+              data['payment_url'] ??
+              data['data']?['authorization_url'] ??
+              data['data']?['payment_url'])
+          ?.toString();
+      final farmAmount = data['data']?['amount_farm'];
+      final depositRef = data['data']?['reference'] ??
+          data['data']?['transaction_reference'] ??
+          data['reference'] ??
+          data['transaction_reference'];
+
+      if (paymentUrl != null) {
+        // Launch Paystack / Ivorypay payment page in browser
+        final uri = Uri.parse(paymentUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        _snack(
+          'Complete payment in browser.\n'
+          '~$farmAmount FARM will credit after confirmation.',
+        );
+
+        // Poll with timeout and handle all statuses: completed, failed, cancelled
+        int pollAttempts = 0;
+        const maxAttempts = 60; // ~10 minutes (60 * 10 seconds)
+
+        Timer.periodic(const Duration(seconds: 10), (timer) async {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+
+          pollAttempts++;
+
+          // Timeout after 10 minutes
+          if (pollAttempts > maxAttempts) {
+            timer.cancel();
+            if (mounted) {
+              _snack(
+                'Payment verification timed out. '
+                'Please check your transaction status on the dashboard.',
+              );
+            }
+            return;
+          }
+
+          await _fetchHistory();
+          await _fetchWallet();
+
+          // Find the specific deposit by reference if available
+          Map<String, dynamic>? targetDeposit;
+          if (depositRef != null) {
+            targetDeposit = recentDeposits.firstWhere(
+              (d) =>
+                  d['reference'] == depositRef ||
+                  d['transaction_reference'] == depositRef,
+              orElse: () => {},
+            );
+            if ((targetDeposit?.isEmpty ?? false)) targetDeposit = null;
+          }
+
+          // Fallback to latest if no specific reference found
+          final deposit = targetDeposit ??
+              (recentDeposits.isNotEmpty ? recentDeposits.first : null);
+
+          if (deposit != null) {
+            final status = (deposit['status'] ?? '').toString().toLowerCase();
+
+            // Accept backend `SUCCESS`/`success` as completed as well as legacy `completed`
+            if (status == 'completed' || status == 'success') {
+              timer.cancel();
+              if (mounted && FFAppState().accessToken.isNotEmpty) {
+                _snack('Payment confirmed! Redirecting to dashboard...');
+                Future.delayed(const Duration(milliseconds: 1500), () {
+                  if (mounted) context.go('/dashboard');
+                });
+              }
+            } else if (status == 'failed' ||
+                status == 'cancelled' ||
+                status == 'error') {
+              timer.cancel();
+              if (mounted) {
+                _snack(
+                  'Payment ${status == 'cancelled' ? 'cancelled' : 'failed'}. '
+                  'No funds were deducted. Please try again.',
+                );
+
+                // Refresh history and wallet to reflect backend state. Do not call a
+                // non-existent DELETE endpoint; backend controls lifecycle.
+                await _fetchHistory();
+                await _fetchWallet();
+              }
+            }
+          }
+        });
+      } else {
+        _snack(
+          data['message'] ?? data['error']?.toString() ?? 'Deposit failed. Please try again.',
+        );
+      }
+
+      amountController.clear();
+    } catch (e) {
+      if (mounted) _snack('Network error: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  String _depositMethodLabel(
+    Map<String, dynamic> deposit,
+    Map<String, dynamic> metadata,
+  ) {
+    final rawMethod = metadata['method'] ??
+        deposit['paymentMethod'] ??
+        deposit['payment_method'] ??
+        metadata['payment_method'] ??
+        deposit['payment_channel'] ??
+        deposit['payment_provider'] ??
+        metadata['provider'] ??
+        deposit['provider'];
+    final method = rawMethod?.toString().toLowerCase() ?? '';
+
+    if (method.contains('crypto') || method.contains('ivory')) {
+      return 'CRYPTO';
+    }
+    if (method.contains('mobile')) return 'MOBILE MONEY';
+    if (method.contains('bank') && method.contains('transfer')) {
+      return 'BANK TRANSFER';
+    }
+    if (method.contains('card') || method.contains('paystack')) {
+      return 'BANK CARD';
+    }
+    return method.isEmpty ? 'METHOD UNAVAILABLE' : method.toUpperCase();
+  }
+
+  String _depositDateLabel(Map<String, dynamic> deposit) {
+    final rawDate = deposit['created_at'] ??
+        deposit['createdAt'] ??
+        deposit['deposited_at'] ??
+        deposit['timestamp'] ??
+        deposit['date'];
+    final parsedDate = DateTime.tryParse(rawDate?.toString() ?? '');
+    if (parsedDate == null) return 'Date unavailable';
+    return DateFormat('dd MMM yyyy, h:mm a').format(parsedDate.toLocal());
+  }
+
+  String _depositAmountLabel(
+    Map<String, dynamic> deposit,
+    Map<String, dynamic> metadata,
+  ) {
+    final method = _depositMethodLabel(deposit, metadata);
+    final farmAmount = deposit['amount_farm'] ?? metadata['amount_farm'];
+    final usdAmount = deposit['amount_usd'] ?? metadata['amount_usd'];
+    final usdToFarmRate =
+      deposit['usd_to_farm_rate'] ?? metadata['usd_to_farm_rate'];
+
+    if (method == 'CRYPTO' && farmAmount != null && usdAmount != null) {
+      final rateText = usdToFarmRate == null
+        ? ''
+        : ' (1 USD = ${_formatDepositNumber(usdToFarmRate)} FARM)';
+      return 'USD ${_formatDepositNumber(usdAmount)} = '
+        '${_formatDepositNumber(farmAmount)} FARM$rateText';
+    }
+
+    final currency = metadata['currency_fiat'] ?? deposit['currency'] ?? 'KES';
+    final fiatAmount = metadata['amount_fiat'] ?? deposit['amount'];
+    return '$currency ${_formatDepositNumber(fiatAmount)} ≈ '
+        '${_formatDepositNumber(farmAmount ?? deposit['amount'])} FARM';
+  }
+
+  String _formatDepositNumber(Object? value) {
+    final number = double.tryParse(value?.toString() ?? '');
+    if (number == null) return value?.toString() ?? '0';
+    return number.toStringAsFixed(number == number.roundToDouble() ? 0 : 2);
+  }
+
+  // ── Payment method card ──────────────────────────────────────────────────
+  Widget _methodCard(
+    BuildContext context, {
+    required String method,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final theme = FlutterFlowTheme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selected = selectedMethod == method;
+    final cardBackground = selected
+        ? (isDark ? const Color(0xFF1F1F1F) : Colors.black)
+        : theme.secondaryBackground;
+    final cardBorder = selected
+        ? (isDark ? const Color(0xFF2A2A2A) : Colors.black)
+        : theme.secondaryText.withAlpha(90);
+    final textColor = selected ? Colors.white : theme.primaryText;
+    final subtitleColor = selected ? Colors.white70 : theme.secondaryText;
+
+    return GestureDetector(
+      onTap: () => setState(() => selectedMethod = method),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: cardBackground,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: cardBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: textColor),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: GoogleFonts.plusJakartaSans(
+                        color: textColor,
+                        fontWeight: FontWeight.bold,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(subtitle,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: subtitleColor,
+                      )),
+                ],
+              ),
+            ),
+            if (selected) Icon(Icons.check_circle, color: Colors.white),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── UI ───────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    final theme = FlutterFlowTheme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (!isKycApproved) {
+      return Scaffold(
+        key: scaffoldKey,
+        backgroundColor: theme.primaryBackground,
+        body: SafeArea(
+          child: KycRequiredWidget(feature: 'deposit'),
+        ),
+      );
+    }
+
+    return Scaffold(
+      key: scaffoldKey,
+      backgroundColor: theme.primaryBackground,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  FlutterFlowIconButton(
+                    icon: const Icon(Icons.arrow_back_ios_new),
+                    onPressed: () => context.goNamed('Dashboard'),
+                  ),
+                  Text('Deposit Funds',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.primaryText)),
+                  Icon(Icons.help_outline, color: theme.secondaryText),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              // Wallet balance card
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF111111) : Colors.black,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: loadingWallet
+                    ? const Center(
+                        child: CircularProgressIndicator(color: Colors.white))
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Wallet Balance',
+                              style: GoogleFonts.plusJakartaSans(
+                                  color: Colors.white70, fontSize: 12)),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${walletBalance.toStringAsFixed(4)} FARM',
+                            style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+
+              const SizedBox(height: 28),
+
+              // Amount input
+              Center(
+                child: TextField(
+                  controller: amountController,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (_) => setState(() {}),
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 36,
+                      fontWeight: FontWeight.bold,
+                      color: theme.primaryText),
+                  decoration: InputDecoration(
+                    prefixText: '$selectedCurrency  ',
+                    border: InputBorder.none,
+                    hintText: '0.00',
+                    hintStyle: GoogleFonts.plusJakartaSans(
+                        fontSize: 36, color: theme.secondaryText),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+              Text(
+                _depositValidationMessage,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  color: amount > 0 && !_hasValidDepositAmount
+                      ? Colors.redAccent
+                      : theme.secondaryText,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Payment method
+              Text('Payment Method',
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: theme.primaryText)),
+              const SizedBox(height: 12),
+
+              _methodCard(
+                context,
+                method: 'CARD',
+                icon: Icons.credit_card,
+                title: 'Bank Card',
+                subtitle: 'Instant',
+              ),
+              _methodCard(
+                context,
+                method: 'BANK_TRANSFER',
+                icon: Icons.account_balance,
+                title: 'Bank Transfer',
+                subtitle: 'Instant',
+              ),
+              _methodCard(
+                context,
+                method: 'MOBILE_MONEY',
+                icon: Icons.phone_android,
+                title: 'Mobile Money (M-Pesa)',
+                subtitle: 'Instant',
+              ),
+              _methodCard(
+                context,
+                method: 'CRYPTO',
+                icon: Icons.currency_bitcoin,
+                title: 'Crypto',
+                subtitle: 'Instant',
+              ),
+
+              const SizedBox(height: 24),
+
+              // Fee breakdown
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: theme.secondaryBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: theme.secondaryText.withAlpha(80)),
+                ),
+                child: Column(
+                  children: [
+                    _feeRow('Amount', 'KES ${amount.toStringAsFixed(2)}'),
+                    const SizedBox(height: 10),
+                    _feeRow('Fee (${(feeRate * 100).toStringAsFixed(1)}%)',
+                        'KES ${fee.toStringAsFixed(2)}'),
+                    const Divider(height: 20),
+                    _feeRow('Total', 'KES ${total.toStringAsFixed(2)}',
+                        bold: true),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Deposit button
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isDark ? const Color(0xFF1F1F1F) : Colors.black,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed:
+                      (isLoading || !_hasValidDepositAmount) ? null : _createDeposit,
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text('Deposit Funds',
+                          style: GoogleFonts.plusJakartaSans(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Recent deposits
+              Text('Recent Deposits',
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+
+              if (recentDeposits.isEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text('No deposits yet',
+                        style: GoogleFonts.plusJakartaSans(
+                            color: theme.secondaryText)),
+                  ),
+                )
+              else
+                ...recentDeposits.map((d) {
+                  final deposit = Map<String, dynamic>.from(d as Map);
+                  final status = (d['status'] ?? 'pending') as String;
+                  final isComplete = status == 'completed';
+                  final meta = deposit['metadata'] is Map
+                      ? Map<String, dynamic>.from(deposit['metadata'] as Map)
+                      : <String, dynamic>{};
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.secondaryBackground,
+                      border:
+                          Border.all(color: theme.secondaryText.withAlpha(70)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isComplete
+                                ? Colors.green.shade50
+                                : Colors.orange.shade50,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isComplete
+                                ? Icons.check_circle_outline
+                                : Icons.hourglass_top,
+                            color: isComplete ? Colors.green : Colors.orange,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _depositDateLabel(deposit),
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: theme.secondaryText,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _depositAmountLabel(deposit, meta),
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.primaryText),
+                              ),
+                              Text(
+                                '≈ ${d['amount']} FARM • $status',
+                                style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12, color: theme.secondaryText),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          _depositMethodLabel(deposit, meta),
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: theme.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+              const SizedBox(height: 20),
+              Center(
+                child: Text('Secured by FARM 🔒',
+                    style: TextStyle(color: theme.secondaryText, fontSize: 12)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _feeRow(String label, String value, {bool bold = false}) {
+    final style = GoogleFonts.plusJakartaSans(
+        fontWeight: bold ? FontWeight.bold : FontWeight.normal);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [Text(label, style: style), Text(value, style: style)],
+    );
+  }
+}

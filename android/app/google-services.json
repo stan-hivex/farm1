@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1093041322989",
+    "project_id": "farmapp-e2145",
+    "storage_bucket": "farmapp-e2145.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1093041322989:android:2e04e68243343d605385e4",
+        "android_client_info": {
+          "package_name": "farm.africa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAT0JtzWWi50pQd3olxRJtN2eXEULzubTU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1093041322989:android:5b521ac48fdb8c2f5385e4",
+        "android_client_info": {
+          "package_name": "farm.farm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAT0JtzWWi50pQd3olxRJtN2eXEULzubTU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
