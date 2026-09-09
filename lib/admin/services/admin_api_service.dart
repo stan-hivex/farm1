@@ -362,13 +362,13 @@ class AdminApiService {
 
   // ── KYC ───────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getKycQueue({int page = 1}) =>
-      _req(method: 'GET', path: '/kyc/queue?page=$page');
+      _req(method: 'GET', path: '/admin/kyc/queue?page=$page');
 
   static Future<Map<String, dynamic>> reviewKyc(String docId, String status,
           {String? rejectionReason}) =>
       _req(
         method: 'POST',
-        path: '/kyc/$docId/review',
+        path: '/admin/kyc/$docId/review',
         body: {
           'status': status,
           if (rejectionReason != null) 'rejection_reason': rejectionReason,
@@ -385,7 +385,7 @@ class AdminApiService {
       _req(
         method: 'GET',
         path: '/admin/transactions?page=$page'
-            '${type != null ? "&type=$type" : ""}'
+            '${type != null ? "&transaction_type=$type" : ""}'
             '${status != null ? "&status=$status" : ""}'
             '${search != null ? "&search=${Uri.encodeQueryComponent(search)}" : ""}',
       );
@@ -412,7 +412,7 @@ class AdminApiService {
           {int page = 1, String? status}) =>
       _req(
         method: 'GET',
-        path: '/admin/transactions?page=$page&type=deposit'
+        path: '/admin/transactions?page=$page&transaction_type=deposit'
             '${status != null ? "&status=$status" : ""}',
       );
 
@@ -421,7 +421,7 @@ class AdminApiService {
           {int page = 1, String? status}) =>
       _req(
         method: 'GET',
-        path: '/admin/transactions?page=$page&type=withdrawal'
+        path: '/admin/withdrawals?page=$page'
             '${status != null ? "&status=$status" : ""}',
       );
 

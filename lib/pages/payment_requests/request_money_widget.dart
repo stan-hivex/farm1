@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 // Removed unused import
 import '/backend/services/api_service.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 class RequestMoneyWidget extends StatefulWidget {
   const RequestMoneyWidget({super.key});
@@ -30,7 +31,7 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
     final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final desc = _descCtrl.text.trim();
     if (recipient.isEmpty || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter valid recipient and amount')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('common.all_fields_required'.tr())));
       return;
     }
 
@@ -64,25 +65,25 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
           children: [
             TextField(
               controller: _recipientCtrl,
-              decoration: const InputDecoration(labelText: 'Recipient (username, phone or address)'),
+              decoration: InputDecoration(labelText: 'common.recipient'.tr()),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Amount (FARM)'),
+              decoration: InputDecoration(labelText: 'common.amount'.tr()),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descCtrl,
-              decoration: const InputDecoration(labelText: 'Description (optional)'),
+              decoration: InputDecoration(labelText: 'common.description'.tr()),
             ),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _submitting ? null : _submit,
-                child: _submitting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Request'),
+                child: _submitting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text('common.send'.tr()),
               ),
             ),
           ],

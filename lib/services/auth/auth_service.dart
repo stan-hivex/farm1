@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '/core/config/supabase_config.dart';
 import '/core/config/env.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -381,6 +382,8 @@ class AuthService {
       await SecureStorageService.clearAuthData();
       await FFAppState().clearAuthCredentials();
       await FFAppState().clearRoleSession(activeRole);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('language', 'en');
     } catch (e) {
       debugPrint('Local clear auth data error: $e');
       logoutError = Exception('Local logout cleanup failed: $e');

@@ -4,5 +4,17 @@
   "notifications": "الإشعارات",
   "support": "الدعم",
   "save": "حفظ",
-  "welcome": "مرحباً"
+  "welcome": "مرحباً",
+  "common": {
+    "transaction_success": "تمت المعاملة بنجاح", "transaction_failed": "فشلت المعاملة", "pin_required": "الرقم السري مطلوب لتأكيد المعاملة", "failed": "فشل", "kyc_required": "يلزم التحقق من KYC قبل استخدام", "new_transaction": "معاملة جديدة", "requests": "الطلبات", "pending_requests": "الطلبات المعلقة", "your_requests": "طلباتك", "no_requests": "لم يتم العثور على طلبات",
+    "cancel": "إلغاء", "confirm": "تأكيد", "continue": "متابعة", "save": "حفظ", "send": "إرسال", "retry": "حاول مرة أخرى", "register": "تسجيل", "sign_in": "تسجيل الدخول", "sign_up": "إنشاء حساب", "sign_out": "تسجيل الخروج", "password": "كلمة المرور", "phone": "الهاتف", "amount": "المبلغ", "recipient": "المستلم", "description": "الوصف", "pin": "الرقم السري", "or": "أو", "select_country": "اختر الدولة", "account": "حسابك", "all_fields_required": "يرجى ملء جميع الحقول", "login_success": "تم تسجيل الدخول بنجاح", "login_failed": "فشل تسجيل الدخول. تحقق من بياناتك.", "network_error": "تعذر الاتصال بالخادم. تحقق من الشبكة.", "biometric_success": "تم تسجيل الدخول بالبصمة بنجاح", "biometric_failed": "فشل تسجيل الدخول بالبصمة", "forgot_password": "هل نسيت كلمة المرور؟", "no_account": "ليس لديك حساب؟", "language_selected": "تم اختيار اللغة", "notification_updated": "تم تحديث تفضيلات الإشعارات", "notification_update_failed": "تعذر تحديث التفضيلات", "use_password": "استخدم كلمة المرور بدلاً من ذلك"
+  },
+  "onboarding": {"tagline": "دورة من النمو", "title": "حوّل مستقبلك إلى رموز", "description": "أول نظام بلوك تشين متكامل للمدفوعات السريعة وخدمات الضمان.", "preparing": "جارٍ إعداد تجربتك…", "terms_intro": "بالمتابعة، أنت توافق على", "terms": "شروط الخدمة", "privacy": "سياسة الخصوصية"},
+  "auth": {"sign_in_title": "سجّل الدخول إلى حسابك", "enter_phone": "أدخل رقم الهاتف (بدون رمز الدولة)", "enter_password": "أدخل كلمة المرور", "biometric_login": "تسجيل الدخول بالبصمة", "signing_in": "جارٍ تسجيل الدخول...", "create_account": "إنشاء حساب", "registration_success": "تم التسجيل بنجاح. تحقق من بريدك الإلكتروني قبل تسجيل الدخول.", "registration_failed": "فشل التسجيل. حاول مرة أخرى.", "valid_email": "يرجى إدخال بريد إلكتروني صالح."},
+  "settings": {"notification_settings": "إعدادات الإشعارات", "privacy_policy": "سياسة الخصوصية", "terms_of_service": "شروط الخدمة", "support_help": "الدعم ومركز المساعدة", "delete_account": "حذف الحساب"},
+  "validation": {"contact_required": "أدخل رقم هاتفك أو بريدك الإلكتروني", "pin_length": "يجب أن يتكون الرقم السري من 4 أرقام على الأقل", "pin_mismatch": "الأرقام السرية غير متطابقة", "password_required": "أدخل كلمة المرور للمتابعة", "pin_fields_required": "أكمل جميع حقول الرقم السري"},
+  "auth_extra": {"password_updated": "تم تحديث كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.", "create_new_password": "إنشاء كلمة مرور جديدة", "choose_new_password": "اختر كلمة مرور قوية جديدة لـ", "verify_email": "تحقق من البريد الإلكتروني", "email_verification": "التحقق من البريد الإلكتروني"},
+  "pin": {"updated": "تم تحديث الرقم السري", "update_failed": "تعذر تحديث الرقم السري", "changed": "تم تغيير الرقم السري", "forgot": "نسيت الرقم السري", "reset_title": "إعادة تعيين الرقم السري للمعاملة", "reset_description": "استخدم هذه الشاشة لاستعادة الرقم السري أو تحديثه.", "phone_or_email": "الهاتف أو البريد الإلكتروني"},
+  "transactions": {"title": "المعاملات", "history": "سجل معاملاتك", "all": "الكل", "sent": "المرسلة", "received": "المستلمة", "deposit": "إيداع", "withdraw": "سحب", "empty": "لا توجد معاملات تطابق عوامل التصفية."},
+  "status": {"pending": "قيد الانتظار", "completed": "مكتملة", "failed": "فاشلة"}
 }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '/backend/services/api_service.dart';
 import '/services/app_session_manager.dart';
 import '/services/transaction_authorization_service.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 class IncomingRequestsWidget extends StatefulWidget {
   const IncomingRequestsWidget({super.key});
@@ -38,11 +39,11 @@ class _IncomingRequestsWidgetState extends State<IncomingRequestsWidget> {
         return Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 16, right: 16, top: 16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Enter PIN to confirm'),
+            Text('common.pin'.tr()),
             const SizedBox(height: 8),
-            TextField(controller: pinCtrl, keyboardType: TextInputType.number, obscureText: true, decoration: const InputDecoration(labelText: 'PIN')),
+            TextField(controller: pinCtrl, keyboardType: TextInputType.number, obscureText: true, decoration: InputDecoration(labelText: 'common.pin'.tr())),
             const SizedBox(height: 12),
-            Row(children: [Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Confirm')))])
+            Row(children: [Expanded(child: ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: Text('common.confirm'.tr())))])
           ]),
         );
       });
@@ -55,7 +56,7 @@ class _IncomingRequestsWidgetState extends State<IncomingRequestsWidget> {
       pin = pinCtrl.text.trim();
       pinCtrl.dispose();
       if (pin.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter your transaction PIN')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('common.pin_required'.tr())));
         return;
       }
     }
@@ -116,9 +117,9 @@ class _IncomingRequestsWidgetState extends State<IncomingRequestsWidget> {
                   title: Text(requester['username'] ?? 'User'),
                   subtitle: Text('${(r['amount'] as num).toString()} FARM'),
                   trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                    TextButton(onPressed: () => _decline(r['id']), child: const Text('Decline')),
+                    TextButton(onPressed: () => _decline(r['id']), child: Text('common.cancel'.tr())),
                     const SizedBox(width: 8),
-                    ElevatedButton(onPressed: () => _pay(r['id']), child: const Text('Pay')),
+                    ElevatedButton(onPressed: () => _pay(r['id']), child: Text('common.confirm'.tr())),
                   ]),
                 );
               },

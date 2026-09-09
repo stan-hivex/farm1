@@ -776,7 +776,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
           crossAxisSpacing: 14,
           children: [
             _kpiCard('Total Users', '${data['total_users'] ?? 0}', 'users', accent, cardColor),
-            _kpiCard('Total Revenue', '\$${data['total_revenue'] ?? 0}', 'revenue', accent, cardColor),
+            _kpiCard('Total Revenue', '${data['total_revenue'] ?? 0} FARM', 'platform fees', accent, cardColor),
             _kpiCard('Active Transactions', '${data['active_transactions'] ?? 0}', 'pending', accent, cardColor),
             _kpiCard('System Health', '${data['system_health'] ?? 98}%', 'operational', accent, cardColor),
           ],

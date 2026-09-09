@@ -298,14 +298,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
           );
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Transaction successful")),
+              SnackBar(content: Text('common.transaction_success'.tr())),
             );
           }
           return true;
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Transaction failed: ${e.toString().replaceFirst('Exception: ', '')}")),
+              SnackBar(content: Text('${'common.transaction_failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}')),
             );
           }
         }
@@ -314,7 +314,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       if (pin.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("PIN is required to authorize transaction")),
+            SnackBar(content: Text('common.pin_required'.tr())),
           );
         }
         return false;
@@ -337,14 +337,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Transaction successful")),
+              SnackBar(content: Text('common.transaction_success'.tr())),
           );
         }
         return true;
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Failed: ${e.toString().replaceFirst('Exception: ', '')}")),
+              SnackBar(content: Text('${'common.failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}')),
           );
         }
         return false;
@@ -449,7 +449,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('KYC verification is required before using $feature.'),
+        content: Text('${'common.kyc_required'.tr()} $feature.'),
         action: SnackBarAction(
           label: 'Complete KYC',
           onPressed: () => context.pushNamed('KYCPAGE'),
@@ -484,16 +484,16 @@ class _DashboardWidgetState extends State<DashboardWidget>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text("New Transaction",
+                  Text('common.new_transaction'.tr(),
                       style: FlutterFlowTheme.of(context).titleMedium),
                   TextField(
                     controller: recipientController,
-                    decoration: const InputDecoration(labelText: "Recipient"),
+                    decoration: InputDecoration(labelText: 'common.recipient'.tr()),
                   ),
                   TextField(
                     controller: amountController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "Amount"),
+                    decoration: InputDecoration(labelText: 'common.amount'.tr()),
                   ),
                   if (pinEntryEnabled)
                     TextField(
@@ -534,7 +534,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                         }
                       },
                       decoration: InputDecoration(
-                        labelText: "PIN",
+                        labelText: 'common.pin'.tr(),
                         suffixIcon: isBiometricChecking
                             ? const SizedBox(
                                 height: 24,
@@ -576,11 +576,11 @@ class _DashboardWidgetState extends State<DashboardWidget>
                         });
                         pinFocusNode.requestFocus();
                       },
-                      child: const Text("Continue"),
+                      child: Text('common.continue'.tr()),
                     ),
                   TextField(
                     controller: descController,
-                    decoration: const InputDecoration(labelText: "Description"),
+                    decoration: InputDecoration(labelText: 'common.description'.tr()),
                   ),
                   const SizedBox(height: 20),
                   if (pinEntryEnabled)
@@ -598,7 +598,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                           Navigator.pop(context);
                         }
                       },
-                      child: const Text("Send"),
+                      child: Text('common.send'.tr()),
                     ),
                 ],
               ),

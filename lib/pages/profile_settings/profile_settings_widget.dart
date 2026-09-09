@@ -229,8 +229,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Current Password',
+                  decoration: InputDecoration(
+                    labelText: 'common.password'.tr(),
                   ),
                   obscureText: true,
                   validator: (value) {
@@ -246,7 +246,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: Text('Cancel'),
+              child: Text('common.cancel'.tr()),
             ),
             ElevatedButton(
               onPressed: () async {
@@ -281,7 +281,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                   );
                 }
               },
-              child: Text('Save'),
+              child: Text('common.save'.tr()),
             ),
           ],
         );
@@ -949,7 +949,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     color: FlutterFlowTheme.of(context)
                                         .primaryText,
                                   ),
-                                  label: 'Notification Settings',
+                                  label: 'settings.notification_settings'.tr(),
                                 ),
                               ),
 
@@ -964,7 +964,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     color: FlutterFlowTheme.of(context)
                                         .primaryText,
                                   ),
-                                  label: 'Language',
+                                  label: 'language'.tr(),
                                 ),
                               ),
 
@@ -979,7 +979,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     color: FlutterFlowTheme.of(context)
                                         .primaryText,
                                   ),
-                                  label: 'Privacy Policy',
+                                  label: 'settings.privacy_policy'.tr(),
                                 ),
                               ),
 
@@ -994,7 +994,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     color: FlutterFlowTheme.of(context)
                                         .primaryText,
                                   ),
-                                  label: 'Terms of Service',
+                                  label: 'settings.terms_of_service'.tr(),
                                 ),
                               ),
 
@@ -1009,7 +1009,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     color: FlutterFlowTheme.of(context)
                                         .primaryText,
                                   ),
-                                  label: 'Support & Help Center',
+                                  label: 'settings.support_help'.tr(),
                                 ),
                               ),
                             ],
@@ -1034,7 +1034,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                             model: _model.buttonModel,
                             updateCallback: () => safeSetState(() {}),
                             child: ButtonWidget(
-                              content: 'Sign Out',
+                              content: 'common.sign_out'.tr(),
                               icon: Icon(
                                 Icons.logout_rounded,
                                 color: FlutterFlowTheme.of(context).primaryText,
@@ -1054,7 +1054,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                           ),
                           const SizedBox(height: 12.0),
                           ButtonWidget(
-                            content: 'Delete Account',
+                            content: 'settings.delete_account'.tr(),
                             icon: Icon(
                               Icons.delete_forever_rounded,
                               color: Colors.white,

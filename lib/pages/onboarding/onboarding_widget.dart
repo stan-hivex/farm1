@@ -266,7 +266,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                         ),
                                   ),
                                   Text(
-                                    'a loop of growth',
+                                    'onboarding.tagline'.tr(),
                                     textAlign: TextAlign.center,
                                     style: FlutterFlowTheme.of(context)
                                         .titleMedium
@@ -310,7 +310,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
-                              'Tokenize Your Future',
+                              'onboarding.title'.tr(),
                               textAlign: TextAlign.center,
                               style: FlutterFlowTheme.of(context)
                                   .headlineMedium
@@ -331,7 +331,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                   ),
                             ),
                             Text(
-                              'The first integrated blockchain ecosystem for fast payments and escrow services.',
+                              'onboarding.description'.tr(),
                               textAlign: TextAlign.center,
                               maxLines: 3,
                               style: FlutterFlowTheme.of(context)
@@ -382,7 +382,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                 ),
                                 const SizedBox(height: 12.0),
                                 Text(
-                                  'Preparing your experience…',
+                                  'onboarding.preparing'.tr(),
                                   style: FlutterFlowTheme.of(context)
                                       .bodyMedium
                                       .copyWith(color: secondaryTextColor),
@@ -400,7 +400,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                 model: _model.buttonModel2,
                                 updateCallback: () => safeSetState(() {}),
                                 child: ButtonWidget(
-                                  content: 'Sign In',
+                                  content: 'common.sign_in'.tr(),
                                   icon_present: false,
                                   icon_end_present: false,
                                   on_tap: 'navigate:loginpage',
@@ -417,7 +417,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                 child: Column(
                                   children: [
                                     Text(
-                                      "Don't have an account?",
+                                      'common.no_account'.tr(),
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
                                           .copyWith(color: secondaryTextColor),
@@ -443,7 +443,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                           backgroundColor: Colors.white,
                                         ),
                                         child: Text(
-                                          'Register',
+                                          'common.register'.tr(),
                                           style: FlutterFlowTheme.of(context)
                                               .bodyMedium
                                               .copyWith(
@@ -467,7 +467,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
-                              'By continuing, you agree to our',
+                              'onboarding.terms_intro'.tr(),
                               style: FlutterFlowTheme.of(context)
                                   .labelSmall
                                   .override(
@@ -495,7 +495,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                 context.pushNamed('TermsOfServicePage');
                               },
                               child: Text(
-                                'Terms of Service',
+                                'onboarding.terms'.tr(),
                                 style: FlutterFlowTheme.of(context)
                                     .labelSmall
                                     .override(
@@ -525,7 +525,7 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                 context.pushNamed('PrivacyPolicyPage');
                               },
                               child: Text(
-                                'Privacy Policy',
+                                'onboarding.privacy'.tr(),
                                 style: FlutterFlowTheme.of(context)
                                     .labelSmall
                                     .override(

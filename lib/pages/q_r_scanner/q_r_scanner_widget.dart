@@ -157,14 +157,14 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Send payment',
+                          'common.send'.tr(),
                         style: Theme.of(sheetContext).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
                       Text(
                         recipientLabel != null && recipientLabel.isNotEmpty
-                            ? 'Send funds to $recipientLabel'
-                            : 'Send funds to $recipientIdentifier',
+                            ? '${'common.send'.tr()} $recipientLabel'
+                            : '${'common.send'.tr()} $recipientIdentifier',
                         style: Theme.of(sheetContext).textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 16),
@@ -173,8 +173,8 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'Amount',
+                        decoration: InputDecoration(
+                          labelText: 'common.amount'.tr(),
                           prefixText: 'FARM ',
                         ),
                       ),
@@ -237,15 +237,15 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                                   }
                                   Navigator.of(sheetContext).pop();
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content: Text('Transfer successful')),
+                                    SnackBar(
+                                      content: Text('common.transaction_success'.tr())),
                                   );
                                 } catch (e) {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        'Transfer failed: ${e.toString().replaceFirst('Exception: ', '')}',
+                                        '${'common.transaction_failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}',
                                       ),
                                     ),
                                   );
@@ -262,7 +262,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                             }
                           },
                           decoration: InputDecoration(
-                            labelText: 'PIN',
+                            labelText: 'common.pin'.tr(),
                             suffixIcon: isBiometricChecking
                                 ? const SizedBox(
                                     height: 24,
@@ -276,8 +276,8 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                       const SizedBox(height: 12),
                       TextField(
                         controller: descriptionController,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
+                        decoration: InputDecoration(
+                          labelText: 'common.description'.tr(),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -294,8 +294,8 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
 
                                   if (amount <= 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Enter a valid amount'),
+                                      SnackBar(
+                                        content: Text('common.amount'.tr()),
                                       ),
                                     );
                                     return;

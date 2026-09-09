@@ -104,8 +104,34 @@ class SecureStorageService {
     await _writeValue('refreshToken', token);
   }
 
+  static Future<String?> readUserId() async => _readValue('userId');
+
+  static Future<void> writeUserId(String userId) async {
+    await _writeValue('userId', userId);
+  }
+
+  static Future<String?> readRole() async => _readValue('role');
+
+  static Future<void> writeRole(String role) async {
+    await _writeValue('role', role);
+  }
+
+  static Future<String?> readLastAuthenticatedRoute() async =>
+      _readValue('lastAuthenticatedRoute');
+
+  static Future<void> writeLastAuthenticatedRoute(String route) async {
+    await _writeValue('lastAuthenticatedRoute', route);
+  }
+
+  static Future<void> clearSessionMetadata() async {
+    await _deleteValue('userId');
+    await _deleteValue('role');
+    await _deleteValue('lastAuthenticatedRoute');
+  }
+
   static Future<void> clearAuthData() async {
     await _deleteValue('accessToken');
     await _deleteValue('refreshToken');
+    await clearSessionMetadata();
   }
 }

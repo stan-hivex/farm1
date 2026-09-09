@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import '/services/auth/auth_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -54,8 +55,8 @@ class _VerifyEmailPageWidgetState extends State<VerifyEmailPageWidget> {
     final email = emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid email address to resend verification.'),
+        SnackBar(
+          content: Text('auth.valid_email'.tr()),
           backgroundColor: Colors.red,
         ),
       );
@@ -85,7 +86,7 @@ class _VerifyEmailPageWidgetState extends State<VerifyEmailPageWidget> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Verify Email'),
+        title: Text('auth_extra.verify_email'.tr()),
         backgroundColor: FlutterFlowTheme.of(context).primary,
         automaticallyImplyLeading: true,
       ),
@@ -97,7 +98,7 @@ class _VerifyEmailPageWidgetState extends State<VerifyEmailPageWidget> {
             children: [
               const SizedBox(height: 24.0),
               Text(
-                'Email Verification',
+                'auth_extra.email_verification'.tr(),
                 style: FlutterFlowTheme.of(context).titleLarge,
               ),
               const SizedBox(height: 16.0),

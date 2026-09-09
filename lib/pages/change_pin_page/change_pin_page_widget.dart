@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import '/backend/services/api_service.dart';
 import '/core/theme_extensions.dart';
 
@@ -89,9 +90,9 @@ class _ChangePinPageWidgetState
         confirmPin.length < 4) {
       ScaffoldMessenger.of(context)
           .showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            "Complete all PIN fields",
+            'validation.pin_fields_required'.tr(),
           ),
         ),
       );
@@ -101,9 +102,9 @@ class _ChangePinPageWidgetState
     if (newPin != confirmPin) {
       ScaffoldMessenger.of(context)
           .showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-            "New PINs do not match",
+            'validation.pin_mismatch'.tr(),
           ),
         ),
       );
@@ -131,7 +132,7 @@ class _ChangePinPageWidgetState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            data['message'] ?? 'PIN changed successfully',
+            data['message'] ?? 'pin.changed'.tr(),
           ),
         ),
       );

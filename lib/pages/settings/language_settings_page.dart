@@ -19,40 +19,39 @@ class LanguageSettingsPageWidget extends StatefulWidget {
 
 class _LanguageSettingsPageWidgetState
     extends State<LanguageSettingsPageWidget> {
-
   bool loading = true;
 
-  String selectedLanguage = 'English';
+  String selectedLanguageCode = 'en';
 
   final List<Map<String, dynamic>> languages = [
-
     {
       'name': 'English',
       'native': 'English',
+      'code': 'en',
       'locale': Locale('en'),
     },
-
     {
       'name': 'Swahili',
       'native': 'Kiswahili',
+      'code': 'sw',
       'locale': Locale('sw'),
     },
-
     {
       'name': 'French',
       'native': 'Français',
+      'code': 'fr',
       'locale': Locale('fr'),
     },
-
     {
       'name': 'Spanish',
       'native': 'Español',
+      'code': 'es',
       'locale': Locale('es'),
     },
-
     {
       'name': 'Arabic',
       'native': 'العربية',
+      'code': 'ar',
       'locale': Locale('ar'),
     },
   ];
@@ -63,193 +62,109 @@ class _LanguageSettingsPageWidgetState
     loadLanguage();
   }
 
-  // =====================================
-  // LOAD SAVED LANGUAGE
-  // =====================================
   Future<void> loadLanguage() async {
-
     final prefs =
         await SharedPreferences.getInstance();
-
-    final saved =
-        prefs.getString('language') ?? 'English';
+    final saved = prefs.getString('language') ?? context.locale.languageCode;
+    final savedCode = languages.any((lang) => lang['code'] == saved)
+        ? saved
+        : context.locale.languageCode;
 
     if (!mounted) return;
 
     setState(() {
-
-      selectedLanguage = saved;
-
+      selectedLanguageCode = languages.any((lang) => lang['code'] == savedCode)
+          ? savedCode
+          : 'en';
       loading = false;
     });
   }
 
-  // =====================================
-  // SAVE TO LOCAL STORAGE
-  // =====================================
-  Future<void> saveLanguage(
-      String language) async {
-
+  Future<void> saveLanguage(String languageCode) async {
     final prefs =
         await SharedPreferences.getInstance();
-
     await prefs.setString(
       'language',
-      language,
+      languageCode,
     );
   }
 
-  // =====================================
-  // SAVE TO BACKEND
-  // =====================================
-  Future<void> saveLanguageBackend(
-      String language) async {
-
+  Future<void> saveLanguageBackend(String languageCode) async {
     try {
-
       await ApiService.request(
         method: 'PUT',
         path: '/settings/language',
-        body: {'language': language},
+        body: {'language': languageCode},
       );
-
     } catch (e) {
-
       debugPrint(
         'LANGUAGE BACKEND ERROR: $e',
       );
     }
   }
 
-  // =====================================
-  // CHANGE LANGUAGE
-  // =====================================
   Future<void> changeLanguage(
     Map<String, dynamic> lang,
   ) async {
-
     final Locale locale =
         lang['locale'];
+    final String languageCode = lang['code'];
 
-    final String languageName =
-        lang['name'];
-
-    // SAVE LOCAL
-    await saveLanguage(languageName);
-
-    // SAVE BACKEND
-    await saveLanguageBackend(
-      locale.languageCode,
-    );
-
-    // CHANGE APP LANGUAGE
     await context.setLocale(locale);
+    await saveLanguage(languageCode);
 
     if (!mounted) return;
 
     setState(() {
-
-      selectedLanguage =
-          languageName;
+      selectedLanguageCode = languageCode;
     });
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(
-
-      SnackBar(
-        content: Text(
-          '$languageName selected',
-        ),
-      ),
-    );
+    await saveLanguageBackend(languageCode);
   }
 
   @override
   Widget build(BuildContext context) {
 
     return Scaffold(
-
       backgroundColor:
           FlutterFlowTheme.of(context)
               .primaryBackground,
-
       appBar: AppBar(
-
         title: Text(
           'language'.tr(),
         ),
-
         elevation: 0,
-
         backgroundColor:
             FlutterFlowTheme.of(context)
                 .primaryBackground,
       ),
-
       body: loading
-
-          ? Center(
-              child:
-                  CircularProgressIndicator(),
+          ? const Center(
+              child: CircularProgressIndicator(),
             )
-
           : ListView.separated(
-
-              padding:
-                  const EdgeInsets.all(16),
-
-              itemCount:
-                  languages.length,
-
-              separatorBuilder:
-                  (_, __) =>
-                      const Divider(),
-
-              itemBuilder:
-                  (context, index) {
-
-                final lang =
-                    languages[index];
-
-                final isSelected =
-                    selectedLanguage ==
-                        lang['name'];
+              padding: const EdgeInsets.all(16),
+              itemCount: languages.length,
+              separatorBuilder: (_, __) => const Divider(),
+              itemBuilder: (context, index) {
+                final lang = languages[index];
+                final isSelected = selectedLanguageCode == lang['code'];
 
                 return ListTile(
-
                   title: Text(
-
                     lang['native'],
-
-                    style:
-                        GoogleFonts.inter(
-
+                    style: GoogleFonts.inter(
                       fontSize: 16,
-
-                      fontWeight:
-                          FontWeight.w500,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-
                   trailing: isSelected
-
                       ? Icon(
                           Icons.check_circle,
-
-                          color:
-                              FlutterFlowTheme.of(
-                                      context)
-                                  .primary,
+                          color: FlutterFlowTheme.of(context).primary,
                         )
-
                       : null,
-
-                  onTap: () async {
-
-                    await changeLanguage(
-                      lang,
-                    );
-                  },
+                  onTap: () => changeLanguage(lang),
                 );
               },
             ),

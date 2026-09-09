@@ -367,6 +367,70 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
   bool passwordVisible = false;
   bool confirmPasswordVisible = false;
 
+  Widget passwordRequirement(
+    BuildContext context, {
+    required String label,
+    required bool met,
+  }) {
+    final theme = FlutterFlowTheme.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          met ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 16.0,
+          color: met ? Colors.green : theme.secondaryText,
+        ),
+        const SizedBox(width: 6.0),
+        Text(
+          label,
+          style: TextStyle(
+            color: met ? Colors.green : theme.secondaryText,
+            fontSize: 12.0,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget passwordRequirements(BuildContext context) {
+    final password = passwordController.text;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Wrap(
+        spacing: 16.0,
+        runSpacing: 6.0,
+        children: [
+          passwordRequirement(
+            context,
+            label: '12 characters',
+            met: password.length >= 12,
+          ),
+          passwordRequirement(
+            context,
+            label: 'Capital letter',
+            met: RegExp(r'[A-Z]').hasMatch(password),
+          ),
+          passwordRequirement(
+            context,
+            label: 'Small letter',
+            met: RegExp(r'[a-z]').hasMatch(password),
+          ),
+          passwordRequirement(
+            context,
+            label: 'Number',
+            met: RegExp(r'[0-9]').hasMatch(password),
+          ),
+          passwordRequirement(
+            context,
+            label: 'Punctuation mark',
+            met: RegExp(r'''[^A-Za-z0-9\s]''').hasMatch(password),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -721,13 +785,26 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   TextFormField(
                     controller: passwordController,
                     obscureText: !passwordVisible,
+                    onChanged: (_) => setState(() {}),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Password required';
                       }
 
-                      if (value.length < 8) {
-                        return 'Minimum 8 characters';
+                      if (value.length < 12) {
+                        return 'Minimum 12 characters';
+                      }
+                      if (!RegExp(r'[A-Z]').hasMatch(value)) {
+                        return 'Include a capital letter';
+                      }
+                      if (!RegExp(r'[a-z]').hasMatch(value)) {
+                        return 'Include a small letter';
+                      }
+                      if (!RegExp(r'[0-9]').hasMatch(value)) {
+                        return 'Include a number';
+                      }
+                      if (!RegExp(r'''[^A-Za-z0-9\s]''').hasMatch(value)) {
+                        return 'Include a punctuation mark';
                       }
 
                       return null;
@@ -750,6 +827,15 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                       ),
                     ),
                   ),
+                  Text(
+                    '(Use at least 12 characters, including a capital letter, '
+                    'small letter, number, and punctuation mark)',
+                    style: TextStyle(
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                      fontSize: 12.0,
+                    ),
+                  ),
+                  passwordRequirements(context),
                   const SizedBox(height: 16.0),
                   buildLabel(
                     context,
@@ -878,8 +964,8 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
                       if (!email.contains('@')) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter a valid email address.'),
+                          SnackBar(
+                            content: Text('auth.valid_email'.tr()),
                             backgroundColor: Colors.red,
                           ),
                         );
@@ -901,9 +987,9 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         if (!mounted) return;
 
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
+                          SnackBar(
                             content: Text(
-                              'Registration successful. Please verify your email before logging in.',
+                              'auth.registration_success'.tr(),
                             ),
                             backgroundColor: Colors.green,
                           ),
@@ -919,8 +1005,8 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         print('ERROR: $e');
 
                         final message = e.toString().contains('Could not connect to backend server')
-                            ? 'Could not connect to backend server. Please check your internet connection and try again.'
-                            : 'Registration failed. Please try again.';
+                            ? 'common.network_error'.tr()
+                            : 'auth.registration_failed'.tr();
 
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -931,7 +1017,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         );
                       }
                     },
-                    text: 'Create Account',
+                    text: 'auth.create_account'.tr(),
                     options: FFButtonOptions(
                       width: double.infinity,
                       height: 54.0,

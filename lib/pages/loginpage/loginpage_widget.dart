@@ -214,8 +214,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Login successful'),
+      SnackBar(
+        content: Text('common.login_success'.tr()),
         backgroundColor: Colors.green,
       ),
     );
@@ -260,8 +260,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
 
     if (identifier.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Please fill in all fields"),
+        SnackBar(
+          content: Text('common.all_fields_required'.tr()),
           backgroundColor: Colors.red,
         ),
       );
@@ -302,8 +302,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(isNetworkIssue
-                ? 'Unable to connect to backend. Please check your network or backend service.'
-                : 'Login failed. Please check your credentials.'),
+                ? 'common.network_error'.tr()
+                : 'common.login_failed'.tr()),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -340,8 +340,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
           '[BiometricLogin] Biometric login successful, routing to dashboard...');
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Biometric login successful'),
+        SnackBar(
+          content: Text('common.biometric_success'.tr()),
           backgroundColor: Colors.green,
         ),
       );
@@ -376,7 +376,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         final errorMsg = e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Biometric login failed: $errorMsg'),
+            content: Text('${'common.biometric_failed'.tr()}: $errorMsg'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -523,7 +523,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                     ),
                     const SizedBox(height: 4.0),
                     Text(
-                      'Sign In to Your Account',
+                      'auth.sign_in_title'.tr(),
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
                             font: GoogleFonts.inter(),
                             color: FlutterFlowTheme.of(context).secondaryText,
@@ -545,7 +545,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Phone',
+                          'common.phone'.tr(),
                           style: FlutterFlowTheme.of(context)
                               .labelLarge
                               .override(
@@ -571,7 +571,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                           Padding(
                                             padding: const EdgeInsets.all(12.0),
                                             child: Text(
-                                              'Select country',
+                                              'common.select_country'.tr(),
                                               style:
                                                   FlutterFlowTheme.of(context)
                                                       .titleMedium,
@@ -646,7 +646,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                               child: TextFormField(
                                 controller: phoneController,
                                 decoration: inputDecoration(context,
-                                    'Enter phone number (without country code)'),
+                                    'auth.enter_phone'.tr()),
                                 keyboardType: TextInputType.phone,
                               ),
                             ),
@@ -663,7 +663,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Password',
+                          'common.password'.tr(),
                           style: FlutterFlowTheme.of(context)
                               .labelLarge
                               .override(
@@ -676,7 +676,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         const SizedBox(height: 8.0),
                         TextFormField(
                           controller: passwordController,
-                          decoration: inputDecoration(context, 'Enter password')
+                          decoration: inputDecoration(context, 'auth.enter_password'.tr())
                               .copyWith(
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -700,7 +700,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                     /// Login Button
                     FFButtonWidget(
                       onPressed: isLoading ? null : handleLogin,
-                      text: isLoading ? 'Signing In...' : 'Sign In',
+                      text: isLoading ? 'auth.signing_in'.tr() : 'common.sign_in'.tr(),
                       options: FFButtonOptions(
                         width: double.infinity,
                         height: 56.0,
@@ -739,7 +739,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 8.0),
                                 child: Text(
-                                  'Or',
+                                  'common.or'.tr(),
                                   style: FlutterFlowTheme.of(context)
                                       .bodySmall
                                       .override(
@@ -788,7 +788,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       onPressed: () =>
                           context.pushNamed(ForgotPasswordPageWidget.routeName),
                       child: Text(
-                        'Forgot password?',
+                        'common.forgot_password'.tr(),
                         style: FlutterFlowTheme.of(context).bodySmall.override(
                               color: FlutterFlowTheme.of(context).primary,
                               fontWeight: FontWeight.w600,
@@ -802,13 +802,13 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Don't have an account? ",
+                          '${'common.no_account'.tr()} ',
                           style: FlutterFlowTheme.of(context).bodySmall,
                         ),
                         GestureDetector(
                           onTap: () => context.pushNamed('registerpage'),
                           child: Text(
-                            'Sign Up',
+                            'common.sign_up'.tr(),
                             style: FlutterFlowTheme.of(context)
                                 .bodySmall
                                 .override(

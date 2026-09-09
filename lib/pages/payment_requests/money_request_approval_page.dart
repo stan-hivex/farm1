@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import '/backend/services/api_service.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 // Removed unused imports
 import '/services/app_session_manager.dart';
 import '/services/transaction_authorization_service.dart';
@@ -177,20 +178,20 @@ class _MoneyRequestApprovalPageState extends State<MoneyRequestApprovalPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Enter your PIN to approve', style: TextStyle(fontWeight: FontWeight.w700)),
+                Text('common.pin_required'.tr(), style: const TextStyle(fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: controller,
                   keyboardType: TextInputType.number,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'PIN'),
+                  decoration: InputDecoration(labelText: 'common.pin'.tr()),
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                    child: const Text('Approve'),
+                    child: Text('common.confirm'.tr()),
                   ),
                 ),
               ],
@@ -200,7 +201,7 @@ class _MoneyRequestApprovalPageState extends State<MoneyRequestApprovalPage> {
       );
 
       if (entered == null || entered.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter your PIN to approve')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('common.pin_required'.tr())));
         return;
       }
       pin = entered;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/backend/services/api_service.dart';
 // Removed unused imports
@@ -49,7 +50,7 @@ class _AllRequestsWidgetState extends State<AllRequestsWidget> {
     final theme = FlutterFlowTheme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Requests'),
+        title: Text('common.requests'.tr()),
         backgroundColor: theme.primaryBackground,
       ),
       body: _loading
@@ -61,18 +62,18 @@ class _AllRequestsWidgetState extends State<AllRequestsWidget> {
                 children: [
                   if (pending.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text('Pending Requests', style: theme.titleLarge),
+                    Text('common.pending_requests'.tr(), style: theme.titleLarge),
                     const SizedBox(height: 12),
                     ...pending.map((req) => _buildIncoming(req)).toList(),
                   ],
                   if (outgoing.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    Text('Your Requests', style: theme.titleLarge),
+                    Text('common.your_requests'.tr(), style: theme.titleLarge),
                     const SizedBox(height: 12),
                     ...outgoing.map((req) => _buildOutgoing(req)).toList(),
                   ],
                   if (pending.isEmpty && outgoing.isEmpty)
-                    Center(child: Text('No requests found', style: theme.bodyMedium)),
+                    Center(child: Text('common.no_requests'.tr(), style: theme.bodyMedium)),
                 ],
               ),
             ),

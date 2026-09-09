@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import '/app_state.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 import '/services/biometric_lock_service.dart';
 import '/services/auth/route_guard_service.dart';
 import '/admin/pages/admin_shell.dart';
@@ -149,12 +148,12 @@ class _BiometricUnlockPageWidgetState extends State<BiometricUnlockPageWidget> {
                     backgroundColor: FlutterFlowTheme.of(context).primary,
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                   ),
-                  child: const Text('Try Again'),
+                  child: Text('common.retry'.tr()),
                 ),
                 const SizedBox(height: 12.0),
                 TextButton(
                   onPressed: _navigateToLogin,
-                  child: const Text('Use password instead'),
+                  child: Text('common.use_password'.tr()),
                 ),
               ],
             ],

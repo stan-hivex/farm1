@@ -118,6 +118,7 @@ class ApiService {
         FFAppState().refreshToken.isNotEmpty) {
       final refreshed = await RefreshManager().refreshIfNeeded(force: true);
       if (refreshed) {
+        debugPrint('[AUTH RETRY] Retrying request after refresh');
         await Future.delayed(const Duration(milliseconds: 250));
         return _request(
           method: method,
@@ -127,6 +128,10 @@ class ApiService {
           isRetry: true,
           timeoutSeconds: timeoutSeconds,
         );
+      }
+      if (RefreshManager().lastFailureWasRevocation) {
+        await FFAppState()
+            .clearAuthCredentials('backend refresh session revoked');
       }
     }
 

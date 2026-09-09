@@ -10,5 +10,107 @@
   "swahili": "Swahili",
   "french": "French",
   "spanish": "Spanish",
-  "arabic": "Arabic"
+  "arabic": "Arabic",
+  "common": {
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "continue": "Continue",
+    "save": "Save",
+    "send": "Send",
+    "retry": "Try Again",
+    "register": "Register",
+    "sign_in": "Sign In",
+    "sign_up": "Sign Up",
+    "sign_out": "Sign Out",
+    "password": "Password",
+    "phone": "Phone",
+    "amount": "Amount",
+    "recipient": "Recipient",
+    "description": "Description",
+    "pin": "PIN",
+    "or": "Or",
+    "select_country": "Select country",
+    "account": "Your Account",
+    "all_fields_required": "Please fill in all fields",
+    "login_success": "Login successful",
+    "login_failed": "Login failed. Please check your credentials.",
+    "network_error": "Unable to connect to backend. Please check your network or backend service.",
+    "biometric_success": "Biometric login successful",
+    "biometric_failed": "Biometric login failed",
+    "forgot_password": "Forgot password?",
+    "no_account": "Don't have an account?",
+    "language_selected": "Language selected",
+    "notification_updated": "Notification preferences updated",
+    "notification_update_failed": "Unable to update preferences",
+    "use_password": "Use password instead",
+    "transaction_success": "Transaction successful",
+    "transaction_failed": "Transaction failed",
+    "pin_required": "PIN is required to authorize transaction",
+    "failed": "Failed",
+    "kyc_required": "KYC verification is required before using",
+    "new_transaction": "New Transaction"
+    ,"requests": "Requests", "pending_requests": "Pending Requests", "your_requests": "Your Requests", "no_requests": "No requests found"
+  },
+  "onboarding": {
+    "tagline": "a loop of growth",
+    "title": "Tokenize Your Future",
+    "description": "The first integrated blockchain ecosystem for fast payments and escrow services.",
+    "preparing": "Preparing your experience…",
+    "terms_intro": "By continuing, you agree to our",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy"
+  },
+  "auth": {
+    "sign_in_title": "Sign In to Your Account",
+    "enter_phone": "Enter phone number (without country code)",
+    "enter_password": "Enter password",
+    "biometric_login": "Login with Biometric",
+    "signing_in": "Signing In...",
+    "create_account": "Create Account",
+    "registration_success": "Registration successful. Please verify your email before logging in.",
+    "registration_failed": "Registration failed. Please try again.",
+    "valid_email": "Please enter a valid email address."
+  },
+  "settings": {
+    "notification_settings": "Notification Settings",
+    "privacy_policy": "Privacy Policy",
+    "terms_of_service": "Terms of Service",
+    "support_help": "Support & Help Center",
+    "delete_account": "Delete Account"
+  },
+  "validation": {
+    "contact_required": "Enter your phone number or email",
+    "pin_length": "PIN must be at least 4 digits",
+    "pin_mismatch": "PINs do not match",
+    "password_required": "Enter your password to continue",
+    "pin_fields_required": "Complete all PIN fields"
+  },
+  "auth_extra": {
+    "password_updated": "Password updated successfully. Please sign in with your new password.",
+    "create_new_password": "Create New Password",
+    "choose_new_password": "Choose a strong new password for",
+    "verify_email": "Verify Email",
+    "email_verification": "Email Verification"
+  },
+  "pin": {
+    "updated": "PIN updated successfully",
+    "update_failed": "Unable to update PIN right now",
+    "changed": "PIN changed successfully",
+    "forgot": "Forgot PIN",
+    "reset_title": "Reset your transaction PIN",
+    "reset_description": "Use this screen to restore or update your PIN. We will validate your request and update your account when the backend accepts it.",
+    "phone_or_email": "Phone or email"
+  },
+  "transactions": {
+    "title": "Transactions",
+    "history": "Your transaction history",
+    "all": "All",
+    "sent": "Sent",
+    "received": "Received",
+    "deposit": "Deposit",
+    "withdraw": "Withdraw",
+    "empty": "No transactions match your filters yet."
+  },
+  "status": {"pending": "Pending", "completed": "Completed", "failed": "Failed"}
+  }
 }

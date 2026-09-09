@@ -42,6 +42,15 @@ class AppStateNotifier extends ChangeNotifier {
   }
 }
 
+bool _isAuthorizedRestoredRoute(String route, String role) {
+  if (route.isEmpty || RouteGuardService().isPublicRoute(route)) return false;
+  if (route.startsWith('/superadmin')) return role == 'super_admin';
+  if (route.startsWith('/admin')) {
+    return role == 'admin' || role == 'super_admin';
+  }
+  return role == 'user';
+}
+
 GoRouter createRouter(
   AppStateNotifier appStateNotifier, {
   String? initialLocation,
@@ -64,15 +73,32 @@ GoRouter createRouter(
               : OnboardingWidget.routePath;
         }
 
+        final role = authState.role.toLowerCase();
+        if (authState.isLoggedIn &&
+            (publicRoute || path == OnboardingWidget.routePath)) {
+          final savedRoute = authState.lastAuthenticatedRoute;
+          if (_isAuthorizedRestoredRoute(savedRoute, role)) {
+            debugPrint('[AUTH ROUTE] Restoring last authenticated route');
+            return savedRoute;
+          }
+          if (role == 'super_admin') return SuperadminDashboardPage.routePath;
+          if (role == 'admin') return '/admin';
+          return DashboardWidget.routePath;
+        }
+
         if (!authState.isLoggedIn || authState.accessToken.isEmpty) {
+          if (authState.isLoggedIn && authState.refreshToken.isNotEmpty) {
+            return null;
+          }
           return publicRoute ? null : LoginpageWidget.routePath;
         }
 
-        final role = authState.role.toLowerCase();
         if (path.startsWith('/superadmin') && role != 'super_admin') {
           return role == 'admin' ? '/admin' : DashboardWidget.routePath;
         }
-        if (path.startsWith('/admin') && role != 'admin' && role != 'super_admin') {
+        if (path.startsWith('/admin') &&
+            role != 'admin' &&
+            role != 'super_admin') {
           return DashboardWidget.routePath;
         }
         if (role == 'super_admin' && path == DashboardWidget.routePath) {
@@ -418,9 +444,7 @@ class RouteLogger extends NavigatorObserver {
           location.startsWith('/onboarding') ||
           location.startsWith('/register');
       if (!publicRoute && sessionExists) {
-        SharedPreferences.getInstance().then(
-          (prefs) => prefs.setString('lastAuthenticatedRoute', location!),
-        );
+        FFAppState().lastAuthenticatedRoute = location!;
       }
     }
   }

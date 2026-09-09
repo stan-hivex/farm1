@@ -68,6 +68,13 @@ void main() async {
   await SocketService.initialize();
   await FlutterFlowTheme.initialize();
 
+  final prefs = await SharedPreferences.getInstance();
+  final savedLanguage = prefs.getString('language');
+  final languageCode = FFAppState().isLoggedIn &&
+          const ['en', 'sw', 'fr', 'es', 'ar'].contains(savedLanguage)
+      ? savedLanguage!
+      : 'en';
+
   if (FFAppState().isLoggedIn &&
       FFAppState().refreshToken.isNotEmpty &&
       FFAppState().isUser) {
@@ -84,6 +91,7 @@ void main() async {
   runZonedGuarded(() {
     runApp(
       EasyLocalization(
+        startLocale: Locale(languageCode),
         supportedLocales: const [
           Locale('en'),
           Locale('sw'),

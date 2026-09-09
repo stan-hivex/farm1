@@ -18,7 +18,8 @@ class FFAppState extends ChangeNotifier {
 
   AuthStartupState _authStartupState = AuthStartupState.initializing;
   AuthStartupState get authStartupState => _authStartupState;
-  bool get isAuthInitializing => _authStartupState == AuthStartupState.initializing;
+  bool get isAuthInitializing =>
+      _authStartupState == AuthStartupState.initializing;
 
   void setAuthStartupState(AuthStartupState value) {
     if (_authStartupState == value) return;
@@ -33,31 +34,46 @@ class FFAppState extends ChangeNotifier {
   Future<void> initializePersistedState() async {
     final prefs = await SharedPreferences.getInstance();
     final normalizedStoredRole =
-      (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+        (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
 
     final adminSession = await AuthSessionStore.readAdminSession();
     final superAdminSession = await AuthSessionStore.readSuperAdminSession();
     final userSession = await AuthSessionStore.readUserSession();
+    final secureAccessToken =
+        await SecureStorageService.readAccessToken() ?? '';
+    final secureRefreshToken =
+        await SecureStorageService.readRefreshToken() ?? '';
 
     if (normalizedStoredRole == 'admin' && adminSession != null) {
       _accessToken = adminSession.accessToken;
       _refreshToken = adminSession.refreshToken;
       _userId = adminSession.userId;
       _role = adminSession.role;
-      _isLoggedIn = adminSession.accessToken.isNotEmpty;
+      _isLoggedIn = adminSession.accessToken.isNotEmpty ||
+          adminSession.refreshToken.isNotEmpty;
     } else if (normalizedStoredRole == 'super_admin' &&
         superAdminSession != null) {
       _accessToken = superAdminSession.accessToken;
       _refreshToken = superAdminSession.refreshToken;
       _userId = superAdminSession.userId;
       _role = superAdminSession.role;
-      _isLoggedIn = superAdminSession.accessToken.isNotEmpty;
+      _isLoggedIn = superAdminSession.accessToken.isNotEmpty ||
+          superAdminSession.refreshToken.isNotEmpty;
     } else if (normalizedStoredRole == 'user' && userSession != null) {
       _accessToken = userSession.accessToken;
       _refreshToken = userSession.refreshToken;
       _userId = userSession.userId;
       _role = userSession.role;
-      _isLoggedIn = userSession.accessToken.isNotEmpty;
+      _isLoggedIn = userSession.accessToken.isNotEmpty ||
+          userSession.refreshToken.isNotEmpty;
+    } else if (normalizedStoredRole.isNotEmpty &&
+        (secureAccessToken.isNotEmpty || secureRefreshToken.isNotEmpty)) {
+      _accessToken = secureAccessToken;
+      _refreshToken = secureRefreshToken;
+      _userId = prefs.getString('userId') ?? '';
+      _role = normalizedStoredRole;
+      _isLoggedIn =
+          secureAccessToken.isNotEmpty || secureRefreshToken.isNotEmpty;
     } else {
       _accessToken = '';
       _refreshToken = '';
@@ -87,6 +103,7 @@ class FFAppState extends ChangeNotifier {
     _kesEquivalent = prefs.getDouble('kesEquivalent') ?? 0.0;
     _profileImageUrl = prefs.getString('profileImageUrl') ?? '';
     _unreadNotificationCount = prefs.getInt('unreadNotificationCount') ?? 0;
+    _lastAuthenticatedRoute = prefs.getString('lastAuthenticatedRoute') ?? '';
     if (prefs.containsKey('biometricLockTimeoutSeconds')) {
       _biometricLockTimeoutSeconds =
           prefs.getInt('biometricLockTimeoutSeconds') ?? 600;
@@ -119,7 +136,7 @@ class FFAppState extends ChangeNotifier {
 
     // Diagnostic auth restore log
     debugPrint(
-        '[AUTH] initializePersistedState: role=$_role userId=$_userId accessTokenPresent=${_accessToken.isNotEmpty} refreshTokenPresent=${_refreshToken.isNotEmpty} isLoggedIn=$_isLoggedIn');
+        '[AUTH STARTUP] Restored role=$_role accessTokenPresent=${_accessToken.isNotEmpty} refreshTokenPresent=${_refreshToken.isNotEmpty} authenticated=$_isLoggedIn');
   }
 
   bool _suspendNotifications = false;
@@ -200,6 +217,7 @@ class FFAppState extends ChangeNotifier {
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setString('userId', value),
     );
+    SecureStorageService.writeUserId(value);
   }
 
   String _firstName = '';
@@ -266,6 +284,18 @@ class FFAppState extends ChangeNotifier {
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setBool('isLoggedIn', value),
     );
+  }
+
+  String _lastAuthenticatedRoute = '';
+  String get lastAuthenticatedRoute => _lastAuthenticatedRoute;
+  set lastAuthenticatedRoute(String value) {
+    if (_lastAuthenticatedRoute == value) return;
+    _lastAuthenticatedRoute = value;
+    notifyListeners();
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setString('lastAuthenticatedRoute', value),
+    );
+    SecureStorageService.writeLastAuthenticatedRoute(value);
   }
 
   bool _biometricsEnabled = false;
@@ -407,6 +437,7 @@ class FFAppState extends ChangeNotifier {
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setString('role', value),
     );
+    SecureStorageService.writeRole(value);
   }
 
   bool get isUser => _role.toLowerCase() == 'user';
@@ -499,6 +530,7 @@ class FFAppState extends ChangeNotifier {
     biometricsEnabled = false;
     hasPin = false;
     role = '';
+    lastAuthenticatedRoute = '';
     themeMode = ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('accessToken');

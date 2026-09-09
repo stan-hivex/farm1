@@ -170,8 +170,8 @@ class _NotificationSettingsPageWidgetState
         
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Notification preferences updated'),
+            SnackBar(
+              content: Text('common.notification_updated'.tr()),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -179,8 +179,8 @@ class _NotificationSettingsPageWidgetState
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Unable to update preferences'),
+            SnackBar(
+              content: Text('common.notification_update_failed'.tr()),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -192,8 +192,8 @@ class _NotificationSettingsPageWidgetState
       debugPrint('SAVE SETTINGS ERROR: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Unable to update preferences right now'),
+          SnackBar(
+            content: Text('common.notification_update_failed'.tr()),
             behavior: SnackBarBehavior.floating,
           ),
         );

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
+import '/flutter_flow/flutter_flow_util.dart';
 
 class ForgotPinPageWidget extends StatefulWidget {
   const ForgotPinPageWidget({super.key});
@@ -38,28 +39,28 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
 
     if (contact.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your phone number or email')),
+        SnackBar(content: Text('validation.contact_required'.tr())),
       );
       return;
     }
 
     if (newPin.length < 4 || confirmPin.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PIN must be at least 4 digits')),
+        SnackBar(content: Text('validation.pin_length'.tr())),
       );
       return;
     }
 
     if (newPin != confirmPin) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PINs do not match')),
+        SnackBar(content: Text('validation.pin_mismatch'.tr())),
       );
       return;
     }
 
     if (password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your password to continue')),
+        SnackBar(content: Text('validation.password_required'.tr())),
       );
       return;
     }
@@ -76,7 +77,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
 
       final message = response['message']?.toString() ??
           response['error']?.toString() ??
-          'PIN updated successfully';
+          'pin.updated'.tr();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
@@ -85,7 +86,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to update PIN right now: $e')),
+        SnackBar(content: Text('${'pin.update_failed'.tr()}: $e')),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -99,7 +100,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
-        title: const Text('Forgot PIN'),
+        title: Text('pin.forgot'.tr()),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
       ),
@@ -109,12 +110,12 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Reset your transaction PIN',
+              'pin.reset_title'.tr(),
               style: theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
-              'Use this screen to restore or update your PIN. We will validate your request and update your account when the backend accepts it.',
+              'pin.reset_description'.tr(),
               style: theme.bodyMedium,
             ),
             const SizedBox(height: 20),
@@ -129,8 +130,8 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
                     TextField(
                       controller: _contactController,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone or email',
+                      decoration: InputDecoration(
+                        labelText: 'pin.phone_or_email'.tr(),
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.contact_phone_outlined),
                       ),

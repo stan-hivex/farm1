@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '/backend/services/api_service.dart';
 import '/core/responsive.dart';
@@ -27,6 +28,8 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
   List<Map<String, dynamic>> _transactions = [];
   String _selectedType = 'all';
   String _selectedStatus = 'all';
+  String _search = '';
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -38,6 +41,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
   @override
   void dispose() {
     _model.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -155,6 +159,15 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
       }
     }
 
+    if (_search.isNotEmpty) {
+      final needle = _search.toLowerCase();
+      final haystack = [
+        tx['id'], tx['transaction_id'], tx['transaction_reference'],
+        tx['reference'], tx['description'], tx['transaction_type'],
+      ].map((value) => value?.toString().toLowerCase() ?? '').join(' ');
+      if (!haystack.contains(needle)) return false;
+    }
+
     return true;
   }
 
@@ -194,7 +207,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
-        title: const Text('Transactions'),
+        title: Text('transactions.title'.tr()),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
       ),
@@ -207,20 +220,34 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Your transaction history',
+                  'transactions.history'.tr(),
                   style:
                       theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search transaction ID or description',
+                    prefixIcon: const Icon(Icons.search_rounded),
+                    suffixIcon: _search.isEmpty ? null : IconButton(
+                      icon: const Icon(Icons.clear_rounded),
+                      onPressed: () { _searchController.clear(); setState(() => _search = ''); },
+                    ),
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => setState(() => _search = value.trim()),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _filterChip('All', 'all'),
-                    _filterChip('Sent', 'send'),
-                    _filterChip('Received', 'receive'),
-                    _filterChip('Deposit', 'deposit'),
-                    _filterChip('Withdraw', 'withdraw'),
+                    _filterChip('transactions.all'.tr(), 'all'),
+                    _filterChip('transactions.sent'.tr(), 'send'),
+                    _filterChip('transactions.received'.tr(), 'receive'),
+                    _filterChip('transactions.deposit'.tr(), 'deposit'),
+                    _filterChip('transactions.withdraw'.tr(), 'withdraw'),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -228,10 +255,10 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _statusChip('All', 'all'),
-                    _statusChip('Pending', 'pending'),
-                    _statusChip('Completed', 'completed'),
-                    _statusChip('Failed', 'failed'),
+                    _statusChip('transactions.all'.tr(), 'all'),
+                    _statusChip('status.pending'.tr(), 'pending'),
+                    _statusChip('status.completed'.tr(), 'completed'),
+                    _statusChip('status.failed'.tr(), 'failed'),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -252,7 +279,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text('No transactions match your filters yet.',
+                      child: Text('transactions.empty'.tr(),
                           style: theme.bodyMedium),
                     ),
                   )
@@ -346,6 +373,21 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Expanded(child: Text('Transaction ID: ${(tx['transaction_reference'] ?? tx['id'] ?? tx['transaction_id'] ?? '-')} ', style: theme.bodySmall)),
+                                        IconButton(
+                                          tooltip: 'Copy transaction ID',
+                                          icon: const Icon(Icons.copy_rounded, size: 18),
+                                          onPressed: () {
+                                            final id = (tx['transaction_reference'] ?? tx['id'] ?? tx['transaction_id'] ?? '').toString();
+                                            Clipboard.setData(ClipboardData(text: id));
+                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction ID copied')));
+                                          },
                                         ),
                                       ],
                                     ),

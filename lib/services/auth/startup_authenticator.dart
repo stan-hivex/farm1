@@ -13,7 +13,8 @@ import 'refresh_manager.dart';
 ///   when a persisted session exists.
 /// - If refresh is temporarily unavailable, keeps the persisted session intact.
 class StartupAuthenticator {
-  static final StartupAuthenticator _instance = StartupAuthenticator._internal();
+  static final StartupAuthenticator _instance =
+      StartupAuthenticator._internal();
   factory StartupAuthenticator() => _instance;
   StartupAuthenticator._internal();
 
@@ -24,7 +25,8 @@ class StartupAuthenticator {
     state.setAuthStartupState(AuthStartupState.initializing);
     debugPrint('[AUTH STARTUP] Beginning session restoration');
     try {
-      final role = (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+      final role =
+          (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
       if (role.isEmpty) {
         state.setAuthStartupState(AuthStartupState.unauthenticated);
         return;
@@ -36,7 +38,8 @@ class StartupAuthenticator {
         return;
       }
 
-      debugPrint('[AUTH STARTUP] Persisted session found; restoring role=$role');
+      debugPrint('[AUTH STARTUP] Persisted session found');
+      debugPrint('[AUTH STARTUP] Restoring role=$role');
 
       // Populate in-memory state conservatively if missing
       if (state.accessToken.isEmpty && (persisted.accessToken).isNotEmpty) {
@@ -50,7 +53,8 @@ class StartupAuthenticator {
       }
       state.role = persisted.role;
       // A refresh token keeps the session authenticated while access is renewed.
-      state.isLoggedIn = state.accessToken.isNotEmpty || state.refreshToken.isNotEmpty;
+      state.isLoggedIn =
+          state.accessToken.isNotEmpty || state.refreshToken.isNotEmpty;
 
       // Try a forced refresh to ensure tokens are valid. If refresh succeeds,
       // the RefreshManager will update persisted session tokens as needed.
@@ -74,7 +78,8 @@ class StartupAuthenticator {
             : profileResponse;
         final serverUserId = profile['id']?.toString() ?? '';
         final serverRole = profile['role']?.toString().toLowerCase() ?? '';
-        if (serverUserId.isEmpty || serverRole.isEmpty ||
+        if (serverUserId.isEmpty ||
+            serverRole.isEmpty ||
             (state.userId.isNotEmpty && serverUserId != state.userId)) {
           await state.clearAuthCredentials('startup identity mismatch');
           return;
@@ -88,17 +93,30 @@ class StartupAuthenticator {
           userId: serverUserId,
         );
       } catch (e) {
+        if (RefreshManager().lastFailureWasRevocation) {
+          await state.clearAuthCredentials(
+              'profile request confirmed session revocation');
+          return;
+        }
         debugPrint('[AUTH STARTUP] Profile verification unavailable: $e');
       }
 
       if (!refreshed) {
-        debugPrint('[AUTH STARTUP] Preserving persisted session after temporary refresh failure');
+        debugPrint(
+            '[AUTH STARTUP] Preserving persisted session after temporary refresh failure');
       }
       state.setAuthStartupState(AuthStartupState.authenticated);
       debugPrint('[AUTH STARTUP] Authenticated state restored');
     } catch (e) {
-      state.setAuthStartupState(AuthStartupState.unauthenticated);
-      debugPrint('[StartupAuthenticator] restoreSession error: $e');
+      if (state.refreshToken.isNotEmpty || state.accessToken.isNotEmpty) {
+        state.isLoggedIn = true;
+        state.setAuthStartupState(AuthStartupState.authenticated);
+        debugPrint(
+            '[AUTH STARTUP] Restoration temporarily unavailable; session preserved');
+      } else {
+        state.setAuthStartupState(AuthStartupState.unauthenticated);
+        debugPrint('[StartupAuthenticator] restoreSession error: $e');
+      }
     }
   }
 }
