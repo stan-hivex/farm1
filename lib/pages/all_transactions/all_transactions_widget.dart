@@ -5,6 +5,7 @@ import '/backend/services/api_service.dart';
 import '/core/responsive.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_peer_resolver.dart';
 import 'all_transactions_model.dart';
 
@@ -28,8 +29,33 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
   List<Map<String, dynamic>> _transactions = [];
   String _selectedType = 'all';
   String _selectedStatus = 'all';
+  final TextEditingController _searchController = TextEditingController();
+  final Set<int> _selectedTransactions = <int>{};
   String _search = '';
-  final _searchController = TextEditingController();
+
+  List<Map<String, dynamic>> get _visibleTransactions {
+    final needle = _search.trim().toLowerCase();
+    if (needle.isEmpty) return _transactions;
+    return _transactions.where((tx) {
+      final values = [
+        tx['transaction_id'],
+        tx['transactionId'],
+        tx['transaction_reference'],
+        tx['reference'],
+        tx['id'],
+        tx['description'],
+        tx['transaction_type'],
+        tx['type'],
+        tx['sender_username'],
+        tx['recipient_username'],
+        tx['merchant_business_name'],
+        tx['status'],
+        tx['amount'],
+      ];
+      return values.any(
+          (value) => value?.toString().toLowerCase().contains(needle) == true);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -40,9 +66,43 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
 
   @override
   void dispose() {
-    _model.dispose();
     _searchController.dispose();
+    _model.dispose();
     super.dispose();
+  }
+
+  List<Map<String, dynamic>> get _selectedReceipts => _selectedTransactions
+      .where((index) => index >= 0 && index < _visibleTransactions.length)
+      .map((index) => _visibleTransactions[index])
+      .toList();
+
+  Future<void> _downloadSelected() async {
+    try {
+      await TransactionReceiptService.downloadReceipts(_selectedReceipts);
+      if (!mounted) return;
+      setState(() => _selectedTransactions.clear());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected receipts saved to gallery')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save receipts: $error')),
+      );
+    }
+  }
+
+  Future<void> _shareSelected() async {
+    try {
+      await TransactionReceiptService.shareReceipts(_selectedReceipts);
+      if (!mounted) return;
+      setState(() => _selectedTransactions.clear());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not share receipts: $error')),
+      );
+    }
   }
 
   Future<void> _loadTransactions() async {
@@ -159,15 +219,6 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
       }
     }
 
-    if (_search.isNotEmpty) {
-      final needle = _search.toLowerCase();
-      final haystack = [
-        tx['id'], tx['transaction_id'], tx['transaction_reference'],
-        tx['reference'], tx['description'], tx['transaction_type'],
-      ].map((value) => value?.toString().toLowerCase() ?? '').join(' ');
-      if (!haystack.contains(needle)) return false;
-    }
-
     return true;
   }
 
@@ -207,7 +258,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
-        title: Text('transactions.title'.tr()),
+        title: const Text('Transactions'),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
       ),
@@ -220,7 +271,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'transactions.history'.tr(),
+                  'Your transaction history',
                   style:
                       theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -228,26 +279,57 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                 TextField(
                   controller: _searchController,
                   decoration: InputDecoration(
-                    hintText: 'Search transaction ID or description',
+                    hintText: 'Search by ID, type, person, amount, or status',
                     prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _search.isEmpty ? null : IconButton(
-                      icon: const Icon(Icons.clear_rounded),
-                      onPressed: () { _searchController.clear(); setState(() => _search = ''); },
-                    ),
+                    suffixIcon: _search.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Clear search',
+                            icon: const Icon(Icons.clear_rounded),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _search = '';
+                                _selectedTransactions.clear();
+                              });
+                            },
+                          ),
                     border: const OutlineInputBorder(),
                   ),
-                  onChanged: (value) => setState(() => _search = value.trim()),
+                  onChanged: (value) => setState(() {
+                    _search = value;
+                    _selectedTransactions.clear();
+                  }),
                 ),
+                if (_selectedTransactions.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Text('${_selectedTransactions.length} selected'),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Share selected receipts',
+                        icon: const Icon(Icons.share_rounded),
+                        onPressed: _shareSelected,
+                      ),
+                      IconButton(
+                        tooltip: 'Download selected receipts',
+                        icon: const Icon(Icons.download_rounded),
+                        onPressed: _downloadSelected,
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _filterChip('transactions.all'.tr(), 'all'),
-                    _filterChip('transactions.sent'.tr(), 'send'),
-                    _filterChip('transactions.received'.tr(), 'receive'),
-                    _filterChip('transactions.deposit'.tr(), 'deposit'),
-                    _filterChip('transactions.withdraw'.tr(), 'withdraw'),
+                    _filterChip('All', 'all'),
+                    _filterChip('Sent', 'send'),
+                    _filterChip('Received', 'receive'),
+                    _filterChip('Deposit', 'deposit'),
+                    _filterChip('Withdraw', 'withdraw'),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -255,10 +337,10 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    _statusChip('transactions.all'.tr(), 'all'),
-                    _statusChip('status.pending'.tr(), 'pending'),
-                    _statusChip('status.completed'.tr(), 'completed'),
-                    _statusChip('status.failed'.tr(), 'failed'),
+                    _statusChip('All', 'all'),
+                    _statusChip('Pending', 'pending'),
+                    _statusChip('Completed', 'completed'),
+                    _statusChip('Failed', 'failed'),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -275,11 +357,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                           style: const TextStyle(color: Colors.redAccent)),
                     ),
                   )
-                else if (_transactions.isEmpty)
+                else if (_visibleTransactions.isEmpty)
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text('transactions.empty'.tr(),
+                      child: Text('No transactions match your filters yet.',
                           style: theme.bodyMedium),
                     ),
                   )
@@ -287,10 +369,10 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                   ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _transactions.length,
+                    itemCount: _visibleTransactions.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
-                      final tx = _transactions[index];
+                      final tx = _visibleTransactions[index];
                       final type = (tx['transaction_type'] ??
                               tx['type'] ??
                               'Transaction')
@@ -324,13 +406,27 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                           ? '${isOutgoing ? 'To' : 'From'} $peerWithMerchant'
                           : '${isOutgoing ? 'To' : 'From'} $peer';
 
-                      return Card(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        child: Padding(
-                          padding: const EdgeInsets.all(14),
-                          child: Row(
-                            children: [
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () =>
+                            TransactionReceiptService.showDetails(context, tx),
+                        child: Card(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: _selectedTransactions.contains(index),
+                                  onChanged: (selected) => setState(() {
+                                    if (selected == true) {
+                                      _selectedTransactions.add(index);
+                                    } else {
+                                      _selectedTransactions.remove(index);
+                                    }
+                                  }),
+                                ),
                               CircleAvatar(
                                 radius: 22,
                                 backgroundColor: theme.secondaryBackground,
@@ -355,6 +451,44 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                                 fontWeight: FontWeight.w700),
                                           ),
                                         ),
+                                        if (TransactionReceiptService.transactionId(tx)
+                                            .isNotEmpty)
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  'ID: ${TransactionReceiptService.transactionId(tx)}',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: theme.bodySmall,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Copy transaction ID',
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                                icon: const Icon(Icons.copy_rounded,
+                                                    size: 18),
+                                                onPressed: () async {
+                                                  await Clipboard.setData(
+                                                    ClipboardData(
+                                                      text: TransactionReceiptService
+                                                          .transactionId(tx),
+                                                    ),
+                                                  );
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context)
+                                                        .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                            'Transaction ID copied'),
+                                                      ),
+                                                    );
+                                                  }
+                                                },
+                                              ),
+                                            ],
+                                          ),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 10, vertical: 4),
@@ -373,21 +507,6 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        Expanded(child: Text('Transaction ID: ${(tx['transaction_reference'] ?? tx['id'] ?? tx['transaction_id'] ?? '-')} ', style: theme.bodySmall)),
-                                        IconButton(
-                                          tooltip: 'Copy transaction ID',
-                                          icon: const Icon(Icons.copy_rounded, size: 18),
-                                          onPressed: () {
-                                            final id = (tx['transaction_reference'] ?? tx['id'] ?? tx['transaction_id'] ?? '').toString();
-                                            Clipboard.setData(ClipboardData(text: id));
-                                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaction ID copied')));
-                                          },
                                         ),
                                       ],
                                     ),
@@ -429,7 +548,8 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                   ],
                                 ),
                               ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       );

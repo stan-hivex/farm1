@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 // Removed unused import
 
@@ -57,9 +56,10 @@ class _NotificationSettingsPageWidgetState
   Future<void> loadSettings() async {
     // Don't reload settings if we're currently saving
     if (isSaving) return;
-    
+
     try {
-      final resp = await ApiService.request(method: 'GET', path: '/notifications/settings');
+      final resp = await ApiService.request(
+          method: 'GET', path: '/notifications/settings');
 
       if (!mounted || isSaving) return;
 
@@ -137,10 +137,10 @@ class _NotificationSettingsPageWidgetState
 
   Future<bool> saveSettings() async {
     if (isSaving) return false;
-    
+
     try {
       isSaving = true;
-      
+
       final resp = await ApiService.request(
         method: 'PUT',
         path: '/notifications/settings',
@@ -157,7 +157,7 @@ class _NotificationSettingsPageWidgetState
       if (!mounted) return false;
 
       final success = resp.isNotEmpty;
-      
+
       if (success) {
         FFAppState().update(() {
           FFAppState().pushNotifications = pushNotifications;
@@ -167,7 +167,7 @@ class _NotificationSettingsPageWidgetState
           FFAppState().notificationSoundEnabled = soundEnabled;
           FFAppState().notificationVibrationEnabled = vibrationEnabled;
         });
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -186,7 +186,7 @@ class _NotificationSettingsPageWidgetState
           );
         }
       }
-      
+
       return success;
     } catch (e) {
       debugPrint('SAVE SETTINGS ERROR: $e');
@@ -238,7 +238,7 @@ class _NotificationSettingsPageWidgetState
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
-        title: Text('Notifications'),
+        title: Text('common.notifications_title'.tr()),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh_rounded),
@@ -258,7 +258,7 @@ class _NotificationSettingsPageWidgetState
           padding: const EdgeInsets.all(16),
           children: [
             Text(
-              'Preferences',
+              'common.notifications_preferences'.tr(),
               style: theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
@@ -270,62 +270,77 @@ class _NotificationSettingsPageWidgetState
                 children: [
                   SwitchListTile(
                     value: pushNotifications,
-                    title: Text('Push notifications'),
-                    subtitle: Text('Receive alerts on your device'),
-                    onChanged: isSaving ? null : (value) async {
-                      setState(() => pushNotifications = value);
-                      await saveSettings();
-                    },
+                    title: Text('common.push_notifications'.tr()),
+                    subtitle:
+                        Text('common.push_notifications_description'.tr()),
+                    onChanged: isSaving
+                        ? null
+                        : (value) async {
+                            setState(() => pushNotifications = value);
+                            await saveSettings();
+                          },
                   ),
                   const Divider(height: 1),
                   SwitchListTile(
                     value: emailNotifications,
-                    title: Text('Email notifications'),
-                    subtitle: Text('Send updates to your inbox'),
-                    onChanged: isSaving ? null : (value) async {
-                      setState(() => emailNotifications = value);
-                      await saveSettings();
-                    },
+                    title: Text('common.email_notifications'.tr()),
+                    subtitle:
+                        Text('common.email_notifications_description'.tr()),
+                    onChanged: isSaving
+                        ? null
+                        : (value) async {
+                            setState(() => emailNotifications = value);
+                            await saveSettings();
+                          },
                   ),
                   const Divider(height: 1),
                   SwitchListTile(
                     value: inAppNotifications,
-                    title: Text('In-app notifications'),
-                    subtitle: Text('Show notifications inside the app'),
-                    onChanged: isSaving ? null : (value) async {
-                      setState(() => inAppNotifications = value);
-                      await saveSettings();
-                    },
+                    title: Text('common.in_app_notifications'.tr()),
+                    subtitle:
+                        Text('common.in_app_notifications_description'.tr()),
+                    onChanged: isSaving
+                        ? null
+                        : (value) async {
+                            setState(() => inAppNotifications = value);
+                            await saveSettings();
+                          },
                   ),
                   const Divider(height: 1),
                   SwitchListTile(
                     value: smsNotifications,
-                    title: Text('SMS notifications'),
-                    subtitle: Text('Get important alerts by text'),
-                    onChanged: isSaving ? null : (value) async {
-                      setState(() => smsNotifications = value);
-                      await saveSettings();
-                    },
+                    title: Text('common.sms_notifications'.tr()),
+                    subtitle: Text('common.sms_notifications_description'.tr()),
+                    onChanged: isSaving
+                        ? null
+                        : (value) async {
+                            setState(() => smsNotifications = value);
+                            await saveSettings();
+                          },
                   ),
                   const Divider(height: 1),
                   SwitchListTile(
                     value: soundEnabled,
-                    title: Text('Sound'),
-                    subtitle: Text('Play sounds for notifications'),
-                    onChanged: isSaving ? null : (value) async {
-                      setState(() => soundEnabled = value);
-                      await saveSettings();
-                    },
+                    title: Text('common.sound'.tr()),
+                    subtitle: Text('common.sound_description'.tr()),
+                    onChanged: isSaving
+                        ? null
+                        : (value) async {
+                            setState(() => soundEnabled = value);
+                            await saveSettings();
+                          },
                   ),
                   const Divider(height: 1),
                   SwitchListTile(
                     value: vibrationEnabled,
-                    title: Text('Vibration'),
-                    subtitle: Text('Vibrate for incoming alerts'),
-                    onChanged: isSaving ? null : (value) async {
-                      setState(() => vibrationEnabled = value);
-                      await saveSettings();
-                    },
+                    title: Text('common.vibration'.tr()),
+                    subtitle: Text('common.vibration_description'.tr()),
+                    onChanged: isSaving
+                        ? null
+                        : (value) async {
+                            setState(() => vibrationEnabled = value);
+                            await saveSettings();
+                          },
                   ),
                 ],
               ),
@@ -334,8 +349,9 @@ class _NotificationSettingsPageWidgetState
             Row(
               children: [
                 Text(
-                  'Recent activity',
-                  style: theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
+                  'common.recent_activity'.tr(),
+                  style:
+                      theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const Spacer(),
                 TextButton.icon(
@@ -343,7 +359,7 @@ class _NotificationSettingsPageWidgetState
                     await loadNotifications();
                   },
                   icon: Icon(Icons.sync_rounded, size: 18),
-                  label: Text('Refresh'),
+                  label: Text('common.refresh'.tr()),
                 ),
               ],
             ),
@@ -369,10 +385,11 @@ class _NotificationSettingsPageWidgetState
                   padding: EdgeInsets.all(24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text('No notifications yet', style: TextStyle(fontWeight: FontWeight.w600)),
+                    children: [
+                      Text('common.notifications_empty_title'.tr(),
+                          style: TextStyle(fontWeight: FontWeight.w600)),
                       SizedBox(height: 8),
-                      Text('You will see account and transaction updates here.'),
+                      Text('common.notifications_empty_description'.tr()),
                     ],
                   ),
                 ),
@@ -388,7 +405,8 @@ class _NotificationSettingsPageWidgetState
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 10),
                             leading: CircleAvatar(
                               radius: 20,
                               backgroundColor: theme.secondaryBackground,

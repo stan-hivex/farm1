@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
 class SupportHelpCenterPageWidget extends StatefulWidget {
@@ -15,7 +16,6 @@ class SupportHelpCenterPageWidget extends StatefulWidget {
 
 class _SupportHelpCenterPageWidgetState
     extends State<SupportHelpCenterPageWidget> {
-
   void safeNavigate(String routeName) {
     try {
       context.pushNamed(routeName);
@@ -25,7 +25,7 @@ class _SupportHelpCenterPageWidgetState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Page not available: $routeName',
+            '${'common.page_not_available'.tr()}: $routeName',
           ),
         ),
       );
@@ -35,26 +35,20 @@ class _SupportHelpCenterPageWidgetState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor:
-          FlutterFlowTheme.of(context).primaryBackground,
-
+      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       appBar: AppBar(
-        backgroundColor:
-            FlutterFlowTheme.of(context).primaryBackground,
-        title: Text('Support & Help Center'),
+        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
+        title: Text('common.support_title'.tr()),
         elevation: 0,
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             Text(
-              'How can we help you?',
-              style:
-                  FlutterFlowTheme.of(context).titleMedium,
+              'common.support_question'.tr(),
+              style: FlutterFlowTheme.of(context).titleMedium,
             ),
 
             const SizedBox(height: 16),
@@ -65,9 +59,9 @@ class _SupportHelpCenterPageWidgetState
                 Icons.question_answer_rounded,
                 color: FlutterFlowTheme.of(context).primary,
               ),
-              title: Text('FAQs'),
+              title: Text('common.support_faqs'.tr()),
               subtitle: Text(
-                'Browse frequently asked questions',
+                'common.support_faqs_description'.tr(),
               ),
               trailing: Icon(
                 Icons.chevron_right_rounded,
@@ -85,9 +79,9 @@ class _SupportHelpCenterPageWidgetState
                 Icons.chat_rounded,
                 color: FlutterFlowTheme.of(context).primary,
               ),
-              title: Text('Live Chat'),
+              title: Text('common.support_live_chat'.tr()),
               subtitle: Text(
-                'Chat with support team',
+                'common.support_live_chat_description'.tr(),
               ),
               trailing: Icon(
                 Icons.chevron_right_rounded,
@@ -105,9 +99,9 @@ class _SupportHelpCenterPageWidgetState
                 Icons.email_rounded,
                 color: FlutterFlowTheme.of(context).primary,
               ),
-              title: Text('Email Support'),
+              title: Text('common.support_email'.tr()),
               subtitle: Text(
-                'Send a support request',
+                'common.support_email_description'.tr(),
               ),
               trailing: Icon(
                 Icons.chevron_right_rounded,
@@ -123,9 +117,8 @@ class _SupportHelpCenterPageWidgetState
 
             Center(
               child: Text(
-                'Support is available 24/7',
-                style:
-                    FlutterFlowTheme.of(context).bodySmall,
+                'common.support_availability'.tr(),
+                style: FlutterFlowTheme.of(context).bodySmall,
               ),
             ),
           ],

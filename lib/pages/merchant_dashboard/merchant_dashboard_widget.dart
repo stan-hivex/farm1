@@ -1,19 +1,19 @@
 ﻿import '/components/button/button_widget.dart';
 import '/components/merchant_stat_card/merchant_stat_card_widget.dart';
 import '/components/merchant_transaction_item/merchant_transaction_item_widget.dart';
-import '/flutter_flow/flutter_flow_charts.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/backend/services/api_service.dart';
 import '/core/app_config.dart';
 import '/services/qr_download_service.dart';
 import '/utils/merchant_qr_utils.dart';
+import '/services/transaction_receipt_service.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 import 'merchant_dashboard_model.dart';
-
 
 class MerchantDashboardWidget extends StatefulWidget {
   const MerchantDashboardWidget({super.key});
@@ -36,12 +36,15 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
   bool regeneratingQr = false;
   bool applyingMerchant = false;
   bool merchantNotFound = false;
+  String merchantStatus = 'active';
+  String? merchantStatusMessage;
 
   Map<String, dynamic>? merchant;
   Map<String, dynamic>? stats;
 
   List<dynamic> recentTransactions = [];
   List<double> weeklyData = List<double>.filled(7, 0);
+  List<String> weeklyLabels = List<String>.filled(7, '');
   String? merchantQrImageBase64;
 
   String? get _merchantQrBase64 {
@@ -98,66 +101,95 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       setState(() {
         loading = true;
         merchantNotFound = false;
+        merchantStatusMessage = null;
       });
 
-      final resp = await ApiService.request(method: 'GET', path: '/merchant/dashboard');
-      final data = resp['data'] ?? resp;
-        final transactions = data['recent_transactions'] ?? [];
+      final resp =
+          await ApiService.request(method: 'GET', path: '/merchant/dashboard');
+      final rawData = resp['data'];
+      final data = rawData is Map
+          ? Map<String, dynamic>.from(rawData)
+          : Map<String, dynamic>.from(resp);
+      final status = data['application_status']?.toString().toLowerCase() ??
+          ((data['merchant'] is Map && data['merchant']['status'] != null)
+              ? data['merchant']['status'].toString().toLowerCase()
+              : 'active');
+      if (status == 'not_submitted' ||
+          status == 'pending' ||
+          status == 'rejected' ||
+          status == 'kyc_required') {
         setState(() {
-          merchant = data['merchant'];
-          stats = data['stats'];
-          recentTransactions = transactions;
-          weeklyData = _buildWeeklyData(data['stats'], transactions);
+          merchantStatus = status;
+          merchantStatusMessage = data['message']?.toString();
+          merchantNotFound = status == 'not_submitted';
           loading = false;
         });
-
-        if (_merchantQrBase64 == null) {
-          await _fetchMerchantQr();
-        }
-      // ApiService throws on non-2xx responses, but just in case handle missing data
-      if (data == null) {
-        setState(() {
-          loading = false;
-        });
-        showError('Failed to load merchant dashboard');
         return;
       }
 
-      if (data is Map) {
-        final message = (data['message']?.toString() ?? '');
-        if (message.contains('Merchant account not found')) {
-          setState(() {
-            merchantNotFound = true;
-            loading = false;
-          });
-          return;
-        }
-        setState(() {
-          loading = false;
-        });
-        showError(message);
-      }
-    } catch (e) {
+      final transactions = data['recent_transactions'] is List
+          ? data['recent_transactions'] as List
+          : <dynamic>[];
       setState(() {
+        merchantStatus = status;
+        merchant = data['merchant'] is Map
+            ? Map<String, dynamic>.from(data['merchant'])
+            : null;
+        stats = data['stats'] is Map
+            ? Map<String, dynamic>.from(data['stats'])
+            : null;
+        recentTransactions = transactions;
+        final weekly = _buildWeeklyData(data['stats'], transactions);
+        weeklyData = weekly.amounts;
+        weeklyLabels = weekly.labels;
         loading = false;
       });
-      showError(e.toString());
+
+      if (_merchantQrBase64 == null) {
+        await _fetchMerchantQr();
+      }
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '').trim();
+      if (message.toLowerCase().contains('merchant account not found')) {
+        setState(() {
+          merchantStatus = 'not_submitted';
+          merchantNotFound = true;
+          merchantStatusMessage =
+              'Welcome to the Merchant Portal. Submit your business details to get started.';
+          loading = false;
+        });
+        return;
+      }
+      if (message.toLowerCase().contains('full kyc')) {
+        setState(() {
+          merchantStatus = 'kyc_required';
+          merchantStatusMessage =
+              'Complete full identity verification before accessing the Merchant Portal.';
+          loading = false;
+        });
+        return;
+      }
+      setState(() => loading = false);
+      showError(message.isEmpty ? 'Unable to load merchant dashboard' : message);
     }
   }
 
-  List<double> _buildWeeklyData(
+  ({List<double> amounts, List<String> labels}) _buildWeeklyData(
     Map<String, dynamic>? data,
     List<dynamic> transactions,
   ) {
     if (data != null && data['weekly_performance'] is List) {
       final raw = data['weekly_performance'];
       if (raw is List) {
-        final converted = raw
-            .map<double?>((value) => double.tryParse(value?.toString() ?? '0'))
-            .whereType<double>()
-            .toList();
+        final converted = raw.whereType<Map>().toList();
         if (converted.length == 7) {
-          return converted;
+          return (
+            amounts: converted.map((value) => double.tryParse(value['amount']?.toString() ?? '0') ?? 0).toList(),
+            labels: converted.map((value) {
+              final date = DateTime.tryParse(value['date']?.toString() ?? '');
+              return date == null ? '-' : '${date.day}/${date.month}';
+            }).toList(),
+          );
         }
       }
     }
@@ -173,7 +205,13 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       final amount = double.tryParse(tx['amount']?.toString() ?? '0') ?? 0;
       totals[(date.weekday + 5) % 7] += amount;
     }
-    return totals;
+    return (
+      amounts: totals,
+      labels: List.generate(7, (index) {
+        final date = now.subtract(Duration(days: 6 - index));
+        return '${date.day}/${date.month}';
+      }),
+    );
   }
 
   String _formatMerchantTransactionDate(dynamic value) {
@@ -181,6 +219,132 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
     final parsed = DateTime.tryParse(value.toString());
     if (parsed == null) return value.toString();
     return dateTimeFormatEastAfricanTime('MMM d, yyyy • h:mm a', parsed);
+  }
+
+  Widget _buildWeeklySalesChart() {
+    final theme = FlutterFlowTheme.of(context);
+    final highestSale = weeklyData.fold<double>(0, (highest, value) => value > highest ? value : highest);
+    final chartMax = highestSale <= 0
+        ? 100.0
+        : ((highestSale * 1.25) / 50).ceil() * 50.0;
+    final barColor = theme.primary;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const leftReserved = 52.0;
+        const rightPadding = 8.0;
+        const topPadding = 8.0;
+        const bottomReserved = 28.0;
+        final plotWidth = constraints.maxWidth - leftReserved - rightPadding;
+        final plotHeight = 168 - topPadding - bottomReserved;
+
+        return SizedBox(
+          height: 168,
+          child: Stack(
+            children: [
+              BarChart(
+                BarChartData(
+                  minY: 0,
+                  maxY: chartMax,
+                  alignment: BarChartAlignment.spaceAround,
+                  barTouchData: BarTouchData(enabled: true),
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: chartMax / 4,
+                    getDrawingHorizontalLine: (_) => FlLine(
+                      color: theme.alternate.withValues(alpha: 0.35),
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  titlesData: FlTitlesData(
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      axisNameWidget: Text('FARM', style: theme.bodySmall),
+                      axisNameSize: 22,
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: leftReserved,
+                        interval: chartMax / 4,
+                        getTitlesWidget: (value, meta) => Text(
+                          _formatChartAmount(value),
+                          style: theme.bodySmall.copyWith(fontSize: 10),
+                        ),
+                      ),
+                    ),
+                    bottomTitles: AxisTitles(
+                      axisNameWidget: Text('Date', style: theme.bodySmall),
+                      axisNameSize: 22,
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: bottomReserved,
+                        getTitlesWidget: (value, meta) {
+                          final index = value.round();
+                          if (index < 0 || index >= weeklyLabels.length) return const SizedBox.shrink();
+                          return SideTitleWidget(
+                            meta: meta,
+                            child: Text(weeklyLabels[index], style: theme.bodySmall.copyWith(fontSize: 9)),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  barGroups: List.generate(
+                    weeklyData.length,
+                    (index) => BarChartGroupData(
+                      x: index,
+                      barRods: [
+                        BarChartRodData(
+                          toY: weeklyData[index],
+                          width: 18,
+                          color: barColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              IgnorePointer(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: leftReserved, right: rightPadding, top: topPadding),
+                  child: SizedBox(
+                    height: plotHeight,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: List.generate(weeklyData.length, (index) {
+                        final value = weeklyData[index];
+                        final labelOffset = plotHeight * (1 - (value / chartMax));
+                        return SizedBox(
+                          width: plotWidth / weeklyData.length,
+                          child: Transform.translate(
+                            offset: Offset(0, labelOffset.clamp(0, plotHeight - 14)),
+                            child: Text(
+                              _formatChartAmount(value),
+                              textAlign: TextAlign.center,
+                              style: theme.bodySmall.copyWith(fontSize: 9, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _formatChartAmount(double value) {
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
+    if (value == value.roundToDouble()) return value.toInt().toString();
+    return value.toStringAsFixed(1);
   }
 
   Future<void> applyMerchant() async {
@@ -336,7 +500,8 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
 
     if (qrSource == null || qrSource.isEmpty) {
       if (mounted) {
-        showError('No QR code available to download yet. Please try again shortly.');
+        showError(
+            'No QR code available to download yet. Please try again shortly.');
       }
       return;
     }
@@ -347,7 +512,8 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
         throw Exception('QR payload could not be decoded');
       }
 
-      final fileName = 'farm_merchant_qr_${DateTime.now().millisecondsSinceEpoch}.png';
+      final fileName =
+          'farm_merchant_qr_${DateTime.now().millisecondsSinceEpoch}.png';
       final result = await QrDownloadService.instance.downloadQr(
         Uint8List.fromList(bytes),
         fileName: fileName,
@@ -414,15 +580,15 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
         return AlertDialog(
           title: const Text('✓ QR Code Saved'),
           content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _shareQrKit();
-                },
-                child: const Text('SHARE'),
-              ),
-            ],
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _shareQrKit();
+              },
+              child: const Text('SHARE'),
+            ),
+          ],
         );
       },
     );
@@ -476,12 +642,14 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                   child: ElevatedButton(
                     onPressed: applyingMerchant ? null : applyMerchant,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white
-                          : Colors.black,
-                      foregroundColor: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.black
-                          : Colors.white,
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white
+                              : Colors.black,
+                      foregroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                              ? Colors.black
+                              : Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
@@ -562,18 +730,21 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                       child: ElevatedButton(
                         onPressed: payoutLoading ? null : requestPayout,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white
-                              : Colors.black,
-                          foregroundColor: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.black
-                              : Colors.white,
+                          backgroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black,
+                          foregroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.black
+                                  : Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         child: payoutLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
                             : const Text('Submit Payout Request'),
                       ),
                     ),
@@ -621,7 +792,8 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       ),
       style: const TextStyle(color: Colors.white),
     );
@@ -636,7 +808,26 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       );
     }
 
-    if (merchantNotFound) {
+    if (merchantNotFound ||
+      merchantStatus == 'pending' ||
+      merchantStatus == 'rejected' ||
+      merchantStatus == 'kyc_required') {
+      final needsApplication = merchantNotFound || merchantStatus == 'rejected';
+      final title = merchantStatus == 'pending'
+        ? 'Application under review'
+        : merchantStatus == 'kyc_required'
+          ? 'Complete identity verification'
+          : merchantStatus == 'rejected'
+            ? 'Application not approved'
+            : 'Welcome to the Merchant Portal';
+      final message = merchantStatusMessage ??
+        (merchantStatus == 'pending'
+          ? 'Your business details are being reviewed. Please wait for an admin decision.'
+          : merchantStatus == 'kyc_required'
+            ? 'Complete full identity verification before accessing the Merchant Portal.'
+            : merchantStatus == 'rejected'
+              ? 'Your application was not approved. Review your details and submit again.'
+              : 'Submit your business details to get started.');
       return Scaffold(
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         body: SafeArea(
@@ -650,18 +841,28 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                     width: 120,
                     height: 120,
                     decoration: BoxDecoration(
-                      color: FlutterFlowTheme.of(context).primary.withValues(alpha: 0.14),
+                      color: FlutterFlowTheme.of(context)
+                          .primary
+                          .withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(32),
                     ),
                     child: Icon(
-                      Icons.storefront_rounded,
+                      merchantStatus == 'kyc_required'
+                        ? Icons.verified_user_outlined
+                        : merchantStatus == 'pending'
+                          ? Icons.hourglass_top_rounded
+                          : merchantStatus == 'rejected'
+                            ? Icons.info_outline_rounded
+                            : Icons.storefront_rounded,
                       size: 60,
-                      color: FlutterFlowTheme.of(context).primary,
+                      color: merchantStatus == 'rejected'
+                        ? Colors.orange
+                        : Colors.green,
                     ),
                   ),
                   const SizedBox(height: 32),
                   Text(
-                    'Create Merchant Account',
+                    title,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 30,
                       color: FlutterFlowTheme.of(context).primaryText,
@@ -670,7 +871,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'You do not yet have a merchant account.\nApply now and start receiving payments.',
+                    message,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.plusJakartaSans(
                       color: FlutterFlowTheme.of(context).secondaryText,
@@ -683,20 +884,24 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: openApplyMerchantModal,
+                      onPressed: needsApplication ? openApplyMerchantModal : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white
-                            : Colors.black,
-                        foregroundColor: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.black
-                            : Colors.white,
+                        backgroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : Colors.black,
+                        foregroundColor:
+                            Theme.of(context).brightness == Brightness.dark
+                                ? Colors.black
+                                : Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(18),
                         ),
                       ),
                       child: Text(
-                        'Apply Merchant Account',
+                        merchantStatus == 'rejected'
+                            ? 'Update and resubmit details'
+                            : 'Enter business details',
                         style: GoogleFonts.plusJakartaSans(
                           fontWeight: FontWeight.bold,
                         ),
@@ -877,7 +1082,8 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Icon(
-                                  (stats?['monthly_growth_percentage'] ?? 0) >= 0
+                                  (stats?['monthly_growth_percentage'] ?? 0) >=
+                                          0
                                       ? Icons.trending_up_rounded
                                       : Icons.trending_down_rounded,
                                   color: FlutterFlowTheme.of(context).onPrimary,
@@ -1026,10 +1232,12 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                                           borderRadius:
                                               BorderRadius.circular(20),
                                           child: () {
-                                            final qrBytes = resolveMerchantQrBytes(
+                                            final qrBytes =
+                                                resolveMerchantQrBytes(
                                               _merchantQrBase64,
                                             );
-                                            if (qrBytes == null || qrBytes.isEmpty) {
+                                            if (qrBytes == null ||
+                                                qrBytes.isEmpty) {
                                               return const Center(
                                                 child: Icon(
                                                   Icons.qr_code_2_rounded,
@@ -1123,7 +1331,6 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                               ),
                             ),
                           ].divide(SizedBox(height: 24)),
-
                         ),
                       ),
                     ),
@@ -1175,78 +1382,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                               ),
                               child: Padding(
                                 padding: EdgeInsets.all(16),
-                                child: Container(
-                                  child: Container(
-                                    height: 168,
-                                    child: FlutterFlowBarChart(
-                                      barData: [
-                                        FFBarChartData(
-                                          yData: (weeklyData),
-                                          color: FlutterFlowTheme.of(context)
-                                              .primary,
-                                        )
-                                      ],
-                                      xLabels: ([
-                                        'M',
-                                        'T',
-                                        'W',
-                                        'T',
-                                        'F',
-                                        'S',
-                                        'S'
-                                      ]),
-                                      barWidth: 20,
-                                      barBorderRadius: BorderRadius.circular(4),
-                                      groupSpace: 12,
-                                      alignment: BarChartAlignment.spaceEvenly,
-                                      chartStylingInfo: ChartStylingInfo(
-                                        backgroundColor: Colors.transparent,
-                                        showBorder: false,
-                                      ),
-                                      axisBounds: AxisBounds(
-                                        minY: 0,
-                                        maxX: 6,
-                                        maxY: 720,
-                                      ),
-                                      xAxisLabelInfo: AxisLabelInfo(
-                                        showLabels: true,
-                                        labelTextStyle: FlutterFlowTheme.of(
-                                                context)
-                                            .bodySmall
-                                            .override(
-                                              font: GoogleFonts.inter(
-                                                fontWeight:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontWeight,
-                                                fontStyle:
-                                                    FlutterFlowTheme.of(context)
-                                                        .bodySmall
-                                                        .fontStyle,
-                                              ),
-                                              color:
-                                                  FlutterFlowTheme.of(context)
-                                                      .secondaryText,
-                                              fontSize: 10,
-                                              letterSpacing: 0.0,
-                                              fontWeight:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontWeight,
-                                              fontStyle:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodySmall
-                                                      .fontStyle,
-                                              lineHeight: 1,
-                                            ),
-                                        reservedSize: 20,
-                                      ),
-                                      yAxisLabelInfo: AxisLabelInfo(
-                                        reservedSize: 0,
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                child: _buildWeeklySalesChart(),
                               ),
                             ),
                           ].divide(SizedBox(height: 16)),
@@ -1313,34 +1449,43 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                               Center(
                                 child: Text(
                                   'No recent transactions',
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodyMedium,
+                                  style:
+                                      FlutterFlowTheme.of(context).bodyMedium,
                                 ),
                               ),
                             ]
-                          : recentTransactions
-                              .asMap()
-                              .entries
-                              .map((entry) {
-                                int index = entry.key;
-                                dynamic tx = entry.value;
-                                return wrapWithModel(
-                                  model: index == 0
-                                      ? _model.merchantTransactionItemModel1
-                                      : index == 1
-                                          ? _model.merchantTransactionItemModel2
-                                          : index == 2
-                                              ? _model
-                                                  .merchantTransactionItemModel3
-                                              : _model
-                                                  .merchantTransactionItemModel4,
-                                  updateCallback: () => safeSetState(() {}),
+                          : recentTransactions.asMap().entries.map((entry) {
+                              int index = entry.key;
+                              dynamic tx = entry.value;
+                              return wrapWithModel(
+                                model: index == 0
+                                    ? _model.merchantTransactionItemModel1
+                                    : index == 1
+                                        ? _model.merchantTransactionItemModel2
+                                        : index == 2
+                                            ? _model
+                                                .merchantTransactionItemModel3
+                                            : _model
+                                                .merchantTransactionItemModel4,
+                                updateCallback: () => safeSetState(() {}),
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      TransactionReceiptService.showDetails(
+                                          context,
+                                          Map<String, dynamic>.from(tx)),
                                   child: MerchantTransactionItemWidget(
                                     amount: '${tx['amount'] ?? 0}',
-                                    customer: tx['customer_name']?.toString().trim().isNotEmpty == true
+                                    customer: tx['customer_name']
+                                                ?.toString()
+                                                .trim()
+                                                .isNotEmpty ==
+                                            true
                                         ? tx['customer_name']
                                         : '@user',
-                                    date: _formatMerchantTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp']),
+                                    date: _formatMerchantTransactionDate(
+                                        tx['created_at'] ??
+                                            tx['createdAt'] ??
+                                            tx['timestamp']),
                                     icon: Icon(
                                       Icons.person_rounded,
                                       color: FlutterFlowTheme.of(context)
@@ -1349,9 +1494,9 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                                     ),
                                     status: tx['status'] ?? 'COMPLETED',
                                   ),
-                                );
-                              })
-                              .toList(),
+                                ),
+                              );
+                            }).toList(),
                     ),
                   ].divide(SizedBox(height: 16)),
                 ),

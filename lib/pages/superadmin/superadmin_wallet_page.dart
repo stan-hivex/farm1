@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
 import '/app_state.dart';
 import '/backend/services/api_service.dart';
+import 'superadmin_dashboard_page.dart';
 import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
- 
 
 class SuperadminWalletPage extends StatefulWidget {
   const SuperadminWalletPage({super.key});
@@ -85,9 +86,11 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
 
     try {
       setState(() => _isBiometricChecking = true);
-      final authResult = await TransactionAuthorizationService().authorizeTransaction(
-        localizedReason: 'Confirm withdrawal',
-      ).then((r) => r.toTransactionAuthenticationResult());
+      final authResult = await TransactionAuthorizationService()
+          .authorizeTransaction(
+            localizedReason: 'Confirm withdrawal',
+          )
+          .then((r) => r.toTransactionAuthenticationResult());
 
       if (authResult.biometricUsed) {
         if (!mounted) return;
@@ -113,7 +116,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       _error = null;
     });
     try {
-      final resp = await ApiService.request(method: 'GET', path: '/admin/wallet');
+      final resp =
+          await ApiService.request(method: 'GET', path: '/admin/wallet');
       setState(() => _walletData = resp['data'] ?? resp);
     } catch (e) {
       setState(() => _error = e.toString().replaceAll('Exception: ', ''));
@@ -122,7 +126,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     }
   }
 
-  Future<void> _processWithdrawal({TransactionAuthenticationResult? preAuthResult}) async {
+  Future<void> _processWithdrawal(
+      {TransactionAuthenticationResult? preAuthResult}) async {
     if (_amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields')),
@@ -131,9 +136,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     }
 
     try {
-      final authResult = preAuthResult ?? _lastPinAuthResult ?? await TransactionAuthorizationService().authorizeTransaction(
-        localizedReason: 'Confirm withdrawal',
-      ).then((r) => r.toTransactionAuthenticationResult());
+      final authResult = preAuthResult ??
+          _lastPinAuthResult ??
+          await TransactionAuthorizationService()
+              .authorizeTransaction(
+                localizedReason: 'Confirm withdrawal',
+              )
+              .then((r) => r.toTransactionAuthenticationResult());
 
       final usedBiometric = authResult?.biometricUsed == true;
       if (usedBiometric) {
@@ -149,7 +158,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
         if (_selectedWithdrawalMethod == 'MOBILE_MONEY') {
           if (_phoneController.text.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Phone number required for mobile money')),
+              const SnackBar(
+                  content: Text('Phone number required for mobile money')),
             );
             return;
           }
@@ -157,7 +167,9 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
         } else if (_selectedWithdrawalMethod == 'BANK_TRANSFER') {
           if (_selectedBank == null || _accountNumberController.text.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Bank and account number required for bank transfer')),
+              const SnackBar(
+                  content: Text(
+                      'Bank and account number required for bank transfer')),
             );
             return;
           }
@@ -178,7 +190,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
         );
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Withdrawal request submitted successfully')),
+          const SnackBar(
+              content: Text('Withdrawal request submitted successfully')),
         );
         _loadWalletData();
         _fetchWithdrawalHistory();
@@ -187,12 +200,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
 
       if (_pinController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PIN is required to authorize withdrawal')),
+          const SnackBar(
+              content: Text('PIN is required to authorize withdrawal')),
         );
         return;
       }
 
-        // Ensure authenticated; ApiService.request will attempt refresh if needed
+      // Ensure authenticated; ApiService.request will attempt refresh if needed
 
       final Map<String, dynamic> body = {
         'amount': double.parse(_amountController.text),
@@ -203,7 +217,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       if (_selectedWithdrawalMethod == 'MOBILE_MONEY') {
         if (_phoneController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Phone number required for mobile money')),
+            const SnackBar(
+                content: Text('Phone number required for mobile money')),
           );
           return;
         }
@@ -211,16 +226,20 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       } else if (_selectedWithdrawalMethod == 'BANK_TRANSFER') {
         if (_selectedBank == null || _accountNumberController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Bank and account number required for bank transfer')),
+            const SnackBar(
+                content:
+                    Text('Bank and account number required for bank transfer')),
           );
           return;
         }
         body['bankName'] = _selectedBank;
         body['accountNumber'] = _accountNumberController.text;
       } else if (_selectedWithdrawalMethod == 'CRYPTO') {
-        if (_cryptoAddressController.text.isEmpty || _cryptoNetworkController.text.isEmpty) {
+        if (_cryptoAddressController.text.isEmpty ||
+            _cryptoNetworkController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Crypto address and network required')),
+            const SnackBar(
+                content: Text('Crypto address and network required')),
           );
           return;
         }
@@ -228,7 +247,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
         body['network'] = _cryptoNetworkController.text;
       }
 
-      final decoded = await ApiService.request(method: 'POST', path: '/withdraw/create', body: body);
+      final decoded = await ApiService.request(
+          method: 'POST', path: '/withdraw/create', body: body);
 
       _clearWithdrawalForm();
       await _loadWalletData();
@@ -236,7 +256,9 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Withdrawal initiated: ${decoded['reference'] ?? ''}')),
+          SnackBar(
+              content:
+                  Text('Withdrawal initiated: ${decoded['reference'] ?? ''}')),
         );
       }
     } catch (e) {
@@ -252,7 +274,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     });
 
     try {
-      final resp = await ApiService.request(method: 'GET', path: '/withdraw/history');
+      final resp =
+          await ApiService.request(method: 'GET', path: '/withdraw/history');
       final decoded = resp['data'] ?? resp;
       final data = decoded is Map<String, dynamic>
           ? decoded['data'] ?? decoded['withdrawals'] ?? []
@@ -291,7 +314,11 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
   }
 
   String _resolveHistoryMethod(Map<String, dynamic> item) {
-    final rawMethod = item['method'] ?? item['payment_method'] ?? item['withdrawal_method'] ?? item['metadata']?['method'] ?? item['metadata']?['payment_method'];
+    final rawMethod = item['method'] ??
+        item['payment_method'] ??
+        item['withdrawal_method'] ??
+        item['metadata']?['method'] ??
+        item['metadata']?['payment_method'];
     if (rawMethod == null) return 'Unknown';
     return rawMethod.toString().replaceAll('_', ' ').toUpperCase();
   }
@@ -354,7 +381,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       );
     }
 
-    final balance = _walletData?['available_balance'] ?? _walletData?['balance'] ?? 0.0;
+    final balance =
+        _walletData?['available_balance'] ?? _walletData?['balance'] ?? 0.0;
     final pendingWithdrawals = _walletData?['pending_withdrawals'] ?? 0.0;
     final totalWithdrawn = _walletData?['total_withdrawn'] ?? 0.0;
     final currency = _walletData?['currency'] ?? 'FARM';
@@ -364,6 +392,17 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       appBar: AppBar(
         backgroundColor: cardColor,
         elevation: 0,
+        leading: IconButton(
+          tooltip: 'Back to dashboard',
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(SuperadminDashboardPage.routePath);
+            }
+          },
+        ),
         title: Text(
           'Superadmin Wallet',
           style: GoogleFonts.plusJakartaSans(
@@ -381,11 +420,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Balance Card
-              _buildBalanceCard(balance, pendingWithdrawals, currency, accent, cardColor, muted),
+              _buildBalanceCard(balance, pendingWithdrawals, currency, accent,
+                  cardColor, muted),
               const SizedBox(height: 24),
 
               // Withdrawal Stats
-              _buildWithdrawalStats(totalWithdrawn, currency, accent, cardColor, muted),
+              _buildWithdrawalStats(
+                  totalWithdrawn, currency, accent, cardColor, muted),
               const SizedBox(height: 24),
 
               // Withdrawal Method Selection
@@ -471,10 +512,18 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                   children: _history.map((item) {
                     final statusRaw = (item['status'] ?? 'pending').toString();
                     final status = statusRaw.toLowerCase();
-                    final isComplete = status == 'completed' || status == 'success';
-                    final method = _resolveHistoryMethod(item as Map<String, dynamic>);
-                    final date = _formatDate(item['created_at'] ?? item['createdAt'] ?? item['processed_at'] ?? item['date']);
-                    final amount = item['amount'] ?? item['settlement'] ?? item['balance'] ?? 0;
+                    final isComplete =
+                        status == 'completed' || status == 'success';
+                    final method =
+                        _resolveHistoryMethod(item as Map<String, dynamic>);
+                    final date = _formatDate(item['created_at'] ??
+                        item['createdAt'] ??
+                        item['processed_at'] ??
+                        item['date']);
+                    final amount = item['amount'] ??
+                        item['settlement'] ??
+                        item['balance'] ??
+                        0;
 
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
@@ -518,15 +567,20 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: isComplete ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                                  color: isComplete
+                                      ? Colors.green.withValues(alpha: 0.15)
+                                      : Colors.orange.withValues(alpha: 0.15),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
                                   status.toUpperCase(),
                                   style: GoogleFonts.plusJakartaSans(
-                                    color: isComplete ? Colors.greenAccent : Colors.orangeAccent,
+                                    color: isComplete
+                                        ? Colors.greenAccent
+                                        : Colors.orangeAccent,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -547,12 +601,16 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     );
   }
 
-  Widget _buildBalanceCard(double balance, double pending, String currency, Color accent, Color cardColor, Color muted) {
+  Widget _buildBalanceCard(double balance, double pending, String currency,
+      Color accent, Color cardColor, Color muted) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [accent.withValues(alpha: 0.1), accent.withValues(alpha: 0.05)],
+          colors: [
+            accent.withValues(alpha: 0.1),
+            accent.withValues(alpha: 0.05)
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -613,7 +671,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     );
   }
 
-  Widget _buildWithdrawalStats(double totalWithdrawn, String currency, Color accent, Color cardColor, Color muted) {
+  Widget _buildWithdrawalStats(double totalWithdrawn, String currency,
+      Color accent, Color cardColor, Color muted) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -651,7 +710,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
               color: accent.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.account_balance_wallet_rounded, color: accent, size: 24),
+            child: Icon(Icons.account_balance_wallet_rounded,
+                color: accent, size: 24),
           ),
         ],
       ),
@@ -673,9 +733,11 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
           return Padding(
             padding: const EdgeInsets.only(right: 10),
             child: GestureDetector(
-              onTap: () => setState(() => _selectedWithdrawalMethod = method.$1),
+              onTap: () =>
+                  setState(() => _selectedWithdrawalMethod = method.$1),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: isSelected ? accent : cardColor,
                   borderRadius: BorderRadius.circular(12),
@@ -720,11 +782,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildInputField('Amount (FARM)', _amountController, 'Enter amount', accent, isNumeric: true),
+          _buildInputField(
+              'Amount (FARM)', _amountController, 'Enter amount', accent,
+              isNumeric: true),
           const SizedBox(height: 14),
-
           if (_selectedWithdrawalMethod == 'MOBILE_MONEY') ...[
-            _buildInputField('Phone Number', _phoneController, 'e.g. +254712345678', accent),
+            _buildInputField(
+                'Phone Number', _phoneController, 'e.g. +254712345678', accent),
             const SizedBox(height: 14),
           ] else if (_selectedWithdrawalMethod == 'BANK_TRANSFER') ...[
             Container(
@@ -737,7 +801,9 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                 value: _selectedBank,
                 hint: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text('Select Bank', style: GoogleFonts.plusJakartaSans(color: Colors.white70)),
+                  child: Text('Select Bank',
+                      style:
+                          GoogleFonts.plusJakartaSans(color: Colors.white70)),
                 ),
                 isExpanded: true,
                 underline: const SizedBox(),
@@ -747,7 +813,9 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                     value: bank,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(bank, style: GoogleFonts.plusJakartaSans(color: Colors.white)),
+                      child: Text(bank,
+                          style:
+                              GoogleFonts.plusJakartaSans(color: Colors.white)),
                     ),
                   );
                 }).toList(),
@@ -755,15 +823,17 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
               ),
             ),
             const SizedBox(height: 14),
-            _buildInputField('Account Number', _accountNumberController, 'Bank account number', accent),
+            _buildInputField('Account Number', _accountNumberController,
+                'Bank account number', accent),
             const SizedBox(height: 14),
           ] else if (_selectedWithdrawalMethod == 'CRYPTO') ...[
-            _buildInputField('Wallet Address', _cryptoAddressController, 'Your wallet address', accent),
+            _buildInputField('Wallet Address', _cryptoAddressController,
+                'Your wallet address', accent),
             const SizedBox(height: 14),
-            _buildInputField('Network', _cryptoNetworkController, 'e.g. TRON, BSC, ETH', accent),
+            _buildInputField('Network', _cryptoNetworkController,
+                'e.g. TRON, BSC, ETH', accent),
             const SizedBox(height: 14),
           ],
-
           if (_pinEntryEnabled)
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -785,7 +855,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                   obscureText: true,
                   decoration: InputDecoration(
                     hintText: 'Your transaction PIN',
-                    hintStyle: GoogleFonts.plusJakartaSans(color: Colors.white38),
+                    hintStyle:
+                        GoogleFonts.plusJakartaSans(color: Colors.white38),
                     filled: true,
                     fillColor: Colors.white.withValues(alpha: 0.05),
                     border: OutlineInputBorder(
@@ -836,7 +907,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, String hint, Color accent,
+  Widget _buildInputField(
+      String label, TextEditingController controller, String hint, Color accent,
       {bool isPassword = false, bool isNumeric = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -872,7 +944,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
               borderRadius: BorderRadius.circular(10),
               borderSide: BorderSide(color: accent),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
       ],

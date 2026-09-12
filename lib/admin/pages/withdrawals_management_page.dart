@@ -18,6 +18,14 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage> {
   bool _loading = true;
   String _statusFilter = 'all';
   int _page = 1;
+  String _search = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -130,9 +138,10 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage> {
                                           context.onSurface.withOpacity(0.6))))
                           : ListView.builder(
                               padding: const EdgeInsets.all(20),
-                              itemCount: _withdrawals.length,
+                              itemCount: _withdrawals.where((w) => _search.isEmpty || w.toString().toLowerCase().contains(_search.toLowerCase())).length,
                               itemBuilder: (_, i) {
-                                final w = _withdrawals[i];
+                                final visible = _withdrawals.where((w) => _search.isEmpty || w.toString().toLowerCase().contains(_search.toLowerCase())).toList();
+                                final w = visible[i];
                                 final meta = w['metadata'] as Map? ?? {};
                                 final method = _paymentMethodLabel(meta, w);
                                 final isPending = w['status'] == 'pending';
@@ -348,7 +357,9 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage> {
     );
   }
 
-  Widget _filterRow(Color accent) => SingleChildScrollView(
+  Widget _filterRow(Color accent) => Column(children: [
+    Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 4), child: TextField(controller: _searchController, decoration: const InputDecoration(hintText: 'Search username, user ID, withdrawal ID', prefixIcon: Icon(Icons.search_rounded), border: OutlineInputBorder()), onChanged: (value) => setState(() => _search = value))),
+    SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
         child: Row(children: [
@@ -380,5 +391,5 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage> {
               ),
             ),
         ]),
-      );
+      )]);
 }

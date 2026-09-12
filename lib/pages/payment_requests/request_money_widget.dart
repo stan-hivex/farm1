@@ -31,13 +31,14 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
     final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     final desc = _descCtrl.text.trim();
     if (recipient.isEmpty || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('common.all_fields_required'.tr())));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('common.all_fields_required'.tr())));
       return;
     }
 
     try {
       setState(() => _submitting = true);
-      final res = await ApiService.request(
+      await ApiService.request(
         method: 'POST',
         path: '/payment-requests/request',
         body: {
@@ -46,10 +47,14 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
           'description': desc,
         },
       );
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['message'] ?? 'Request created')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('common.request_created'.tr())),
+      );
       Navigator.of(context).pop();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${e.toString().replaceFirst('Exception: ', '')}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('common.failed'.tr())),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -58,7 +63,7 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Request Money')),
+      appBar: AppBar(title: Text('common.request_money'.tr())),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -70,7 +75,8 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
             const SizedBox(height: 12),
             TextField(
               controller: _amountCtrl,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(labelText: 'common.amount'.tr()),
             ),
             const SizedBox(height: 12),
@@ -83,7 +89,12 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _submitting ? null : _submit,
-                child: _submitting ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : Text('common.send'.tr()),
+                child: _submitting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text('common.send'.tr()),
               ),
             ),
           ],

@@ -16,11 +16,10 @@ class KycRequiredWidget extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.verified_user_outlined,
-                size: 60, color: theme.primary),
+            Icon(Icons.verified_user_outlined, size: 60, color: theme.primary),
             const SizedBox(height: 24),
             Text(
-              'KYC Verification Required',
+              'common.kyc_title'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 24,
@@ -30,7 +29,7 @@ class KycRequiredWidget extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'KYC verification is required before using $feature. Please complete your KYC details to continue.',
+              '${'common.kyc_required'.tr()} $feature. ${'common.kyc_complete_prompt'.tr()}',
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 14,
@@ -51,7 +50,7 @@ class KycRequiredWidget extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'Complete KYC',
+                  'common.complete_kyc'.tr(),
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -62,7 +61,7 @@ class KycRequiredWidget extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Your submission will be reviewed by admin before access is granted.',
+              'common.kyc_review_notice'.tr(),
               textAlign: TextAlign.center,
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,

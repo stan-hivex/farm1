@@ -38,9 +38,14 @@ class SocketService {
     _socket = io.io(
       normalizedUrl,
       io.OptionBuilder()
-          .setTransports(['websocket'])
+          // Render may reset a direct WebSocket upgrade. Socket.IO can establish
+          // the session over polling and upgrade to WebSocket when available.
+          .setTransports(['polling', 'websocket'])
           .disableAutoConnect()
           .enableForceNewConnection()
+          .enableReconnection()
+          .setReconnectionAttempts(5)
+          .setReconnectionDelay(2000)
           .setTimeout(5000)
           .build(),
     );
@@ -51,7 +56,7 @@ class SocketService {
     });
 
     _socket!.onConnectError((error) {
-      debugPrint('[Socket] connection error: $error');
+      debugPrint('[Socket] realtime connection unavailable; HTTP features remain available');
     });
 
     _socket!.onDisconnect((reason) {

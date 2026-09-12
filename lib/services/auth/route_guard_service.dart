@@ -214,8 +214,10 @@ class RouteGuardService {
       '/otppage',
     ];
 
-    return publicPaths.contains(path) ||
-        publicPaths.any((publicPath) => path.startsWith(publicPath));
+    return path == '/' ||
+      publicPaths
+        .where((publicPath) => publicPath != '/')
+        .any((publicPath) => path.startsWith(publicPath));
   }
 
   /// Verify authentication and handle redirect if needed.

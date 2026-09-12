@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAT0JtzWWi50pQd3olxRJtN2eXEULzubTU',
-    appId: '1:1093041322989:android:5b521ac48fdb8c2f5385e4',
+    appId: '1:1093041322989:android:2e04e68243343d605385e4',
     messagingSenderId: '1093041322989',
     projectId: 'farmapp-e2145',
     storageBucket: 'farmapp-e2145.firebasestorage.app',

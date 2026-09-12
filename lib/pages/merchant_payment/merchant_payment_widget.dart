@@ -123,13 +123,13 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
         );
 
         if (!mounted) return;
-        _showSnack('Payment successful');
+        _showSnack('common.transaction_success'.tr());
         context.pop();
         return;
       }
 
       if (authResult?.biometricUsed != true && pin.isEmpty) {
-        _showSnack('Enter your transaction PIN');
+        _showSnack('common.pin_required'.tr());
         return;
       }
 
@@ -156,14 +156,14 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
       );
 
       if (!mounted) return;
-      _showSnack('Payment successful');
+      _showSnack('common.transaction_success'.tr());
       context.pop();
     } catch (e) {
       if (!mounted) return;
       setState(() {
         error = e.toString();
       });
-      _showSnack('Payment failed: $error');
+      _showSnack('common.transaction_failed'.tr());
     } finally {
       if (mounted) {
         setState(() {
@@ -304,10 +304,12 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
                       : Builder(builder: (context) {
                           final isDark =
                               Theme.of(context).brightness == Brightness.dark;
-                          final textColor = isDark ? Colors.black : Colors.white;
+                          final textColor =
+                              isDark ? Colors.black : Colors.white;
                           return Text('Pay Merchant',
                               style: theme.titleMedium.copyWith(
-                                  color: textColor, fontWeight: FontWeight.bold));
+                                  color: textColor,
+                                  fontWeight: FontWeight.bold));
                         }),
                 ),
               ),

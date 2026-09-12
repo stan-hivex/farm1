@@ -18,6 +18,15 @@ class _KycManagementPageState extends State<KycManagementPage> {
   bool _loading = true;
   String? _error;
   int _page = 1;
+  String _search = '';
+  String _status = 'pending';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -31,7 +40,7 @@ class _KycManagementPageState extends State<KycManagementPage> {
       _error = null;
     });
     try {
-      final res = await AdminApiService.getKycQueue(page: _page);
+      final res = await AdminApiService.getKycQueue(page: _page, status: _status);
       setState(() => _queue = res['data'] ?? []);
     } catch (e) {
       setState(() => _error = e.toString().replaceAll('Exception: ', ''));
@@ -98,16 +107,33 @@ class _KycManagementPageState extends State<KycManagementPage> {
         ElevatedButton(onPressed: _load, child: Text('Retry'))
       ]));
 
-    return RefreshIndicator(
+    return Column(children: [
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+        child: Row(children: [
+          for (final value in ['pending', 'rejected', 'all'])
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(label: Text(value.toUpperCase()), selected: _status == value, onSelected: (_) { setState(() => _status = value); _load(); }),
+            ),
+        ]),
+      ),
+      Expanded(child: RefreshIndicator(
       onRefresh: _load,
       child: _queue.isEmpty
           ? Center(child: Text('No pending KYC applications'))
           : ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: _queue.length,
-              itemBuilder: (_, i) => _kycCard(_queue[i]),
+              itemCount: _queue.where((doc) => _search.isEmpty || doc.toString().toLowerCase().contains(_search.toLowerCase())).length + 1,
+              itemBuilder: (_, i) {
+                if (i == 0) return Padding(padding: const EdgeInsets.only(bottom: 12), child: TextField(controller: _searchController, decoration: const InputDecoration(hintText: 'Search name, username, ID or document number', prefixIcon: Icon(Icons.search_rounded), border: OutlineInputBorder()), onChanged: (value) => setState(() => _search = value)));
+                final visible = _queue.where((doc) => _search.isEmpty || doc.toString().toLowerCase().contains(_search.toLowerCase())).toList();
+                return _kycCard(visible[i - 1]);
+              },
             ),
-    );
+      )),
+    ]);
   }
 
   Widget _kycCard(Map<String, dynamic> doc) {
@@ -380,17 +406,6 @@ class _KycManagementPageState extends State<KycManagementPage> {
       ),
     );
   }
-
-  Widget _largeImg(String? url) => Container(
-        width: double.infinity,
-        height: 200,
-        decoration: BoxDecoration(
-          color: context.surface,
-          borderRadius: BorderRadius.circular(12),
-          image: url != null ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover) : null,
-        ),
-        child: url == null ? Center(child: Icon(Icons.image_not_supported, color: context.textSecondary)) : null,
-      );
 
   Widget finalImgsSection(Map<String, dynamic> d) {
     final List<String> imgs = [];

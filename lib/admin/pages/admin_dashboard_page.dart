@@ -5,6 +5,7 @@ import '../core/admin_guard.dart';
 import '../core/admin_navigation.dart';
 import '../services/admin_api_service.dart';
 import '/services/auth/auth_service.dart';
+import '/core/localization/app_locale_service.dart';
 import '/pages/loginpage/loginpage_widget.dart';
 import 'add_superadmin_page.dart';
 import 'deposits_management_page.dart';
@@ -13,7 +14,7 @@ import 'notifications_management_page.dart';
 import 'user_management_page.dart';
 import 'withdrawals_management_page.dart';
 import 'kyc_management_page.dart';
-import 'transactions_management_page.dart';
+import 'payouts_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -225,6 +226,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   await AuthService().logout();
                 } catch (_) {}
                 if (!mounted) return;
+                await AppLocaleService.resetToEnglish(context);
                 AuthNavigation.replaceAllWithBuilder(
                   context,
                   (_) => LoginpageWidget(),
@@ -287,10 +289,24 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        _metricCard('Total Users', '${s['total_users'] ?? 0}', 'Active people', cardColor, accent, () => _navigateTo(const UserManagementPage())),
-        _metricCard('Active Escrows', '${s['active_escrows'] ?? 0}', 'Escrow flows', cardColor, accent, () => _navigateTo(const EscrowManagementPage())),
-        _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}', 'Review queue', cardColor, accent, () => _navigateTo(const KycManagementPage())),
-        _metricCard('Pending Payouts', '${s['pending_payouts'] ?? 0}', 'Awaiting settlement', cardColor, accent, () => _navigateTo(const WithdrawalsManagementPage())),
+        _metricCard('Total Users', '${s['total_users'] ?? 0}', 'Active people',
+            cardColor, accent, () => _navigateTo(const UserManagementPage())),
+        _metricCard(
+            'Active Escrows',
+            '${s['active_escrows'] ?? 0}',
+            'Escrow flows',
+            cardColor,
+            accent,
+            () => _navigateTo(const EscrowManagementPage())),
+        _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}', 'Review queue',
+            cardColor, accent, () => _navigateTo(const KycManagementPage())),
+        _metricCard(
+            'Pending Payouts',
+            '${s['pending_payouts'] ?? 0}',
+            'Awaiting settlement',
+            cardColor,
+            accent,
+            () => _navigateTo(const PayoutsPage())),
       ],
     );
   }
@@ -303,50 +319,52 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(24),
         child: Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: context.onSurface.withOpacity(0.12)),
-        boxShadow: [
-          BoxShadow(
-              color: context.background.withAlpha((0.18 * 255).round()),
-              blurRadius: 18,
-              offset: const Offset(0, 8)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
-                  style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withOpacity(0.7),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500)),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: accent.withAlpha((0.12 * 255).round()),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(Icons.trending_up_rounded, size: 18, color: accent),
-              ),
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: context.onSurface.withOpacity(0.12)),
+            boxShadow: [
+              BoxShadow(
+                  color: context.background.withAlpha((0.18 * 255).round()),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8)),
             ],
           ),
-          Text(value,
-              style: GoogleFonts.plusJakartaSans(
-                  color: context.onSurface,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900)),
-          Text(caption,
-              style: GoogleFonts.plusJakartaSans(
-                  color: context.onSurface.withOpacity(0.54), fontSize: 12)),
-        ],
-      ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(title,
+                      style: GoogleFonts.plusJakartaSans(
+                          color: context.onSurface.withOpacity(0.7),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500)),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: accent.withAlpha((0.12 * 255).round()),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(Icons.trending_up_rounded,
+                        size: 18, color: accent),
+                  ),
+                ],
+              ),
+              Text(value,
+                  style: GoogleFonts.plusJakartaSans(
+                      color: context.onSurface,
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900)),
+              Text(caption,
+                  style: GoogleFonts.plusJakartaSans(
+                      color: context.onSurface.withOpacity(0.54),
+                      fontSize: 12)),
+            ],
+          ),
         ),
       ),
     );

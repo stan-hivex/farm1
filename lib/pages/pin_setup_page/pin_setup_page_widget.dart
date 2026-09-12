@@ -119,9 +119,9 @@ class _PinSetupPageWidgetState
     if (_pin.length < 4 ||
         _confirmPin.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            'validation.pin_fields_required'.tr(),
+            'Enter complete PIN',
           ),
         ),
       );
@@ -130,9 +130,9 @@ class _PinSetupPageWidgetState
 
     if (_pin != _confirmPin) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            'validation.pin_mismatch'.tr(),
+            'PINs do not match',
           ),
         ),
       );

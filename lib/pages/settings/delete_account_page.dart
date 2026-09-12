@@ -3,6 +3,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/auth/auth_service.dart';
 import '/services/auth/delete_account_validator.dart';
+import '/core/localization/app_locale_service.dart';
 
 class DeleteAccountPageWidget extends StatefulWidget {
   const DeleteAccountPageWidget({super.key});
@@ -11,7 +12,8 @@ class DeleteAccountPageWidget extends StatefulWidget {
   static String routePath = '/deleteAccountPage';
 
   @override
-  State<DeleteAccountPageWidget> createState() => _DeleteAccountPageWidgetState();
+  State<DeleteAccountPageWidget> createState() =>
+      _DeleteAccountPageWidgetState();
 }
 
 class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
@@ -37,7 +39,9 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
     if (!validation.isValid) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(validation.error ?? 'Unable to delete account')),
+        SnackBar(
+          content: Text(_localizedValidationError(validation.error)),
+        ),
       );
       return;
     }
@@ -53,18 +57,32 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account deleted successfully')),
+        SnackBar(content: Text('settings.delete_success'.tr())),
       );
+      await AppLocaleService.resetToEnglish(context);
       context.goNamed('loginpage');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text('settings.delete_failed'.tr())),
       );
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  String _localizedValidationError(String? error) {
+    switch (error) {
+      case 'Please enter your password to continue.':
+        return 'settings.password_required'.tr();
+      case 'Please confirm that you understand this action is permanent.':
+        return 'settings.delete_acknowledgement_required'.tr();
+      case 'Please confirm that you want to delete your account permanently.':
+        return 'settings.delete_confirmation_required'.tr();
+      default:
+        return 'settings.delete_failed'.tr();
     }
   }
 
@@ -75,7 +93,7 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
-        title: const Text('Delete Account'),
+        title: Text('settings.delete_account'.tr()),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
       ),
@@ -86,12 +104,12 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Permanently delete your account',
+                'settings.delete_account_description'.tr(),
                 style: theme.titleMedium.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),
               Text(
-                'This action is permanent. It will sign you out, remove your local credentials, and delete your account after backend verification.',
+                'settings.delete_account_warning'.tr(),
                 style: theme.bodyMedium,
               ),
               const SizedBox(height: 20),
@@ -107,7 +125,7 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
                         controller: _passwordController,
                         obscureText: !_passwordVisible,
                         decoration: InputDecoration(
-                          labelText: 'Current password',
+                          labelText: 'settings.current_password'.tr(),
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
@@ -117,7 +135,8 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
                                   : Icons.visibility,
                             ),
                             onPressed: () {
-                              setState(() => _passwordVisible = !_passwordVisible);
+                              setState(
+                                  () => _passwordVisible = !_passwordVisible);
                             },
                           ),
                         ),
@@ -125,7 +144,7 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
                       const SizedBox(height: 16),
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('I understand this action is permanent.'),
+                        title: Text('settings.delete_acknowledgement'.tr()),
                         value: _acknowledged,
                         onChanged: (value) {
                           setState(() => _acknowledged = value ?? false);
@@ -133,7 +152,7 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
                       ),
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('I want to delete my account permanently.'),
+                        title: Text('settings.delete_confirmation'.tr()),
                         value: _confirmDelete,
                         onChanged: (value) {
                           setState(() => _confirmDelete = value ?? false);
@@ -155,7 +174,9 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.delete_forever_rounded),
-                  label: Text(_isLoading ? 'Deleting account...' : 'Delete account permanently'),
+                  label: Text(_isLoading
+                      ? 'settings.deleting_account'.tr()
+                      : 'settings.delete_account_permanently'.tr()),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.error,
                     foregroundColor: Colors.white,

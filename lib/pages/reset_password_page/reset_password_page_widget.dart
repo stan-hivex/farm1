@@ -63,8 +63,8 @@ class _ResetPasswordPageWidgetState extends State<ResetPasswordPageWidget> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('auth_extra.password_updated'.tr()),
+        const SnackBar(
+          content: Text('Password updated successfully. Please sign in with your new password.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -92,7 +92,7 @@ class _ResetPasswordPageWidgetState extends State<ResetPasswordPageWidget> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('auth_extra.create_new_password'.tr()),
+        title: const Text('Create New Password'),
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         foregroundColor: FlutterFlowTheme.of(context).primaryText,
         elevation: 0,
@@ -106,7 +106,7 @@ class _ResetPasswordPageWidgetState extends State<ResetPasswordPageWidget> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  '${'auth_extra.choose_new_password'.tr()} ${_email.isNotEmpty ? _email : 'common.account'.tr()}',
+                  'Choose a strong new password for ${_email.isNotEmpty ? _email : 'your account'}',
                   style: FlutterFlowTheme.of(context).headlineSmall,
                 ),
                 const SizedBox(height: 16),

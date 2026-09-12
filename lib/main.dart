@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:easy_localization/easy_localization.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +11,8 @@ import 'firebase_options.dart';
 import 'flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'core/app_theme.dart';
+import 'core/localization/app_locale_service.dart';
+import 'core/widgets/global_language_switcher.dart';
 import 'web_url_strategy.dart';
 import 'services/app_session_manager.dart';
 import 'services/biometric_lock_service.dart';
@@ -71,7 +72,9 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final savedLanguage = prefs.getString('language');
   final languageCode = FFAppState().isLoggedIn &&
-          const ['en', 'sw', 'fr', 'es', 'ar'].contains(savedLanguage)
+          AppLocaleService.supportedLocales
+              .map((locale) => locale.languageCode)
+              .contains(savedLanguage)
       ? savedLanguage!
       : 'en';
 
@@ -92,13 +95,7 @@ void main() async {
     runApp(
       EasyLocalization(
         startLocale: Locale(languageCode),
-        supportedLocales: const [
-          Locale('en'),
-          Locale('sw'),
-          Locale('fr'),
-          Locale('es'),
-          Locale('ar'),
-        ],
+        supportedLocales: AppLocaleService.supportedLocales,
         path: 'assets/translations',
         fallbackLocale: const Locale('en'),
         child: MultiProvider(
@@ -225,7 +222,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> _persistCurrentAuthenticatedRoute() async {
     if (!FFAppState().isLoggedIn) return;
     final location = getRoute();
-    if (location.isEmpty || RouteGuardService().isPublicRoute(location) ||
+    if (location.isEmpty ||
+        RouteGuardService().isPublicRoute(location) ||
         location == BiometricUnlockPageWidget.routePath) {
       return;
     }
@@ -316,7 +314,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             SystemNavigator.pop();
           }
         },
-        child: child ?? const SizedBox.shrink(),
+        child: Stack(
+          children: [
+            child ?? const SizedBox.shrink(),
+            const Positioned(
+              right: 12,
+              bottom: 12,
+              child: SafeArea(child: GlobalLanguageSwitcher()),
+            ),
+          ],
+        ),
       ),
     );
   }

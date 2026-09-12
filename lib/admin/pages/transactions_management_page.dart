@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
+import '/services/transaction_receipt_service.dart';
 
 class TransactionsManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -21,6 +22,14 @@ class _TransactionsManagementPageState
   String _statusFilter = 'all';
   int _page = 1;
   int _total = 0;
+  String _search = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -121,7 +130,13 @@ class _TransactionsManagementPageState
                                   ]),
                             );
                           }
-                          final t = _txns[i];
+                          final visible = _txns.where((item) {
+                            if (_search.trim().isEmpty) return true;
+                            final query = _search.toLowerCase();
+                            return item.toString().toLowerCase().contains(query);
+                          }).toList();
+                          if (i >= visible.length) return const SizedBox.shrink();
+                          final t = visible[i];
                           final color = _statusColor(t['status']);
                           final meta = t['metadata'] as Map? ?? {};
                           final method = (t['method'] ?? meta['payment_method'] ?? meta['method'] ?? '-').toString().toUpperCase();
@@ -133,7 +148,10 @@ class _TransactionsManagementPageState
                           final statusLabel = (t['status_display'] ?? t['status'] ?? '-').toString().toUpperCase();
                           final dateLabel = (t['date'] ?? '-').toString();
                           final timeLabel = (t['time'] ?? '-').toString();
-                          return Container(
+                          return InkWell(
+                            onTap: () => _showTransactionDetails(Map<String, dynamic>.from(t as Map)),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
@@ -228,6 +246,7 @@ class _TransactionsManagementPageState
                                     ),
                                   ]),
                             ]),
+                            ),
                           );
                         },
                       ))),
@@ -239,6 +258,18 @@ class _TransactionsManagementPageState
 
   Widget _filters(Color accent) => Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: TextField(
+              controller: _searchController,
+              decoration: const InputDecoration(
+                hintText: 'Search username, user ID, transaction ID',
+                prefixIcon: Icon(Icons.search_rounded),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (value) => setState(() => _search = value),
+            ),
+          ),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
@@ -322,4 +353,8 @@ class _TransactionsManagementPageState
           ),
         ],
       );
+
+  void _showTransactionDetails(Map<String, dynamic> transaction) {
+    TransactionReceiptService.showDetails(context, transaction);
+  }
 }

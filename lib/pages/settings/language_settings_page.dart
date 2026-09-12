@@ -1,8 +1,7 @@
-
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '/backend/services/api_service.dart';
+import '/core/localization/app_locale_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -63,8 +62,7 @@ class _LanguageSettingsPageWidgetState
   }
 
   Future<void> loadLanguage() async {
-    final prefs =
-        await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString('language') ?? context.locale.languageCode;
     final savedCode = languages.any((lang) => lang['code'] == saved)
         ? saved
@@ -73,70 +71,37 @@ class _LanguageSettingsPageWidgetState
     if (!mounted) return;
 
     setState(() {
-      selectedLanguageCode = languages.any((lang) => lang['code'] == savedCode)
-          ? savedCode
-          : 'en';
+      selectedLanguageCode =
+          languages.any((lang) => lang['code'] == savedCode) ? savedCode : 'en';
       loading = false;
     });
-  }
-
-  Future<void> saveLanguage(String languageCode) async {
-    final prefs =
-        await SharedPreferences.getInstance();
-    await prefs.setString(
-      'language',
-      languageCode,
-    );
-  }
-
-  Future<void> saveLanguageBackend(String languageCode) async {
-    try {
-      await ApiService.request(
-        method: 'PUT',
-        path: '/settings/language',
-        body: {'language': languageCode},
-      );
-    } catch (e) {
-      debugPrint(
-        'LANGUAGE BACKEND ERROR: $e',
-      );
-    }
   }
 
   Future<void> changeLanguage(
     Map<String, dynamic> lang,
   ) async {
-    final Locale locale =
-        lang['locale'];
+    final Locale locale = lang['locale'];
     final String languageCode = lang['code'];
 
-    await context.setLocale(locale);
-    await saveLanguage(languageCode);
+    await AppLocaleService.setLocale(context, locale);
 
     if (!mounted) return;
 
     setState(() {
       selectedLanguageCode = languageCode;
     });
-
-    await saveLanguageBackend(languageCode);
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      backgroundColor:
-          FlutterFlowTheme.of(context)
-              .primaryBackground,
+      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       appBar: AppBar(
         title: Text(
           'language'.tr(),
         ),
         elevation: 0,
-        backgroundColor:
-            FlutterFlowTheme.of(context)
-                .primaryBackground,
+        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       ),
       body: loading
           ? const Center(

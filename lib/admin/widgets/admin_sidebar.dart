@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '/services/auth/auth_service.dart';
+import '/core/localization/app_locale_service.dart';
 import '../../pages/loginpage/loginpage_widget.dart';
 import '../core/admin_navigation.dart';
 
@@ -32,11 +33,12 @@ class AdminSidebar extends StatelessWidget {
                 title: const Text('Logout'),
                 onTap: () async {
                   try {
-                      await AuthService().logout();
+                    await AuthService().logout();
                   } catch (_) {
                     // ignore errors from logout request; still clear session locally
                   }
                   if (context.mounted) {
+                    await AppLocaleService.resetToEnglish(context);
                     AuthNavigation.replaceAllWithBuilder(
                       context,
                       (_) => LoginpageWidget(),

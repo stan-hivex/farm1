@@ -6,9 +6,10 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/core/theme_extensions.dart';
 import '/services/app_session_manager.dart';
- 
+
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
+import '/services/transaction_receipt_service.dart';
 import '/backend/api_requests/user_api_service.dart';
 
 import 'package:flutter/material.dart';
@@ -33,9 +34,47 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
   String selectedFilter = 'all';
 
   List<EscrowModel> escrows = [];
+  final Set<String> _selectedEscrows = <String>{};
 
   int activeCount = 0;
   double protectedAmount = 0;
+
+  Map<String, dynamic> _escrowReceiptData(EscrowModel escrow) {
+    final currentUserId = context.read<FFAppState>().userId;
+    return {
+      'transaction_type': 'Escrow',
+      'id': escrow.id,
+      'amount': escrow.amount,
+      'status': escrow.status,
+      'created_at': escrow.createdAt.toIso8601String(),
+      'role': escrow.getRoleForUser(currentUserId),
+      'counterparty': escrow.getCounterpartyDisplayName(currentUserId),
+      'buyer_username': escrow.buyerUsername,
+      'seller_username': escrow.sellerUsername,
+    };
+  }
+
+  Future<void> _downloadSelectedEscrows() async {
+    final selected = escrows
+        .where((escrow) => _selectedEscrows.contains(escrow.id))
+        .map(_escrowReceiptData)
+        .toList();
+    try {
+      await TransactionReceiptService.downloadReceipts(selected);
+      if (mounted) {
+        setState(() => _selectedEscrows.clear());
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Selected receipts saved to gallery')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save receipts: $error')),
+        );
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -68,14 +107,17 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     });
 
     try {
-      final resp = await ApiService.getEscrows(status: selectedFilter == 'all' ? null : selectedFilter);
+      final resp = await ApiService.getEscrows(
+          status: selectedFilter == 'all' ? null : selectedFilter);
 
       if (!mounted) return;
 
       final items = List<dynamic>.from(resp['data'] ?? resp);
 
       setState(() {
-        escrows = items.map((m) => EscrowModel.fromJson(m as Map<String, dynamic>)).toList();
+        escrows = items
+            .map((m) => EscrowModel.fromJson(m as Map<String, dynamic>))
+            .toList();
 
         activeCount = escrows.where((e) => e.status == 'active').length;
 
@@ -178,9 +220,10 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
           )
           .then((r) => r.toTransactionAuthenticationResult());
       if (authResult.biometricUsed == true) {
-        await ApiService.releaseEscrow(escrowId,
-            // ApiService wrapper expects escrowId and supports biometric args via request
-            );
+        await ApiService.releaseEscrow(
+          escrowId,
+          // ApiService wrapper expects escrowId and supports biometric args via request
+        );
       } else {
         final pinController = TextEditingController();
         final pin = await showDialog<String>(
@@ -412,15 +455,26 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                           : '?',
                                     ),
                                   ),
-                                  title: Text(
-                                      (user['username'] ?? '').toString().trim().isNotEmpty
-                                          ? '@${(user['username'] ?? '').toString().trim()}${((user['phone'] ?? '').toString().trim().isNotEmpty) ? ' • ${(user['phone'] ?? '').toString().trim()}' : ''}'
-                                          : (user['phone'] ?? '').toString().trim()),
+                                  title: Text((user['username'] ?? '')
+                                          .toString()
+                                          .trim()
+                                          .isNotEmpty
+                                      ? '@${(user['username'] ?? '').toString().trim()}${((user['phone'] ?? '').toString().trim().isNotEmpty) ? ' • ${(user['phone'] ?? '').toString().trim()}' : ''}'
+                                      : (user['phone'] ?? '')
+                                          .toString()
+                                          .trim()),
                                   onTap: () {
                                     sellerController.text =
-                                        ((user['username'] ?? '').toString().trim().isNotEmpty
-                                            ? (user['username'] ?? '').toString().trim()
-                                            : (user['phone'] ?? '').toString().trim());
+                                        ((user['username'] ?? '')
+                                                .toString()
+                                                .trim()
+                                                .isNotEmpty
+                                            ? (user['username'] ?? '')
+                                                .toString()
+                                                .trim()
+                                            : (user['phone'] ?? '')
+                                                .toString()
+                                                .trim());
                                     setState(() => suggestionUsers = []);
                                   },
                                 );
@@ -534,8 +588,8 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                 setState(() => isBiometricChecking = false);
                                 try {
                                   final amount = double.tryParse(
-                                      amountController.text.trim()) ??
-                                    0;
+                                          amountController.text.trim()) ??
+                                      0;
                                   if (amount <= 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -545,11 +599,16 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                     return;
                                   }
 
-                                  final walletResp = await ApiService.getWallet();
-                                  final wallet = walletResp['data'] ?? walletResp;
+                                  final walletResp =
+                                      await ApiService.getWallet();
+                                  final wallet =
+                                      walletResp['data'] ?? walletResp;
                                   final available = double.tryParse(
-                                      (wallet['available_balance'] ?? wallet['balance'] ?? '0').toString()) ??
-                                    0;
+                                          (wallet['available_balance'] ??
+                                                  wallet['balance'] ??
+                                                  '0')
+                                              .toString()) ??
+                                      0;
                                   final fee = double.tryParse((amount * 0.015)
                                           .toStringAsFixed(2)) ??
                                       0;
@@ -567,13 +626,16 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                     method: 'POST',
                                     path: '/escrow',
                                     body: {
-                                      'seller_identifier': sellerController.text.trim(),
+                                      'seller_identifier':
+                                          sellerController.text.trim(),
                                       'amount': amount,
                                       'title': titleController.text.trim(),
-                                      'description': descriptionController.text.trim(),
+                                      'description':
+                                          descriptionController.text.trim(),
                                       'pin': null,
                                       'biometric_auth': true,
-                                      'device_fingerprint': result.deviceFingerprint,
+                                      'device_fingerprint':
+                                          result.deviceFingerprint,
                                     },
                                   );
 
@@ -635,16 +697,18 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                      try {
+                    try {
                       final amount = double.parse(amountController.text.trim());
                       final fee =
-                        double.parse((amount * 0.015).toStringAsFixed(2));
+                          double.parse((amount * 0.015).toStringAsFixed(2));
 
                       // Check wallet balance
                       final walletResp = await ApiService.getWallet();
                       final wallet = walletResp['data'] ?? walletResp;
-                      final available =
-                        double.tryParse((wallet['available_balance'] ?? wallet['balance']).toString()) ?? 0;
+                      final available = double.tryParse(
+                              (wallet['available_balance'] ?? wallet['balance'])
+                                  .toString()) ??
+                          0;
 
                       if (available < amount + fee) {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -797,44 +861,64 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     final role = escrow.getRoleForUser(currentUserId);
     final counterpartyName = escrow.getCounterpartyDisplayName(currentUserId);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        children: [
-          EscrowItemWidget(
-            amount: escrow.amount.toStringAsFixed(2),
-            date: formatDate(escrow.createdAt),
-            is_pending: isPending,
-            role: role,
-            status: escrow.status[0].toUpperCase() + escrow.status.substring(1),
-            username: counterpartyName,
-          ),
-          if (isPending)
-            Padding(
-              padding: const EdgeInsets.only(
-                left: 16,
-                right: 16,
-                bottom: 16,
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => releaseEscrow(escrow.id),
-                      child: const Text('Release Funds'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => disputeEscrow(escrow.id),
-                      child: const Text('Dispute'),
-                    ),
-                  ),
-                ],
-              ),
+    final details = _escrowReceiptData(escrow);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => TransactionReceiptService.showDetails(context, details),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          children: [
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              value: _selectedEscrows.contains(escrow.id),
+              title: const Text('Select receipt'),
+              onChanged: (selected) => setState(() {
+                if (selected == true) {
+                  _selectedEscrows.add(escrow.id);
+                } else {
+                  _selectedEscrows.remove(escrow.id);
+                }
+              }),
             ),
-        ],
+            EscrowItemWidget(
+              amount: escrow.amount.toStringAsFixed(2),
+              date: formatDate(escrow.createdAt),
+              is_pending: isPending,
+              role: role,
+              status:
+                  escrow.status[0].toUpperCase() + escrow.status.substring(1),
+              username: counterpartyName,
+            ),
+            if (isPending)
+              Padding(
+                padding: const EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  bottom: 16,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => releaseEscrow(escrow.id),
+                        child: const Text('Release Funds'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => disputeEscrow(escrow.id),
+                        child: const Text('Dispute'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1025,6 +1109,16 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        if (_selectedEscrows.isNotEmpty)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.download_rounded),
+                              label: Text(
+                                  'Download selected (${_selectedEscrows.length})'),
+                              onPressed: _downloadSelectedEscrows,
+                            ),
+                          ),
                         if (isLoading)
                           Center(
                             child: CircularProgressIndicator(),

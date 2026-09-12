@@ -19,8 +19,11 @@ import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
 import '/services/auth/auth_service.dart';
+import '/core/localization/app_locale_service.dart';
 import '/utils/transaction_peer_resolver.dart';
+import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dashboard_model.dart';
@@ -169,6 +172,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       debugPrint('[Dashboard] logout error: $e');
     }
     if (mounted) {
+      await AppLocaleService.resetToEnglish(context);
       context.goNamed('loginpage');
     }
   }
@@ -179,8 +183,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
       final data = response['data'] as Map<String, dynamic>? ?? response;
       if (!mounted) return;
       setState(() {
-        walletBalance = double.tryParse((data['balance'] ?? data['available_balance'] ?? 0).toString()) ?? 0.0;
-        kesEquivalent = double.tryParse((data['kes_equivalent'] ?? 0).toString()) ?? 0.0;
+        walletBalance = double.tryParse(
+                (data['balance'] ?? data['available_balance'] ?? 0)
+                    .toString()) ??
+            0.0;
+        kesEquivalent =
+            double.tryParse((data['kes_equivalent'] ?? 0).toString()) ?? 0.0;
         isBalanceLoading = false;
       });
     } catch (e) {
@@ -194,7 +202,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
       final data = response['data'] as Map<String, dynamic>? ?? response;
       final kycStatus = data['kyc_status'] ?? data['kycStatus'];
       if (kycStatus is String) FFAppState().kycStatus = kycStatus;
-      setState(() { profileImageUrl = data['profile_image']; });
+      setState(() {
+        profileImageUrl = data['profile_image'];
+      });
     } catch (e) {
       print('PROFILE ERROR: $e');
     }
@@ -209,15 +219,20 @@ class _DashboardWidgetState extends State<DashboardWidget>
     final parsed =
         value is DateTime ? value : DateTime.tryParse(value.toString());
     if (parsed == null) return value.toString();
-    return dateTimeFormatEastAfricanTime('MMM d, yyyy • h:mm a', parsed.toUtc());
+    return dateTimeFormatEastAfricanTime(
+        'MMM d, yyyy • h:mm a', parsed.toUtc());
   }
 
   Future<void> fetchTransactions() async {
     try {
-      final response = await ApiService.getTransactions(page: 1, limit: 5, timeoutSeconds: 10);
+      final response = await ApiService.getTransactions(
+          page: 1, limit: 5, timeoutSeconds: 10);
       final items = response['data'] as List? ?? [];
       if (!mounted) return;
-      setState(() { transactions = items; isTransactionsLoading = false; });
+      setState(() {
+        transactions = items;
+        isTransactionsLoading = false;
+      });
     } catch (e) {
       print('TRANSACTIONS ERROR: $e');
     }
@@ -274,9 +289,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
     TransactionAuthenticationResult? preAuthResult,
   }) async {
     try {
-      final authResult = preAuthResult ?? await TransactionAuthorizationService().authorizeTransaction(
-        localizedReason: 'Confirm transaction',
-      ).then((r) => r.toTransactionAuthenticationResult());
+      final authResult = preAuthResult ??
+          await TransactionAuthorizationService()
+              .authorizeTransaction(
+                localizedReason: 'Confirm transaction',
+              )
+              .then((r) => r.toTransactionAuthenticationResult());
 
       final usedBiometric = authResult?.biometricUsed == true;
       if (usedBiometric) {
@@ -290,7 +308,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
         };
 
         try {
-          await ApiService.request(method: 'POST', path: '/wallet/send', body: body);
+          await ApiService.request(
+              method: 'POST', path: '/wallet/send', body: body);
           await AppSessionManager().syncNow(
             profileTimeoutSeconds: 5,
             walletTimeoutSeconds: 5,
@@ -305,7 +324,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${'common.transaction_failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}')),
+              SnackBar(
+                  content: Text(
+                      '${'common.transaction_failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}')),
             );
           }
         }
@@ -328,7 +349,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
       };
 
       try {
-        await ApiService.request(method: 'POST', path: '/wallet/send', body: body);
+        await ApiService.request(
+            method: 'POST', path: '/wallet/send', body: body);
         await AppSessionManager().syncNow(
           profileTimeoutSeconds: 5,
           walletTimeoutSeconds: 5,
@@ -337,14 +359,16 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('common.transaction_success'.tr())),
+            SnackBar(content: Text('common.transaction_success'.tr())),
           );
         }
         return true;
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('${'common.failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}')),
+            SnackBar(
+                content: Text(
+                    '${'common.failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}')),
           );
         }
         return false;
@@ -451,7 +475,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       SnackBar(
         content: Text('${'common.kyc_required'.tr()} $feature.'),
         action: SnackBarAction(
-          label: 'Complete KYC',
+          label: 'common.complete_kyc'.tr(),
           onPressed: () => context.pushNamed('KYCPAGE'),
         ),
       ),
@@ -488,12 +512,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
                       style: FlutterFlowTheme.of(context).titleMedium),
                   TextField(
                     controller: recipientController,
-                    decoration: InputDecoration(labelText: 'common.recipient'.tr()),
+                    decoration:
+                        InputDecoration(labelText: 'common.recipient'.tr()),
                   ),
                   TextField(
                     controller: amountController,
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: 'common.amount'.tr()),
+                    decoration:
+                        InputDecoration(labelText: 'common.amount'.tr()),
                   ),
                   if (pinEntryEnabled)
                     TextField(
@@ -504,15 +530,21 @@ class _DashboardWidgetState extends State<DashboardWidget>
                       onTap: () async {
                         if (!pinEntryEnabled && !isBiometricChecking) {
                           setState(() => isBiometricChecking = true);
-                          final authResult = await TransactionAuthorizationService().authorizeTransaction(
-                            localizedReason: 'Confirm transaction',
-                          ).then((r) => r.toTransactionAuthenticationResult());
+                          final authResult =
+                              await TransactionAuthorizationService()
+                                  .authorizeTransaction(
+                                    localizedReason: 'Confirm transaction',
+                                  )
+                                  .then((r) =>
+                                      r.toTransactionAuthenticationResult());
                           if (!mounted) return;
 
                           if (authResult.biometricUsed) {
                             final success = await sendTransaction(
                               recipient: recipientController.text.trim(),
-                              amount: double.tryParse(amountController.text.trim()) ?? 0,
+                              amount: double.tryParse(
+                                      amountController.text.trim()) ??
+                                  0,
                               pin: '',
                               description: descController.text.trim(),
                               preAuthResult: authResult,
@@ -539,7 +571,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                             ? const SizedBox(
                                 height: 24,
                                 width: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : null,
                       ),
@@ -548,15 +581,21 @@ class _DashboardWidgetState extends State<DashboardWidget>
                     ElevatedButton(
                       onPressed: () async {
                         setState(() => isBiometricChecking = true);
-                        final authResult = await TransactionAuthorizationService().authorizeTransaction(
-                          localizedReason: 'Confirm transaction',
-                        ).then((r) => r.toTransactionAuthenticationResult());
+                        final authResult =
+                            await TransactionAuthorizationService()
+                                .authorizeTransaction(
+                                  localizedReason: 'Confirm transaction',
+                                )
+                                .then((r) =>
+                                    r.toTransactionAuthenticationResult());
                         if (!mounted) return;
 
                         if (authResult.biometricUsed) {
                           final success = await sendTransaction(
                             recipient: recipientController.text.trim(),
-                            amount: double.tryParse(amountController.text.trim()) ?? 0,
+                            amount:
+                                double.tryParse(amountController.text.trim()) ??
+                                    0,
                             pin: '',
                             description: descController.text.trim(),
                             preAuthResult: authResult,
@@ -580,7 +619,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                     ),
                   TextField(
                     controller: descController,
-                    decoration: InputDecoration(labelText: 'common.description'.tr()),
+                    decoration:
+                        InputDecoration(labelText: 'common.description'.tr()),
                   ),
                   const SizedBox(height: 20),
                   if (pinEntryEnabled)
@@ -726,7 +766,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                           child: Padding(
                             padding: EdgeInsets.fromLTRB(
                               24.0,
-                              MediaQuery.of(context).padding.top > 0 ? 18.0 : 16.0,
+                              MediaQuery.of(context).padding.top > 0
+                                  ? 18.0
+                                  : 16.0,
                               24.0,
                               20.0,
                             ),
@@ -807,6 +849,38 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       .primaryText,
                                               size: 18.0,
                                             ),
+                                          IconButton(
+                                            tooltip: 'Copy username',
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 24.0,
+                                              minHeight: 24.0,
+                                            ),
+                                            iconSize: 18.0,
+                                            icon:
+                                                const Icon(Icons.copy_rounded),
+                                            onPressed:
+                                                FFAppState().userName.isEmpty
+                                                    ? null
+                                                    : () async {
+                                                        await Clipboard.setData(
+                                                          ClipboardData(
+                                                            text: FFAppState()
+                                                                .userName,
+                                                          ),
+                                                        );
+                                                        if (!context.mounted)
+                                                          return;
+                                                        ScaffoldMessenger.of(
+                                                                context)
+                                                            .showSnackBar(
+                                                          const SnackBar(
+                                                            content: Text(
+                                                                'Username copied'),
+                                                          ),
+                                                        );
+                                                      },
+                                          ),
                                         ].divide(const SizedBox(width: 4.0)),
                                       ),
                                       if (hasKycSubmission &&
@@ -868,7 +942,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                             ),
                                             onPressed: () async {
                                               await context.pushNamed(
-                                                UserNotificationsPageWidget.routeName,
+                                                UserNotificationsPageWidget
+                                                    .routeName,
                                               );
                                               if (mounted) {
                                                 await loadNotifications();
@@ -986,7 +1061,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                 height: MediaQuery.of(context).size.height < 700
                                     ? 200.0
                                     : 230.0,
-                                constraints: const BoxConstraints(minHeight: 180.0),
+                                constraints:
+                                    const BoxConstraints(minHeight: 180.0),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).brightness ==
                                           Brightness.dark
@@ -1176,15 +1252,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       ),
                                                 ),
                                               ),
-                                            ].divide(
-                                                SizedBox(
-                                                  height: MediaQuery.of(context)
-                                                              .size
-                                                              .height <
-                                                          700
-                                                      ? 2.0
-                                                      : 4.0,
-                                                )),
+                                            ].divide(SizedBox(
+                                              height: MediaQuery.of(context)
+                                                          .size
+                                                          .height <
+                                                      700
+                                                  ? 2.0
+                                                  : 4.0,
+                                            )),
                                           ),
                                           const Spacer(),
                                           Align(
@@ -1199,10 +1274,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                     Theme.of(context)
                                                             .brightness ==
                                                         Brightness.dark;
-                                                final buttonColor =
-                                                    isDarkMode
-                                                        ? Colors.black
-                                                        : Colors.white;
+                                                final buttonColor = isDarkMode
+                                                    ? Colors.black
+                                                    : Colors.white;
                                                 final buttonTextColor =
                                                     isDarkMode
                                                         ? Colors.white
@@ -1218,7 +1292,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                     onTap: onTap,
                                                     child: Container(
                                                       width: isCompact
-                                                          ? (screenWidth - 24) / 2
+                                                          ? (screenWidth - 24) /
+                                                              2
                                                           : 96.0,
                                                       decoration: BoxDecoration(
                                                         color: color,
@@ -1226,9 +1301,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                             BorderRadius
                                                                 .circular(12.0),
                                                       ),
-                                                      padding:
-                                                          const EdgeInsets
-                                                              .symmetric(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
                                                         horizontal: 6.0,
                                                         vertical: 6.0,
                                                       ),
@@ -1258,7 +1332,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                                     buttonTextColor,
                                                                 fontSize: 12.0,
                                                                 fontWeight:
-                                                                    FontWeight.w600,
+                                                                    FontWeight
+                                                                        .w600,
                                                               ),
                                                             ),
                                                           ),
@@ -1764,22 +1839,39 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         tx['status'] ?? 'Completed';
 
                                     final String txType =
-                                        (tx['transaction_type'] ?? tx['type'] ?? 'Transaction')
+                                        (tx['transaction_type'] ??
+                                                tx['type'] ??
+                                                'Transaction')
                                             .toString();
                                     final bool isMerchantPayment =
-                                        txType.toLowerCase() == 'merchant_payment';
+                                        txType.toLowerCase() ==
+                                            'merchant_payment';
                                     final String merchantName =
-                                        tx['merchant_business_name']?.toString().trim() ?? '';
+                                        tx['merchant_business_name']
+                                                ?.toString()
+                                                .trim() ??
+                                            '';
                                     final String peerUsername = isOutgoing
-                                        ? (tx['recipient_username']?.toString().trim().isNotEmpty == true
+                                        ? (tx['recipient_username']
+                                                    ?.toString()
+                                                    .trim()
+                                                    .isNotEmpty ==
+                                                true
                                             ? '@${tx['recipient_username']}'
-                                            : _resolveTransactionPeer(tx, outgoing: true))
-                                        : (tx['sender_username']?.toString().trim().isNotEmpty == true
+                                            : _resolveTransactionPeer(tx,
+                                                outgoing: true))
+                                        : (tx['sender_username']
+                                                    ?.toString()
+                                                    .trim()
+                                                    .isNotEmpty ==
+                                                true
                                             ? '@${tx['sender_username']}'
-                                            : _resolveTransactionPeer(tx, outgoing: false));
-                                    final String peerWithMerchant = merchantName.isNotEmpty
-                                        ? '$peerUsername ($merchantName)'
-                                        : peerUsername;
+                                            : _resolveTransactionPeer(tx,
+                                                outgoing: false));
+                                    final String peerWithMerchant =
+                                        merchantName.isNotEmpty
+                                            ? '$peerUsername ($merchantName)'
+                                            : peerUsername;
 
                                     final String title = isMerchantPayment
                                         ? (isOutgoing
@@ -1795,20 +1887,25 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                     return Padding(
                                       padding:
                                           const EdgeInsets.only(bottom: 12),
-                                      child: TransactionItemWidget(
-                                        amount: amount,
-                                        icon: Icon(
-                                          isOutgoing
-                                              ? Icons.north_east_rounded
-                                              : Icons.south_west_rounded,
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                          size: 20.0,
+                                      child: GestureDetector(
+                                        onTap: () => TransactionReceiptService
+                                            .showDetails(context,
+                                                Map<String, dynamic>.from(tx)),
+                                        child: TransactionItemWidget(
+                                          amount: amount,
+                                          icon: Icon(
+                                            isOutgoing
+                                                ? Icons.north_east_rounded
+                                                : Icons.south_west_rounded,
+                                            color: FlutterFlowTheme.of(context)
+                                                .primaryText,
+                                            size: 20.0,
+                                          ),
+                                          status: status,
+                                          subtitle: subtitle,
+                                          title: title,
+                                          is_negative: isOutgoing,
                                         ),
-                                        status: status,
-                                        subtitle: subtitle,
-                                        title: title,
-                                        is_negative: isOutgoing,
                                       ),
                                     );
                                   }).toList(),

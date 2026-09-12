@@ -11,6 +11,7 @@ import '/components/kyc_required_widget.dart';
 import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
+import '/services/transaction_receipt_service.dart';
 
 class WithdrawpageWidget extends StatefulWidget {
   const WithdrawpageWidget({super.key});
@@ -46,6 +47,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
 
   double walletBalance = 0;
   List<dynamic> history = [];
+  final Set<int> _selectedWithdrawals = <int>{};
   Timer? _historyTimer;
 
   // Kenyan banks
@@ -115,10 +117,12 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
 
   String _formatAmount(double value) {
     final formatter = RegExp(r'(\d)(?=(\d{3})+(?!\d))');
-    return value.toStringAsFixed(value.truncateToDouble() == value ? 0 : 2).replaceAllMapped(
-      formatter,
-      (match) => '${match[1]},',
-    );
+    return value
+        .toStringAsFixed(value.truncateToDouble() == value ? 0 : 2)
+        .replaceAllMapped(
+          formatter,
+          (match) => '${match[1]},',
+        );
   }
 
   String get _withdrawValidationMessage {
@@ -254,6 +258,22 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
     } catch (_) {
     } finally {
       if (mounted) setState(() => loadingHistory = false);
+    }
+  }
+
+  Future<void> _downloadSelectedWithdrawals() async {
+    final selected = _selectedWithdrawals
+        .where((index) => index >= 0 && index < history.length)
+        .map((index) => Map<String, dynamic>.from(history[index] as Map))
+        .toList();
+    try {
+      await TransactionReceiptService.downloadReceipts(selected);
+      if (mounted) {
+        setState(() => _selectedWithdrawals.clear());
+        _snack('Selected receipts saved to gallery');
+      }
+    } catch (error) {
+      if (mounted) _snack('Could not save receipts: $error');
     }
   }
 
@@ -428,19 +448,19 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
           walletTimeoutSeconds: 5,
           transactionsTimeoutSeconds: 5,
         );
-        _snack('Withdrawal submitted successfully.');
+        _snack('common.transaction_success'.tr());
         _clearFields();
         await _fetchWallet();
         await _fetchHistory();
       } else {
         final errorMsg = data['message'] ??
             data['error'] ??
-            'Withdrawal failed. Please try again.';
+            'common.transaction_failed'.tr();
         print('[WITHDRAW] Backend Error: $errorMsg');
         _snack(errorMsg);
       }
     } catch (e) {
-      if (mounted) _snack('Network error: $e');
+      if (mounted) _snack('common.network_error'.tr());
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -901,7 +921,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                             ? const SizedBox(
                                 height: 24,
                                 width: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : null,
                         counterText: '',
@@ -970,7 +991,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                             ? null
                             : _createWithdraw,
                         child: isLoading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white)
                             : Text('Withdraw Funds',
                                 style: GoogleFonts.plusJakartaSans(
                                     color: Colors.white,
@@ -990,6 +1012,13 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                   Text('Recent Withdrawals',
                       style: GoogleFonts.plusJakartaSans(
                           fontWeight: FontWeight.bold, fontSize: 16)),
+                  if (_selectedWithdrawals.isNotEmpty)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.download_rounded),
+                      label: Text(
+                          'Download selected (${_selectedWithdrawals.length})'),
+                      onPressed: _downloadSelectedWithdrawals,
+                    ),
                   TextButton(
                       onPressed: _fetchHistory, child: const Text('Refresh')),
                 ],
@@ -1015,66 +1044,83 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                               color: theme.secondaryText))),
                 )
               else
-                ...history.map((w) {
+                ...history.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final w = entry.value;
                   final meta = w['metadata'] as Map<String, dynamic>? ?? {};
                   final statusRaw = (w['status'] ?? 'pending').toString();
                   final status = statusRaw.toLowerCase();
                   final isComplete =
                       status == 'completed' || status == 'success';
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.secondaryBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border:
-                          Border.all(color: theme.secondaryText.withAlpha(70)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: isComplete
-                                ? Colors.green.shade50
-                                : Colors.orange.shade50,
-                            shape: BoxShape.circle,
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => TransactionReceiptService.showDetails(
+                        context, Map<String, dynamic>.from(w as Map)),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.secondaryBackground,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: theme.secondaryText.withAlpha(70)),
+                      ),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: _selectedWithdrawals.contains(index),
+                            onChanged: (selected) => setState(() {
+                              if (selected == true) {
+                                _selectedWithdrawals.add(index);
+                              } else {
+                                _selectedWithdrawals.remove(index);
+                              }
+                            }),
                           ),
-                          child: Icon(
-                            isComplete
-                                ? Icons.check_circle_outline
-                                : Icons.hourglass_top,
-                            color: isComplete ? Colors.green : Colors.orange,
-                            size: 20,
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: isComplete
+                                  ? Colors.green.shade50
+                                  : Colors.orange.shade50,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isComplete
+                                  ? Icons.check_circle_outline
+                                  : Icons.hourglass_top,
+                              color: isComplete ? Colors.green : Colors.orange,
+                              size: 20,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                meta['method'] ??
-                                    w['description'] ??
-                                    'Withdrawal',
-                                style: GoogleFonts.plusJakartaSans(
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.primaryText),
-                              ),
-                              Text(status.toUpperCase(),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  meta['method'] ??
+                                      w['description'] ??
+                                      'Withdrawal',
                                   style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 12,
-                                      color: theme.secondaryText)),
-                            ],
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.primaryText),
+                                ),
+                                Text(status.toUpperCase(),
+                                    style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        color: theme.secondaryText)),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          '-${w['amount']} FARM',
-                          style: GoogleFonts.plusJakartaSans(
-                              fontWeight: FontWeight.bold, color: Colors.red),
-                        ),
-                      ],
+                          Text(
+                            '-${w['amount']} FARM',
+                            style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.bold, color: Colors.red),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }),

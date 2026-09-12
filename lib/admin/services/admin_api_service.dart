@@ -361,8 +361,8 @@ class AdminApiService {
       _req(method: 'PATCH', path: '/admin/users/$userId/status', body: data);
 
   // ── KYC ───────────────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getKycQueue({int page = 1}) =>
-      _req(method: 'GET', path: '/admin/kyc/queue?page=$page');
+    static Future<Map<String, dynamic>> getKycQueue({int page = 1, String? status}) =>
+      _req(method: 'GET', path: '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
 
   static Future<Map<String, dynamic>> reviewKyc(String docId, String status,
           {String? rejectionReason}) =>
@@ -432,6 +432,12 @@ class AdminApiService {
         path: '/admin/withdrawals/$txId/process',
         body: {'status': action},
       );
+
+      static Future<Map<String, dynamic>> getPayouts({int page = 1, String? status}) =>
+        _req(method: 'GET', path: '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
+
+      static Future<Map<String, dynamic>> processPayout(String payoutId, String status) =>
+        _req(method: 'POST', path: '/admin/payouts/$payoutId/process', body: {'status': status});
 
   // ── Merchants ─────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getMerchants(

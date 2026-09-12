@@ -14,8 +14,10 @@ import 'notifications_management_page.dart';
 import 'settings_management_page.dart';
 import 'fee_management_page.dart';
 import 'merchant_kyb_management_page.dart';
+import 'payouts_page.dart';
 import '../services/admin_api_service.dart';
 import '/services/auth/auth_service.dart';
+import '/core/localization/app_locale_service.dart';
 import '../core/admin_guard.dart';
 import '../../pages/loginpage/loginpage_widget.dart';
 import '../widgets/admin_sidebar.dart';
@@ -102,6 +104,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _NavItem(icon: Icons.security_rounded, label: 'Escrow'),
     _NavItem(icon: Icons.south_west_rounded, label: 'Deposits'),
     _NavItem(icon: Icons.north_east_rounded, label: 'Withdrawals'),
+    _NavItem(icon: Icons.payments_rounded, label: 'Payouts'),
     _NavItem(icon: Icons.campaign_rounded, label: 'Notifications'),
     _NavItem(icon: Icons.settings_rounded, label: 'Settings'),
     _NavItem(icon: Icons.percent_rounded, label: 'Fees'),
@@ -123,6 +126,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
         EscrowManagementPage(onGoBack: _goToDashboard),
         DepositsManagementPage(onGoBack: _goToDashboard),
         WithdrawalsManagementPage(onGoBack: _goToDashboard),
+        PayoutsPage(onGoBack: _goToDashboard),
         NotificationsManagementPage(onGoBack: _goToDashboard),
         SettingsManagementPage(onGoBack: _goToDashboard),
         FeeManagementPage(onGoBack: _goToDashboard),
@@ -140,6 +144,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   Future<void> _logout() async {
     await AuthService().logout();
     if (mounted) {
+      await AppLocaleService.resetToEnglish(context);
       AuthNavigation.replaceAllWithBuilder(
         context,
         (_) => LoginpageWidget(),

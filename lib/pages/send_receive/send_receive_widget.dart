@@ -9,11 +9,11 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/components/kyc_required_widget.dart';
 import '/services/app_session_manager.dart';
 import '/utils/transaction_peer_resolver.dart';
+import '/services/transaction_receipt_service.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
- 
 
 enum TransferRequestCardState {
   pending,
@@ -118,7 +118,30 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
   double balance = 0;
   List<dynamic> transactions = [];
+  final Set<int> _selectedTransactions = <int>{};
   List<dynamic> userSuggestions = [];
+
+  Future<void> _downloadSelectedTransactions() async {
+    final selected = _selectedTransactions
+        .where((index) => index >= 0 && index < transactions.length)
+        .map((index) => Map<String, dynamic>.from(transactions[index] as Map))
+        .toList();
+    try {
+      await TransactionReceiptService.downloadReceipts(selected);
+      if (mounted) {
+        setState(() => _selectedTransactions.clear());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('common.receipts_saved'.tr())),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('common.receipts_save_failed'.tr())),
+        );
+      }
+    }
+  }
 
   late AnimationController successController;
 
@@ -160,12 +183,15 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       final walletResp = await ApiService.getWallet();
       final txResp = await ApiService.getTransactions();
 
-      final walletData = Map<String, dynamic>.from(walletResp['data'] ?? walletResp);
+      final walletData =
+          Map<String, dynamic>.from(walletResp['data'] ?? walletResp);
       final txs = List<dynamic>.from(txResp['data'] ?? txResp);
 
       setState(() {
         balance = _parseNumericValue(
-          walletData['available_balance'] ?? walletData['balance'] ?? walletData['wallet_balance'],
+          walletData['available_balance'] ??
+              walletData['balance'] ??
+              walletData['wallet_balance'],
         );
 
         transactions = txs;
@@ -244,9 +270,11 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
     try {
       setState(() => _isBiometricChecking = true);
-      final authResult = await TransactionAuthorizationService().authorizeTransaction(
-        localizedReason: 'Confirm to authorize this transfer',
-      ).then((r) => r.toTransactionAuthenticationResult());
+      final authResult = await TransactionAuthorizationService()
+          .authorizeTransaction(
+            localizedReason: 'Confirm to authorize this transfer',
+          )
+          .then((r) => r.toTransactionAuthenticationResult());
 
       if (authResult.biometricUsed) {
         if (mounted) {
@@ -275,7 +303,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
     }
   }
 
-  Future<void> sendFunds({TransactionAuthenticationResult? preAuthResult}) async {
+  Future<void> sendFunds(
+      {TransactionAuthenticationResult? preAuthResult}) async {
     if (recipientController.text.isEmpty || amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -288,15 +317,17 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       return;
     }
 
-      final authResult = preAuthResult ??
+    final authResult = preAuthResult ??
         (_pinEntryEnabled && _lastPinFieldAuthResult != null
-          ? _lastPinFieldAuthResult
-          : null);
+            ? _lastPinFieldAuthResult
+            : null);
 
     if (authResult == null && !_pinEntryEnabled) {
-      final biometricAuthResult = await TransactionAuthorizationService().authorizeTransaction(
-        localizedReason: 'Confirm to authorize this transfer',
-      ).then((r) => r.toTransactionAuthenticationResult());
+      final biometricAuthResult = await TransactionAuthorizationService()
+          .authorizeTransaction(
+            localizedReason: 'Confirm to authorize this transfer',
+          )
+          .then((r) => r.toTransactionAuthenticationResult());
       if (biometricAuthResult.biometricUsed) {
         await _sendFundsWithAuth(biometricAuthResult);
         return;
@@ -315,10 +346,13 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       return;
     }
 
-    await _sendFundsWithAuth(authResult ?? const TransactionAuthenticationResult(outcome: TransactionAuthenticationOutcome.pinRequired));
+    await _sendFundsWithAuth(authResult ??
+        const TransactionAuthenticationResult(
+            outcome: TransactionAuthenticationOutcome.pinRequired));
   }
 
-  Future<void> _sendFundsWithAuth(TransactionAuthenticationResult authResult) async {
+  Future<void> _sendFundsWithAuth(
+      TransactionAuthenticationResult authResult) async {
     final amount = enteredAmount;
 
     if (!authResult.biometricUsed && pinController.text.trim().isEmpty) {
@@ -349,7 +383,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
           'amount': amount,
           if (!authResult.biometricUsed) 'pin': pinController.text.trim(),
           if (authResult.biometricUsed) 'biometric_auth': true,
-          if (authResult.deviceFingerprint != null) 'device_fingerprint': authResult.deviceFingerprint,
+          if (authResult.deviceFingerprint != null)
+            'device_fingerprint': authResult.deviceFingerprint,
           'description': descriptionController.text.trim(),
         },
       );
@@ -538,7 +573,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
   Future<void> fetchPendingRequests() async {
     try {
-      final resp = await ApiService.request(method: 'GET', path: '/payment-requests/pending');
+      final resp = await ApiService.request(
+          method: 'GET', path: '/payment-requests/pending');
       final requests = resp['data'] ?? resp;
       if (mounted) {
         setState(() {
@@ -556,7 +592,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
   Future<void> fetchMyTransferRequests() async {
     try {
-      final resp = await ApiService.request(method: 'GET', path: '/payment-requests');
+      final resp =
+          await ApiService.request(method: 'GET', path: '/payment-requests');
       final requests = resp['data'] ?? resp;
       if (mounted) {
         setState(() {
@@ -606,9 +643,12 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
     TransactionAuthenticationResult? preAuthResult,
   }) async {
     try {
-      final authResult = preAuthResult ?? await TransactionAuthorizationService().authorizeTransaction(
-        localizedReason: 'Confirm transfer',
-      ).then((r) => r.toTransactionAuthenticationResult());
+      final authResult = preAuthResult ??
+          await TransactionAuthorizationService()
+              .authorizeTransaction(
+                localizedReason: 'Confirm transfer',
+              )
+              .then((r) => r.toTransactionAuthenticationResult());
       await ApiService.request(
         method: 'POST',
         path: '/payment-requests/accept',
@@ -616,7 +656,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
           'request_id': requestId,
           if (pin != null) 'pin': pin,
           if (authResult?.biometricUsed == true) 'biometric_auth': true,
-          if (authResult?.deviceFingerprint != null) 'device_fingerprint': authResult?.deviceFingerprint,
+          if (authResult?.deviceFingerprint != null)
+            'device_fingerprint': authResult?.deviceFingerprint,
         },
       );
       await AppSessionManager().syncNow(
@@ -649,7 +690,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
   }
 
   double get selectedIncomingTotal => pendingRequests
-      .where((req) => selectedIncomingRequestIds.contains(req['id']?.toString()))
+      .where(
+          (req) => selectedIncomingRequestIds.contains(req['id']?.toString()))
       .fold(0.0, (total, req) => total + _parseAmount(req['amount']));
 
   Future<void> _approveSelectedIncomingRequests() async {
@@ -657,7 +699,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
     if (requestIds.isEmpty) return;
 
     final authResult = await TransactionAuthorizationService()
-        .authorizeTransaction(localizedReason: 'Approve selected money requests')
+        .authorizeTransaction(
+            localizedReason: 'Approve selected money requests')
         .then((result) => result.toTransactionAuthenticationResult());
     String? pin;
     if (!authResult.biometricUsed) {
@@ -674,8 +717,12 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
             decoration: const InputDecoration(labelText: 'Transaction PIN'),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-            ElevatedButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Approve')),
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Approve')),
           ],
         ),
       );
@@ -686,7 +733,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
     setState(() => isSending = true);
     try {
-      final response = await PaymentRequestApiService.acceptPaymentRequestsBatch(
+      final response =
+          await PaymentRequestApiService.acceptPaymentRequestsBatch(
         requestIds: requestIds,
         pin: pin,
         biometricAuth: authResult.biometricUsed,
@@ -695,13 +743,20 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       if (!mounted) return;
       setState(() => selectedIncomingRequestIds.clear());
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(response['message'] ?? 'Selected requests completed'), backgroundColor: Colors.green),
+        SnackBar(
+            content: Text(response['message'] ?? 'Selected requests completed'),
+            backgroundColor: Colors.green),
       );
-      await AppSessionManager().syncNow(profileTimeoutSeconds: 5, walletTimeoutSeconds: 5, transactionsTimeoutSeconds: 5);
+      await AppSessionManager().syncNow(
+          profileTimeoutSeconds: 5,
+          walletTimeoutSeconds: 5,
+          transactionsTimeoutSeconds: 5);
       await fetchWallet();
       await fetchPendingRequests();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => isSending = false);
     }
@@ -757,9 +812,11 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
     String requesterUsername,
     double amount,
   ) async {
-    final authResult = await TransactionAuthorizationService().authorizeTransaction(
-      localizedReason: 'Confirm transfer',
-    ).then((r) => r.toTransactionAuthenticationResult());
+    final authResult = await TransactionAuthorizationService()
+        .authorizeTransaction(
+          localizedReason: 'Confirm transfer',
+        )
+        .then((r) => r.toTransactionAuthenticationResult());
 
     if (authResult.biometricUsed) {
       await acceptTransferRequest(
@@ -879,8 +936,9 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
   }
 
   Widget buildTransactionCard(
-    dynamic tx,
-  ) {
+    dynamic tx, {
+    required int index,
+  }) {
     final theme = FlutterFlowTheme.of(context);
     final outgoing = tx['is_outgoing'] == true;
     final amount = _parseNumericValue(tx['amount']);
@@ -891,67 +949,80 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'],
     );
 
-    return Container(
-      margin: const EdgeInsets.only(
-        bottom: 12,
-      ),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: FlutterFlowTheme.of(context).secondaryBackground,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: outgoing ? Colors.red.shade100 : Colors.green.shade100,
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => TransactionReceiptService.showDetails(
+          context, Map<String, dynamic>.from(tx as Map)),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: FlutterFlowTheme.of(context).secondaryBackground,
+        ),
+        child: Row(
+          children: [
+            Checkbox(
+              value: _selectedTransactions.contains(index),
+              onChanged: (selected) => setState(() {
+                if (selected == true) {
+                  _selectedTransactions.add(index);
+                } else {
+                  _selectedTransactions.remove(index);
+                }
+              }),
             ),
-            child: Icon(
-              outgoing ? Icons.arrow_upward : Icons.arrow_downward,
-              color: outgoing ? Colors.red : Colors.green,
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: outgoing ? Colors.red.shade100 : Colors.green.shade100,
+              ),
+              child: Icon(
+                outgoing ? Icons.arrow_upward : Icons.arrow_downward,
+                color: outgoing ? Colors.red : Colors.green,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  outgoing ? 'Sent FARM' : 'Received FARM',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: theme.primaryText,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    outgoing ? 'Sent FARM' : 'Received FARM',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.primaryText,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  outgoing ? 'To $peer' : 'From $peer',
-                  style: TextStyle(
-                    color: FlutterFlowTheme.of(context).secondaryText,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 4),
+                  Text(
+                    outgoing ? 'To $peer' : 'From $peer',
+                    style: TextStyle(
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$reference • $dateText',
-                  style: TextStyle(
-                    color: FlutterFlowTheme.of(context).secondaryText,
+                  const SizedBox(height: 4),
+                  Text(
+                    '$reference • $dateText',
+                    style: TextStyle(
+                      color: FlutterFlowTheme.of(context).secondaryText,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Text(
-            '${amount.toStringAsFixed(2)} FARM',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: outgoing ? Colors.red : Colors.green,
+            Text(
+              '${amount.toStringAsFixed(2)} FARM',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: outgoing ? Colors.red : Colors.green,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -985,13 +1056,15 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
               children: [
                 Checkbox(
                   value: isSelected,
-                  onChanged: requestId.isEmpty ? null : (checked) => setState(() {
-                    if (checked == true) {
-                      selectedIncomingRequestIds.add(requestId);
-                    } else {
-                      selectedIncomingRequestIds.remove(requestId);
-                    }
-                  }),
+                  onChanged: requestId.isEmpty
+                      ? null
+                      : (checked) => setState(() {
+                            if (checked == true) {
+                              selectedIncomingRequestIds.add(requestId);
+                            } else {
+                              selectedIncomingRequestIds.remove(requestId);
+                            }
+                          }),
                 ),
                 Container(
                   width: 48,
@@ -1862,7 +1935,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                           keyboardType: TextInputType.number,
                                           readOnly: _isBiometricChecking,
                                           onTap: () async {
-                                            if (!_pinEntryEnabled && !_isBiometricChecking) {
+                                            if (!_pinEntryEnabled &&
+                                                !_isBiometricChecking) {
                                               await _promptBiometricForPinField();
                                             }
                                           },
@@ -1876,7 +1950,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                               Icons.lock,
                                             ),
                                             border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(
+                                              borderRadius:
+                                                  BorderRadius.circular(
                                                 18,
                                               ),
                                               borderSide: BorderSide(
@@ -1892,7 +1967,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                         SizedBox(
                                           height: 58,
                                           child: ElevatedButton(
-                                            onPressed: _promptBiometricForPinField,
+                                            onPressed:
+                                                _promptBiometricForPinField,
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor:
                                                   selectedTabBackground,
@@ -1968,7 +2044,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                                     'Send FARM',
                                                     style: TextStyle(
                                                       fontSize: 18,
-                                                      fontWeight: FontWeight.bold,
+                                                      fontWeight:
+                                                          FontWeight.bold,
                                                       color: Colors.white,
                                                     ),
                                                   ),
@@ -2202,24 +2279,40 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                       if (selectedIncomingRequestIds.isNotEmpty)
                                         Container(
                                           padding: const EdgeInsets.all(12),
-                                          margin: const EdgeInsets.only(bottom: 12),
-                                          color: Colors.green.withValues(alpha: 0.08),
+                                          margin:
+                                              const EdgeInsets.only(bottom: 12),
+                                          color: Colors.green
+                                              .withValues(alpha: 0.08),
                                           child: Row(
                                             children: [
-                                              Expanded(child: Text('${selectedIncomingRequestIds.length} selected • ${selectedIncomingTotal.toStringAsFixed(2)} FARM')),
-                                              TextButton(onPressed: () => setState(() => selectedIncomingRequestIds.clear()), child: const Text('Clear')),
-                                              ElevatedButton(onPressed: isSending ? null : _approveSelectedIncomingRequests, child: const Text('Approve all')),
+                                              Expanded(
+                                                  child: Text(
+                                                      '${selectedIncomingRequestIds.length} selected • ${selectedIncomingTotal.toStringAsFixed(2)} FARM')),
+                                              TextButton(
+                                                  onPressed: () => setState(() =>
+                                                      selectedIncomingRequestIds
+                                                          .clear()),
+                                                  child: const Text('Clear')),
+                                              ElevatedButton(
+                                                  onPressed: isSending
+                                                      ? null
+                                                      : _approveSelectedIncomingRequests,
+                                                  child: const Text(
+                                                      'Approve all')),
                                             ],
                                           ),
                                         ),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.end,
                                         children: [
                                           TextButton(
                                             onPressed: () => setState(() {
                                               selectedIncomingRequestIds
                                                 ..clear()
-                                                ..addAll(pendingRequests.map((req) => req['id'].toString()));
+                                                ..addAll(pendingRequests.map(
+                                                    (req) =>
+                                                        req['id'].toString()));
                                             }),
                                             child: const Text('Select all'),
                                           ),
@@ -2277,6 +2370,16 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                         ),
                                       ),
                                 ),
+                                if (_selectedTransactions.isNotEmpty)
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: OutlinedButton.icon(
+                                      icon: const Icon(Icons.download_rounded),
+                                      label: Text(
+                                          'Download selected (${_selectedTransactions.length})'),
+                                      onPressed: _downloadSelectedTransactions,
+                                    ),
+                                  ),
                                 const SizedBox(
                                   height: 20,
                                 ),
@@ -2294,12 +2397,12 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                 else
                                   Column(
                                     children: transactions
+                                        .asMap()
+                                        .entries
                                         .map(
-                                          (
-                                            tx,
-                                          ) =>
-                                              buildTransactionCard(
-                                            tx,
+                                          (entry) => buildTransactionCard(
+                                            entry.value,
+                                            index: entry.key,
                                           ),
                                         )
                                         .toList(),

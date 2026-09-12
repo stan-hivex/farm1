@@ -13,6 +13,7 @@ import java.io.File
 
 class MainActivity: FlutterFragmentActivity() {
   private val channelName = "farm.qr_download_service"
+  private val receiptChannelName = "farm.transaction_receipt"
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
@@ -46,6 +47,53 @@ class MainActivity: FlutterFragmentActivity() {
         else -> result.notImplemented()
       }
     }
+
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, receiptChannelName).setMethodCallHandler { call, result ->
+      if (call.method != "saveReceipt") {
+        result.notImplemented()
+        return@setMethodCallHandler
+      }
+      val bytes = call.argument<ByteArray>("bytes")
+      val fileName = call.argument<String>("fileName")
+      if (bytes == null || fileName == null) {
+        result.error("INVALID_ARGUMENTS", "Missing receipt bytes or file name", null)
+        return@setMethodCallHandler
+      }
+      try {
+        result.success(saveReceiptImage(bytes, fileName))
+      } catch (error: Exception) {
+        result.error("SAVE_FAILED", error.message, null)
+      }
+    }
+  }
+
+  private fun saveReceiptImage(bytes: ByteArray, fileName: String): String {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/FARM")
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+      }
+      val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+        ?: throw Exception("Unable to create gallery entry")
+      contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+        ?: throw Exception("Unable to open gallery entry")
+      values.clear()
+      values.put(MediaStore.Images.Media.IS_PENDING, 0)
+      contentResolver.update(uri, values, null, null)
+      return uri.toString()
+    }
+
+    val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+    val targetDir = File(picturesDir, "FARM")
+    if (!targetDir.exists() && !targetDir.mkdirs()) {
+      throw Exception("Unable to create gallery directory")
+    }
+    val file = File(targetDir, fileName)
+    file.outputStream().use { it.write(bytes) }
+    MediaScannerConnection.scanFile(this, arrayOf(file.absolutePath), arrayOf("image/png"), null)
+    return file.absolutePath
   }
 
   private fun saveQrImage(bytes: ByteArray, fileName: String): String {

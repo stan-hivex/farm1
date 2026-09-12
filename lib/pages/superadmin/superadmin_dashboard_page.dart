@@ -16,6 +16,8 @@ import '/admin/services/admin_api_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '/services/auth/auth_service.dart';
+import '/core/localization/app_locale_service.dart';
+import '/services/transaction_receipt_service.dart';
 
 class SuperadminDashboardPage extends StatefulWidget {
   const SuperadminDashboardPage({super.key});
@@ -24,7 +26,8 @@ class SuperadminDashboardPage extends StatefulWidget {
   static const String routePath = '/superadmin/dashboard';
 
   @override
-  State<SuperadminDashboardPage> createState() => _SuperadminDashboardPageState();
+  State<SuperadminDashboardPage> createState() =>
+      _SuperadminDashboardPageState();
 }
 
 class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
@@ -51,7 +54,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    debugPrint('[SuperadminDashboardPage] initState: starting dashboard initialization');
+    debugPrint(
+        '[SuperadminDashboardPage] initState: starting dashboard initialization');
     _loadDashboardData();
     _loadSuperadminWallet();
     _loadExchangeRates();
@@ -76,7 +80,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
       unawaited(_refreshSessionAndReload());
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
     }
   }
@@ -137,13 +142,15 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     });
     try {
       final token = await FFAppState().getActiveAccessToken();
-      debugPrint('[SuperadminDashboardPage] _loadDashboardData token length=${token.length}');
+      debugPrint(
+          '[SuperadminDashboardPage] _loadDashboardData token length=${token.length}');
       if (token.isEmpty) {
         throw Exception('Not authenticated');
       }
 
       // Fetch dashboard data from backend
-      debugPrint('[SuperadminDashboardPage] _loadDashboardData calling ${AppConfig.api}/superadmin/dashboard');
+      debugPrint(
+          '[SuperadminDashboardPage] _loadDashboardData calling ${AppConfig.api}/superadmin/dashboard');
       final response = await ApiManager.instance.makeApiCall(
         callName: 'superadminDashboard',
         apiUrl: '${AppConfig.api}/superadmin/dashboard',
@@ -155,7 +162,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         params: {},
         returnBody: true,
       );
-      debugPrint('[SuperadminDashboardPage] _loadDashboardData response status=${response.statusCode} body=${response.bodyText}');
+      debugPrint(
+          '[SuperadminDashboardPage] _loadDashboardData response status=${response.statusCode} body=${response.bodyText}');
 
       final decoded = response.jsonBody as Map<String, dynamic>?;
       if (decoded == null) {
@@ -205,6 +213,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
       debugPrint('[SuperadminDashboardPage] logout error: $e');
     }
     if (mounted) {
+      await AppLocaleService.resetToEnglish(context);
       AuthNavigation.replaceAllWithBuilder(
         context,
         (_) => LoginpageWidget(),
@@ -213,13 +222,17 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
   }
 
   Future<void> _loadExchangeRates() async {
-    setState(() { _loadingExchangeRates = true; });
+    setState(() {
+      _loadingExchangeRates = true;
+    });
     try {
       final token = await FFAppState().getActiveAccessToken();
-      debugPrint('[SuperadminDashboardPage] _loadExchangeRates token length=${token.length}');
+      debugPrint(
+          '[SuperadminDashboardPage] _loadExchangeRates token length=${token.length}');
       if (token.isEmpty) throw Exception('Not authenticated');
 
-      debugPrint('[SuperadminDashboardPage] _loadExchangeRates calling ${AppConfig.api}/admin/exchange-rates');
+      debugPrint(
+          '[SuperadminDashboardPage] _loadExchangeRates calling ${AppConfig.api}/admin/exchange-rates');
       final response = await ApiManager.instance.makeApiCall(
         callName: 'superadminExchangeRates',
         apiUrl: '${AppConfig.api}/admin/exchange-rates',
@@ -259,23 +272,31 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
       debugPrint(st.toString());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load exchange rates: ${e.toString().replaceAll('Exception: ', '')}')),
+          SnackBar(
+              content: Text(
+                  'Failed to load exchange rates: ${e.toString().replaceAll('Exception: ', '')}')),
         );
       }
     } finally {
-      if (mounted) setState(() { _loadingExchangeRates = false; });
+      if (mounted)
+        setState(() {
+          _loadingExchangeRates = false;
+        });
     }
   }
 
   Future<void> _saveExchangeRates() async {
     if (_kesToFarmCtrl.text.isEmpty || _farmToKesCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill both KES→FARM and FARM→KES rates')),
+        const SnackBar(
+            content: Text('Please fill both KES→FARM and FARM→KES rates')),
       );
       return;
     }
 
-    setState(() { _savingExchangeRates = true; });
+    setState(() {
+      _savingExchangeRates = true;
+    });
     try {
       final token = await FFAppState().getActiveAccessToken();
       if (token.isEmpty) throw Exception('Not authenticated');
@@ -320,11 +341,17 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving exchange rates: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(
+                  'Error saving exchange rates: ${e.toString().replaceAll('Exception: ', '')}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) setState(() { _savingExchangeRates = false; });
+      if (mounted)
+        setState(() {
+          _savingExchangeRates = false;
+        });
     }
   }
 
@@ -385,7 +412,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                       fontSize: 15)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: accent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -481,7 +509,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 const SizedBox(height: 28),
                 _buildCurrencyConversionRatesSection(cardColor, accent, muted),
                 const SizedBox(height: 28),
-                _buildSuperadminFees(_superadminWallet, cardColor, accent, muted),
+                _buildSuperadminFees(
+                    _superadminWallet, cardColor, accent, muted),
                 const SizedBox(height: 28),
                 _buildKYCEarnings(data, cardColor, accent, muted),
                 const SizedBox(height: 28),
@@ -572,7 +601,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 child: InkWell(
                   onTap: () {
                     debugPrint('[SuperadminDashboardPage] wallet icon tapped');
-                    context.go(SuperadminWalletPage.routePath);
+                    context.push(SuperadminWalletPage.routePath);
                   },
                   borderRadius: BorderRadius.circular(16),
                   child: Container(
@@ -621,7 +650,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildAdminActivityCard(String title, String value, Color accent, Color cardColor) {
+  Widget _buildAdminActivityCard(
+      String title, String value, Color accent, Color cardColor) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -656,7 +686,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildAddAdminSection(Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
+  Widget _buildAddAdminSection(
+      Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
@@ -708,17 +739,24 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
           const SizedBox(height: 18),
           Row(
             children: [
-              _buildAdminActivityCard('Pending KYC', '${data['pending_kyc'] ?? 0}', accent, cardColor),
+              _buildAdminActivityCard('Pending KYC',
+                  '${data['pending_kyc'] ?? 0}', accent, cardColor),
               const SizedBox(width: 12),
-              _buildAdminActivityCard('Flagged Tx', '${data['flagged_transactions'] ?? 0}', Colors.orange, cardColor),
+              _buildAdminActivityCard(
+                  'Flagged Tx',
+                  '${data['flagged_transactions'] ?? 0}',
+                  Colors.orange,
+                  cardColor),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              _buildAdminActivityCard('Open Tickets', '${data['support_tickets'] ?? 0}', Colors.blue, cardColor),
+              _buildAdminActivityCard('Open Tickets',
+                  '${data['support_tickets'] ?? 0}', Colors.blue, cardColor),
               const SizedBox(width: 12),
-              _buildAdminActivityCard('Disputes', '${data['pending_disputes'] ?? 0}', Colors.red, cardColor),
+              _buildAdminActivityCard('Disputes',
+                  '${data['pending_disputes'] ?? 0}', Colors.red, cardColor),
             ],
           ),
           const SizedBox(height: 22),
@@ -727,11 +765,17 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             height: 50,
             child: ElevatedButton.icon(
               onPressed: _isCreatingAdmin ? null : _openAddAdminPage,
-              icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.black),
-              label: Text('Create Admin', style: GoogleFonts.plusJakartaSans(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 15)),
+              icon: const Icon(Icons.person_add_alt_1_rounded,
+                  color: Colors.black),
+              label: Text('Create Admin',
+                  style: GoogleFonts.plusJakartaSans(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: accent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -742,10 +786,15 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             child: ElevatedButton.icon(
               onPressed: _openSystemUsersPage,
               icon: const Icon(Icons.people_rounded, color: Colors.black),
-              label: Text('System Users', style: GoogleFonts.plusJakartaSans(color: Colors.black, fontWeight: FontWeight.w700, fontSize: 15)),
+              label: Text('System Users',
+                  style: GoogleFonts.plusJakartaSans(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15)),
               style: ElevatedButton.styleFrom(
                 backgroundColor: accent.withValues(alpha: 0.8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ),
@@ -754,7 +803,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildKPICards(Map<String, dynamic> data, Color cardColor, Color accent) {
+  Widget _buildKPICards(
+      Map<String, dynamic> data, Color cardColor, Color accent) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -775,17 +825,26 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
           mainAxisSpacing: 14,
           crossAxisSpacing: 14,
           children: [
-            _kpiCard('Total Users', '${data['total_users'] ?? 0}', 'users', accent, cardColor),
-            _kpiCard('Total Revenue', '${data['total_revenue'] ?? 0} FARM', 'platform fees', accent, cardColor),
-            _kpiCard('Active Transactions', '${data['active_transactions'] ?? 0}', 'pending', accent, cardColor),
-            _kpiCard('System Health', '${data['system_health'] ?? 98}%', 'operational', accent, cardColor),
+            _kpiCard('Total Users', '${data['total_users'] ?? 0}', 'users',
+                accent, cardColor),
+            _kpiCard('Total Revenue', '${data['total_revenue'] ?? 0} FARM',
+                'platform fees', accent, cardColor),
+            _kpiCard(
+                'Active Transactions',
+                '${data['active_transactions'] ?? 0}',
+                'pending',
+                accent,
+                cardColor),
+            _kpiCard('System Health', '${data['system_health'] ?? 98}%',
+                'operational', accent, cardColor),
           ],
         ),
       ],
     );
   }
 
-  Widget _kpiCard(String title, String value, String subtitle, Color accent, Color cardColor) {
+  Widget _kpiCard(String title, String value, String subtitle, Color accent,
+      Color cardColor) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -853,13 +912,15 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildKYCEarnings(Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
+  Widget _buildKYCEarnings(
+      Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
     final creationEarnings = data['escrow_creation_earnings'] ?? 0.0;
     final releaseEarnings = data['escrow_release_earnings'] ?? 0.0;
     final withdrawEarnings = data['withdraw_fee_earnings'] ?? 0.0;
     final creationCount = data['escrow_creation_count'] ?? 0;
     final releaseCount = data['escrow_release_count'] ?? 0;
-    final withdrawCount = data['withdraw_transaction_count'] ?? data['withdraw_count'] ?? 0;
+    final withdrawCount =
+        data['withdraw_transaction_count'] ?? data['withdraw_count'] ?? 0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -954,9 +1015,14 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildSuperadminFees(Map<String, dynamic>? wallet, Color cardColor, Color accent, Color muted) {
-    final balance = wallet == null ? 0.0 : (wallet['available_balance'] ?? wallet['balance'] ?? 0.0);
-    final displayBalance = (balance is num) ? (balance).toDouble() : double.tryParse(balance.toString()) ?? 0.0;
+  Widget _buildSuperadminFees(Map<String, dynamic>? wallet, Color cardColor,
+      Color accent, Color muted) {
+    final balance = wallet == null
+        ? 0.0
+        : (wallet['available_balance'] ?? wallet['balance'] ?? 0.0);
+    final displayBalance = (balance is num)
+        ? (balance).toDouble()
+        : double.tryParse(balance.toString()) ?? 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -971,7 +1037,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         ),
         const SizedBox(height: 14),
         GestureDetector(
-          onTap: () => context.go(SuperadminWalletPage.routePath),
+          onTap: () => context.push(SuperadminWalletPage.routePath),
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1039,7 +1105,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _earningsBreakdownCard(String title, String amount, String description, Color colorAccent, Color cardColor) {
+  Widget _earningsBreakdownCard(String title, String amount, String description,
+      Color colorAccent, Color cardColor) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1095,7 +1162,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildSystemHealth(Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
+  Widget _buildSystemHealth(
+      Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1118,7 +1186,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
@@ -1147,7 +1216,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _healthItem(String name, String status, Color statusColor, Color cardColor) {
+  Widget _healthItem(
+      String name, String status, Color statusColor, Color cardColor) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1177,7 +1247,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildExchangeRatesSection(Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
+  Widget _buildExchangeRatesSection(
+      Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -1206,9 +1277,11 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
           if (_loadingExchangeRates)
             const Center(child: CircularProgressIndicator())
           else ...[
-            _buildRateField('KES → FARM', _kesToFarmCtrl, 'Example: 1.00', accent),
+            _buildRateField(
+                'KES → FARM', _kesToFarmCtrl, 'Example: 1.00', accent),
             const SizedBox(height: 16),
-            _buildRateField('FARM → KES', _farmToKesCtrl, 'Example: 1.00', accent),
+            _buildRateField(
+                'FARM → KES', _farmToKesCtrl, 'Example: 1.00', accent),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -1227,7 +1300,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 Expanded(
                   child: Text(
                     'Changes here are reflected in user wallet balance interfaces and deposit/withdraw conversion calculations.',
-                    style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
+                    style:
+                        GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
                   ),
                 ),
               ],
@@ -1266,7 +1340,9 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
 
       final current = rows.first as Map<String, dynamic>;
       final usdKes = (current['usd_kes_rate'] ?? 150).toString();
-      final farmUsd = (current['farm_usd_rate'] ?? (1 / double.parse(usdKes)).toString()).toString();
+      final farmUsd =
+          (current['farm_usd_rate'] ?? (1 / double.parse(usdKes)).toString())
+              .toString();
       if (mounted) {
         _usdToKesCtrl.text = usdKes;
         _farmToUsdCtrl.text = farmUsd;
@@ -1320,7 +1396,10 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving conversion rate: ${e.toString().replaceAll('Exception: ', '')}'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text(
+                  'Error saving conversion rate: ${e.toString().replaceAll('Exception: ', '')}'),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
@@ -1328,7 +1407,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     }
   }
 
-  Widget _buildCurrencyConversionRatesSection(Color cardColor, Color accent, Color muted) {
+  Widget _buildCurrencyConversionRatesSection(
+      Color cardColor, Color accent, Color muted) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -1357,9 +1437,11 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
           if (_loadingCurrencyRate)
             const Center(child: CircularProgressIndicator())
           else ...[
-            _buildRateField('USD → KES', _usdToKesCtrl, 'Example: 150.00', accent),
+            _buildRateField(
+                'USD → KES', _usdToKesCtrl, 'Example: 150.00', accent),
             const SizedBox(height: 16),
-            _buildRateField('FARM → USD', _farmToUsdCtrl, 'Auto-derived', accent),
+            _buildRateField(
+                'FARM → USD', _farmToUsdCtrl, 'Auto-derived', accent),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -1378,7 +1460,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 Expanded(
                   child: Text(
                     '1 FARM = 1 KES and 1 FARM = 1 / USD_KES_RATE USD. USDC and USDT use the same derived value.',
-                    style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
+                    style:
+                        GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
                   ),
                 ),
               ],
@@ -1389,11 +1472,14 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildRateField(String label, TextEditingController controller, String hint, Color accent) {
+  Widget _buildRateField(String label, TextEditingController controller,
+      String hint, Color accent) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13)),
+        Text(label,
+            style: GoogleFonts.plusJakartaSans(
+                color: Colors.white70, fontSize: 13)),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
@@ -1416,14 +1502,16 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(color: accent),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMonitoringCards(Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
+  Widget _buildMonitoringCards(
+      Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1436,18 +1524,27 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
           ),
         ),
         const SizedBox(height: 14),
-        _monitoringCard('Pending KYC Reviews', '${data['pending_kyc'] ?? 0}', accent, cardColor, Icons.verified_user),
+        _monitoringCard('Pending KYC Reviews', '${data['pending_kyc'] ?? 0}',
+            accent, cardColor, Icons.verified_user),
         const SizedBox(height: 12),
-        _monitoringCard('Flagged Transactions', '${data['flagged_transactions'] ?? 0}', accent, cardColor, Icons.warning_rounded),
+        _monitoringCard(
+            'Flagged Transactions',
+            '${data['flagged_transactions'] ?? 0}',
+            accent,
+            cardColor,
+            Icons.warning_rounded),
         const SizedBox(height: 12),
-        _monitoringCard('Support Tickets', '${data['support_tickets'] ?? 0}', accent, cardColor, Icons.support_agent),
+        _monitoringCard('Support Tickets', '${data['support_tickets'] ?? 0}',
+            accent, cardColor, Icons.support_agent),
         const SizedBox(height: 12),
-        _monitoringCard('Pending Disputes', '${data['pending_disputes'] ?? 0}', accent, cardColor, Icons.gavel_rounded),
+        _monitoringCard('Pending Disputes', '${data['pending_disputes'] ?? 0}',
+            accent, cardColor, Icons.gavel_rounded),
       ],
     );
   }
 
-  Widget _monitoringCard(String title, String count, Color accent, Color cardColor, IconData icon) {
+  Widget _monitoringCard(String title, String count, Color accent,
+      Color cardColor, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1499,9 +1596,10 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _buildRecentActivities(Map<String, dynamic> data, Color cardColor, Color muted) {
+  Widget _buildRecentActivities(
+      Map<String, dynamic> data, Color cardColor, Color muted) {
     final activities = data['recent_activities'] as List? ?? [];
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1543,50 +1641,57 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                   ),
                   itemBuilder: (context, index) {
                     final activity = activities[index] as Map<String, dynamic>?;
-                    return Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  activity?['description'] ?? 'Activity',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                    return InkWell(
+                      onTap: activity == null
+                          ? null
+                          : () => TransactionReceiptService.showDetails(
+                              context, Map<String, dynamic>.from(activity)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    activity?['description'] ?? 'Activity',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  activity?['timestamp'] ?? '',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    color: muted,
-                                    fontSize: 11,
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    activity?['timestamp'] ?? '',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      color: muted,
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white10,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              activity?['type'] ?? '',
-                              style: GoogleFonts.plusJakartaSans(
-                                color: Colors.white70,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
+                                ],
                               ),
                             ),
-                          ),
-                        ],
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                activity?['type'] ?? '',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },

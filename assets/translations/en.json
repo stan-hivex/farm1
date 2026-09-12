@@ -49,8 +49,13 @@
     "failed": "Failed",
     "kyc_required": "KYC verification is required before using",
     "new_transaction": "New Transaction"
-    ,"requests": "Requests", "pending_requests": "Pending Requests", "your_requests": "Your Requests", "no_requests": "No requests found"
+    ,"requests": "Requests", "pending_requests": "Pending Requests", "your_requests": "Your Requests", "no_requests": "No requests found",
+    "refresh": "Refresh", "page_not_available": "Page not available", "document_load_failed": "Unable to load document",
+    "notifications_title": "Notifications", "notifications_preferences": "Preferences", "push_notifications": "Push notifications", "push_notifications_description": "Receive alerts on your device", "email_notifications": "Email notifications", "email_notifications_description": "Send updates to your inbox", "in_app_notifications": "In-app notifications", "in_app_notifications_description": "Show notifications inside the app", "sms_notifications": "SMS notifications", "sms_notifications_description": "Get important alerts by text", "sound": "Sound", "sound_description": "Play sounds for notifications", "vibration": "Vibration", "vibration_description": "Vibrate for incoming alerts", "recent_activity": "Recent activity", "notifications_empty_title": "No notifications yet", "notifications_empty_description": "You will see account and transaction updates here",
+    "support_title": "Support & Help Center", "support_question": "How can we help you?", "support_faqs": "FAQs", "support_faqs_description": "Browse frequently asked questions", "support_live_chat": "Live Chat", "support_live_chat_description": "Chat with support team", "support_email": "Email Support", "support_email_description": "Send a support request", "support_availability": "Support is available 24/7", "request_money": "Request Money", "request_created": "Request created successfully", "kyc_title": "KYC Verification Required", "kyc_complete_prompt": "Please complete your KYC details to continue.", "complete_kyc": "Complete KYC", "kyc_review_notice": "Your submission will be reviewed by admin before access is granted.", "receipts_saved": "Selected receipts saved to gallery", "receipts_save_failed": "Could not save receipts", "incoming_requests": "Incoming Requests", "load_failed": "Unable to load", "no_pending_requests": "No pending requests", "request_load_failed": "Unable to load this request", "retrying_request": "Retrying automatically. Please wait.", "requested": "Requested", "reason": "Reason", "created": "Created", "just_now": "Just now", "time_remaining": "Time remaining", "expired": "Expired", "decline": "Decline", "working": "Working...", "pay": "Pay", "request_expired": "Request expired", "already_handled": "Already handled", "money_request_approval": "Money Request Approval"
   },
+  "transactions": {"title":"Transactions","history":"Your transaction history","search":"Search by ID, type, person, amount, or status","clear_search":"Clear search","selected":"selected","share_receipts":"Share selected receipts","download_receipts":"Download selected receipts","all":"All","sent":"Sent","received":"Received","deposit":"Deposit","withdraw":"Withdraw","pending":"Pending","completed":"Completed","failed":"Failed","empty":"No transactions match your filters yet.","copy_id":"Copy transaction ID","id_copied":"Transaction ID copied","updated":"Transaction updated"},
+  "deposits": {"range":"Range: KES ${min} - KES ${max}","amount_range_error":"Amount must be between KES ${min} and KES ${max}","complete_payment_browser":"Complete payment in browser.\n~${amount} FARM will credit after confirmation.","verification_timeout":"Payment verification timed out. Please check your transaction status on the dashboard.","payment_cancelled":"Payment cancelled. No funds were deducted. Please try again.","payment_failed_no_deduction":"Payment failed. No funds were deducted. Please try again.","failed":"Deposit failed. Please try again.","date_unavailable":"Date unavailable","funds":"Deposit Funds","wallet_balance":"Wallet Balance","payment_method":"Payment Method","bank_card":"Bank Card","bank_transfer":"Bank Transfer","mobile_money":"Mobile Money (M-Pesa)","crypto":"Crypto","instant":"Instant","amount":"Amount","fee":"Fee","total":"Total","recent":"Recent Deposits"},
   "onboarding": {
     "tagline": "a loop of growth",
     "title": "Tokenize Your Future",
@@ -69,48 +74,16 @@
     "create_account": "Create Account",
     "registration_success": "Registration successful. Please verify your email before logging in.",
     "registration_failed": "Registration failed. Please try again.",
-    "valid_email": "Please enter a valid email address."
+    "valid_email": "Please enter a valid email address.", "phone_verified_logging_in": "Phone verified. Logging you in...", "verification_failed": "Verification failed", "otp_full_code_required": "Please enter the full 6-digit code.", "otp_confirmation_missing": "Confirmation result missing. Please resend code.", "verification_session_expired": "Verification session expired. Request a new code.", "enter_otp": "Enter 6-digit code", "verifying": "Verifying...", "verify_code": "Verify Code", "resend_code": "Resend Code", "waiting_for_sms": "Waiting for the SMS. The one-time-code suggestion will fill the code when it arrives.", "secure_verification": "Secure 256-bit encrypted verification."
   },
   "settings": {
     "notification_settings": "Notification Settings",
     "privacy_policy": "Privacy Policy",
     "terms_of_service": "Terms of Service",
     "support_help": "Support & Help Center",
-    "delete_account": "Delete Account"
-  },
-  "validation": {
-    "contact_required": "Enter your phone number or email",
-    "pin_length": "PIN must be at least 4 digits",
-    "pin_mismatch": "PINs do not match",
-    "password_required": "Enter your password to continue",
-    "pin_fields_required": "Complete all PIN fields"
-  },
-  "auth_extra": {
-    "password_updated": "Password updated successfully. Please sign in with your new password.",
-    "create_new_password": "Create New Password",
-    "choose_new_password": "Choose a strong new password for",
-    "verify_email": "Verify Email",
-    "email_verification": "Email Verification"
-  },
-  "pin": {
-    "updated": "PIN updated successfully",
-    "update_failed": "Unable to update PIN right now",
-    "changed": "PIN changed successfully",
-    "forgot": "Forgot PIN",
-    "reset_title": "Reset your transaction PIN",
-    "reset_description": "Use this screen to restore or update your PIN. We will validate your request and update your account when the backend accepts it.",
-    "phone_or_email": "Phone or email"
-  },
-  "transactions": {
-    "title": "Transactions",
-    "history": "Your transaction history",
-    "all": "All",
-    "sent": "Sent",
-    "received": "Received",
-    "deposit": "Deposit",
-    "withdraw": "Withdraw",
-    "empty": "No transactions match your filters yet."
-  },
-  "status": {"pending": "Pending", "completed": "Completed", "failed": "Failed"}
+    "delete_account": "Delete Account",
+    "delete_success": "Account deleted successfully",
+    "delete_failed": "Unable to delete account",
+    "delete_account_description": "Permanently delete your account", "delete_account_warning": "This action is permanent. It will sign you out, remove your local credentials, and delete your account after backend verification.", "current_password": "Current password", "delete_acknowledgement": "I understand this action is permanent.", "delete_confirmation": "I want to delete my account permanently.", "deleting_account": "Deleting account...", "delete_account_permanently": "Delete account permanently", "password_required": "Please enter your password to continue.", "delete_acknowledgement_required": "Please confirm that you understand this action is permanent.", "delete_confirmation_required": "Please confirm that you want to delete your account permanently."
   }
 }

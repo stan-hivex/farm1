@@ -444,7 +444,7 @@ class RouteLogger extends NavigatorObserver {
           location.startsWith('/onboarding') ||
           location.startsWith('/register');
       if (!publicRoute && sessionExists) {
-        FFAppState().lastAuthenticatedRoute = location!;
+        FFAppState().lastAuthenticatedRoute = location;
       }
     }
   }

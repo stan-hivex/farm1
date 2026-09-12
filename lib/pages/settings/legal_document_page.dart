@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:easy_localization/easy_localization.dart';
 
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -38,7 +39,7 @@ class LegalDocumentPageWidget extends StatelessWidget {
 
           if (snapshot.hasError) {
             return Center(
-              child: Text('Unable to load $title.'),
+              child: Text('${'common.document_load_failed'.tr()}: $title.'),
             );
           }
 

@@ -36,14 +36,13 @@ class OtppageWidget extends StatefulWidget {
 
   static String routeName = 'otppage';
   static String routePath = '/otppage';
+  static const phoneVerificationTimeout = Duration(seconds: 120);
 
   @override
   State<OtppageWidget> createState() => _OtppageWidgetState();
 }
 
 class _OtppageWidgetState extends State<OtppageWidget> {
-  static const _otpVerificationTimeout = Duration(seconds: 120);
-
   late OtppageModel _model;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
@@ -67,7 +66,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
   bool _isVerifying = true;
   String? _verificationId;
   int? _resendToken;
-  int _secondsRemaining = _otpVerificationTimeout.inSeconds;
+  int _secondsRemaining = OtppageWidget.phoneVerificationTimeout.inSeconds;
 
   @override
   void initState() {
@@ -277,6 +276,11 @@ class _OtppageWidgetState extends State<OtppageWidget> {
               e.code == 'auth/network-request-failed') {
             _statusTitle = 'Network error';
             _statusMessage = 'Network error. Check your connection.';
+          } else if (e.code == 'app-not-authorized' ||
+              e.code == 'auth/app-not-authorized') {
+            _statusTitle = 'Android app not authorized';
+            _statusMessage =
+                'Register this app package and its signing SHA-1/SHA-256 fingerprints in Firebase Console, then try again.';
           }
           // Clear shared verifier on fatal errors so a fresh verifier can be created on resend
           try {
@@ -309,25 +313,38 @@ class _OtppageWidgetState extends State<OtppageWidget> {
       }
 
       // Mobile platforms
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        // Use Firebase's verified reCAPTCHA fallback when Play Integrity is unavailable.
+        await FirebaseAuth.instance.setSettings(forceRecaptchaFlow: true);
+      }
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: normalizedPhone,
         forceResendingToken: _resendToken,
-        timeout: _otpVerificationTimeout,
+        timeout: OtppageWidget.phoneVerificationTimeout,
         verificationCompleted: (PhoneAuthCredential credential) async {
           debugPrint('[PHONE AUTH] verificationCompleted');
           debugPrint(
-              '[PHONE AUTH] Automatic credential completion ignored; waiting for one-time-code autofill');
+              '[PHONE AUTH] Firebase automatically retrieved the SMS credential');
+          if (!mounted) return;
+          await _completeFirebaseVerification(credential);
         },
         verificationFailed: (FirebaseAuthException error) async {
           debugPrint('[PHONE AUTH] verificationFailed');
           debugPrint('[PHONE AUTH] code = ${error.code}');
           debugPrint('[PHONE AUTH] message = ${error.message}');
           if (!mounted) return;
+          final isRecaptchaActivityError =
+              error.code == 'missing-activity-for-recaptcha' ||
+                  error.code == 'auth/missing-activity-for-recaptcha';
           setState(() {
             _isVerifying = false;
-            _statusTitle = 'Phone verification failed';
-            _statusMessage =
-                error.message ?? 'Unable to verify the phone number right now.';
+            _statusTitle = isRecaptchaActivityError
+                ? 'reCAPTCHA could not open'
+                : 'Phone verification failed';
+            _statusMessage = isRecaptchaActivityError
+                ? 'Keep the app open while Firebase checks this device, then try again.'
+                : error.message ??
+                    'Unable to verify the phone number right now.';
             _showManualOtpField = true;
           });
         },
@@ -418,8 +435,8 @@ class _OtppageWidgetState extends State<OtppageWidget> {
       if (response['success'] == true) {
         debugPrint('[OTP] completeFirebaseVerification succeeded');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Phone verified. Logging you in...'),
+          SnackBar(
+            content: Text('auth.phone_verified_logging_in'.tr()),
             backgroundColor: Colors.green,
           ),
         );
@@ -444,7 +461,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         _showManualOtpField = true;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verification failed: $e')),
+        SnackBar(content: Text('auth.verification_failed'.tr())),
       );
     }
   }
@@ -456,7 +473,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
 
     if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the full 6-digit code.')),
+        SnackBar(content: Text('auth.otp_full_code_required'.tr())),
       );
       return;
     }
@@ -471,9 +488,8 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         if (confirmation == null) {
           debugPrint('[OTP] verifyManualCode missing confirmation result');
           _isCompletingVerification = false;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content:
-                  Text('Confirmation result missing. Please resend code.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('auth.otp_confirmation_missing'.tr())));
           return;
         }
         final userCredential = await confirmation.confirm(otp);
@@ -492,8 +508,8 @@ class _OtppageWidgetState extends State<OtppageWidget> {
 
         if (!mounted) return;
         if (response['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Phone verified. Logging you in...'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('auth.phone_verified_logging_in'.tr()),
               backgroundColor: Colors.green));
           Future.delayed(const Duration(milliseconds: 800), () {
             if (!mounted) return;
@@ -517,8 +533,8 @@ class _OtppageWidgetState extends State<OtppageWidget> {
           _statusTitle = 'Verification failed';
           _statusMessage = _friendlyError(e);
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Verification failed: ${_friendlyError(e)}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('auth.verification_failed'.tr())));
         return;
       }
     }
@@ -526,8 +542,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
     // Mobile fallback
     if (_verificationId == null || _verificationId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Verification session expired. Request a new code.')),
+        SnackBar(content: Text('auth.verification_session_expired'.tr())),
       );
       return;
     }
@@ -575,7 +590,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
       _isVerifying = true;
       _statusTitle = 'Resending SMS';
       _statusMessage = 'Please wait while a new code is sent.';
-      _secondsRemaining = _otpVerificationTimeout.inSeconds;
+      _secondsRemaining = OtppageWidget.phoneVerificationTimeout.inSeconds;
     });
     _startFallbackTimer();
     // ensure previous verifier/confirmation cleared before resending: clear shared verifier
@@ -683,7 +698,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                       maxLength: 6,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: InputDecoration(
-                        hintText: 'Enter 6-digit code',
+                        hintText: 'auth.enter_otp'.tr(),
                         filled: true,
                         fillColor:
                             FlutterFlowTheme.of(context).secondaryBackground,
@@ -698,7 +713,9 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                   const SizedBox(height: 16),
                   FFButtonWidget(
                     onPressed: _model.isLoading ? null : _verifyManualCode,
-                    text: _model.isLoading ? 'Verifying...' : 'Verify Code',
+                    text: _model.isLoading
+                        ? 'auth.verifying'.tr()
+                        : 'auth.verify_code'.tr(),
                     options: FFButtonOptions(
                       width: double.infinity,
                       height: 56,
@@ -714,18 +731,18 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: _resendCode,
-                    child: const Text('Resend Code'),
+                    child: Text('auth.resend_code'.tr()),
                   ),
                 ] else ...[
                   Text(
-                    'Waiting for the SMS. The one-time-code suggestion will fill the code when it arrives.',
+                    'auth.waiting_for_sms'.tr(),
                     textAlign: TextAlign.center,
                     style: FlutterFlowTheme.of(context).bodyMedium,
                   ),
                 ],
                 const Spacer(),
                 Text(
-                  'Secure 256-bit encrypted verification',
+                  'auth.secure_verification'.tr(),
                   style: FlutterFlowTheme.of(context).bodySmall,
                 ),
               ],

@@ -7,6 +7,7 @@ import '/components/settings_action_tile/settings_action_tile_widget.dart';
 // removed duplicate import
 import '/services/app_session_manager.dart';
 import '/services/auth/auth_service.dart';
+import '/core/localization/app_locale_service.dart';
 import '/services/biometric_lock_service.dart';
 import '/pages/settings/delete_account_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -162,7 +163,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 
   Future<void> fetchSecuritySettings() async {
     try {
-      final resp = await ApiService.request(method: 'GET', path: '/security/settings');
+      final resp =
+          await ApiService.request(method: 'GET', path: '/security/settings');
       final data = Map<String, dynamic>.from(resp['data'] ?? resp);
       final resolvedBiometricsEnabled = FFAppState().biometricsEnabled;
       final remoteHasPin = data['has_pin'] ?? false;
@@ -190,105 +192,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     }
   }
 
-  Future<void> _showEditContactDialog({
-    required String title,
-    required String label,
-    required String currentValue,
-    required String fieldType,
-  }) async {
-    final formKey = GlobalKey<FormState>();
-    final newValueController = TextEditingController(text: currentValue);
-    final passwordController = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: newValueController,
-                  decoration: InputDecoration(labelText: label),
-                  keyboardType: fieldType == 'phone'
-                      ? TextInputType.phone
-                      : TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a value';
-                    }
-                    if (fieldType == 'email' && !value.contains('@')) {
-                      return 'Enter a valid email';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'common.password'.tr(),
-                  ),
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your current password';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: Text('common.cancel'.tr()),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (!formKey.currentState!.validate()) return;
-
-                final newValue = newValueController.text.trim();
-                final currentPassword = passwordController.text.trim();
-
-                try {
-                  await ApiService.updateEmailOrPhone(
-                    email: fieldType == 'email' ? newValue : null,
-                    phone: fieldType == 'phone' ? newValue : null,
-                    currentPassword: currentPassword,
-                  );
-
-                  setState(() {
-                    if (fieldType == 'email') {
-                      email = newValue;
-                      FFAppState().email = newValue;
-                    } else {
-                      phone = newValue;
-                    }
-                  });
-
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('$title updated successfully')),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Update failed: $e')),
-                  );
-                }
-              },
-              child: Text('common.save'.tr()),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Future<void> logoutUser() async {
     try {
       await AuthService().logout();
@@ -300,6 +203,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
       return;
     }
 
+    await AppLocaleService.resetToEnglish(context);
     context.goNamed('loginpage');
   }
 
@@ -552,20 +456,13 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     size: 20.0,
                                   ),
                                   label: 'Email Address',
-                                  show_arrow: true,
+                                  show_arrow: false,
                                   value: isProfileLoading
                                       ? 'Loading...'
                                       : (email.isNotEmpty
                                           ? email
                                           : 'Not available'),
-                                  onTap: isProfileLoading
-                                      ? null
-                                      : () => _showEditContactDialog(
-                                            title: 'Update Email Address',
-                                            label: 'New Email Address',
-                                            currentValue: email,
-                                            fieldType: 'email',
-                                          ),
+                                  onTap: null,
                                 ),
                               ),
                               wrapWithModel(
@@ -579,27 +476,30 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                     size: 20.0,
                                   ),
                                   label: 'Phone Number',
-                                  show_arrow: true,
+                                  show_arrow: false,
                                   value: phone.isNotEmpty
                                       ? phone
                                       : 'Not available',
-                                  onTap: () => _showEditContactDialog(
-                                    title: 'Update Phone Number',
-                                    label: 'New Phone Number',
-                                    currentValue: phone,
-                                    fieldType: 'phone',
-                                  ),
+                                  onTap: null,
                                 ),
                               ),
                               wrapWithModel(
                                 model: _model.profileInfoTileModel3,
                                 updateCallback: () => safeSetState(() {}),
                                 child: GestureDetector(
-                                  onTap: (kycStatus.trim().toLowerCase()=='verified' || kycStatus.trim().toLowerCase()=='approved' || kycStatus.trim().toLowerCase()=='complete' || kycStatus.trim().toLowerCase()=='success')
-                                      ? null
-                                      : () {
-                                          context.pushNamed('KYCPAGE');
-                                        },
+                                  onTap:
+                                      (kycStatus.trim().toLowerCase() ==
+                                                  'verified' ||
+                                              kycStatus.trim().toLowerCase() ==
+                                                  'approved' ||
+                                              kycStatus.trim().toLowerCase() ==
+                                                  'complete' ||
+                                              kycStatus.trim().toLowerCase() ==
+                                                  'success')
+                                          ? null
+                                          : () {
+                                              context.pushNamed('KYCPAGE');
+                                            },
                                   child: ProfileInfoTileWidget(
                                     icon: Icon(
                                       Icons.fingerprint_rounded,
@@ -675,7 +575,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
 // SECURITY & PIN
                               GestureDetector(
                                 onTap: () async {
-                                  final result = await context.pushNamed('pin_setup_page');
+                                  final result =
+                                      await context.pushNamed('pin_setup_page');
                                   if (result == true) {
                                     await fetchSecuritySettings();
                                   }
@@ -855,39 +756,50 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                 value: biometricsEnabled,
                                 onChanged: (value) async {
                                   // Do not change the UI until operation succeeds
-                                  final biometricLockService = BiometricLockService();
+                                  final biometricLockService =
+                                      BiometricLockService();
                                   try {
                                     if (value) {
-                                      final ok = await biometricLockService.enableBiometrics();
+                                      final ok = await biometricLockService
+                                          .enableBiometrics();
                                       if (ok) {
                                         setState(() {
                                           biometricsEnabled = true;
                                         });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Biometrics enabled')),
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                              content:
+                                                  Text('Biometrics enabled')),
                                         );
                                       }
                                     } else {
                                       // turning off
-                                      final ok = await biometricLockService.disableBiometrics();
+                                      final ok = await biometricLockService
+                                          .disableBiometrics();
                                       if (ok) {
                                         setState(() {
                                           biometricsEnabled = false;
                                         });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('Biometrics disabled')),
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                              content:
+                                                  Text('Biometrics disabled')),
                                         );
                                       }
                                     }
                                   } catch (e, stack) {
                                     if (mounted) {
                                       setState(() {
-                                        biometricsEnabled = FFAppState().biometricsEnabled;
+                                        biometricsEnabled =
+                                            FFAppState().biometricsEnabled;
                                       });
                                       debugPrint('===== BIOMETRIC ERROR =====');
                                       debugPrint(e.toString());
                                       debugPrint(stack.toString());
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
                                         SnackBar(content: Text(e.toString())),
                                       );
                                     }
@@ -915,7 +827,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           (value) => DropdownMenuItem<int>(
                                             value: value,
                                             child: Text(
-                                              formatBiometricLockTimeoutLabel(value),
+                                              formatBiometricLockTimeoutLabel(
+                                                  value),
                                             ),
                                           ),
                                         )
@@ -924,9 +837,11 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         ? (value) {
                                             if (value == null) return;
                                             setState(() {
-                                              biometricLockTimeoutSeconds = value;
+                                              biometricLockTimeoutSeconds =
+                                                  value;
                                             });
-                                            FFAppState().biometricLockTimeoutSeconds =
+                                            FFAppState()
+                                                    .biometricLockTimeoutSeconds =
                                                 value;
                                           }
                                         : null,
@@ -1064,7 +979,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                             icon_end_present: false,
                             on_tap: '',
                             onTapCallback: () {
-                              context.pushNamed(DeleteAccountPageWidget.routeName);
+                              context
+                                  .pushNamed(DeleteAccountPageWidget.routeName);
                             },
                             variant: 'destructive',
                             size: 'medium',
