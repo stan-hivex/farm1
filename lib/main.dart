@@ -12,7 +12,6 @@ import 'flutter_flow/flutter_flow_theme.dart';
 import 'flutter_flow/flutter_flow_util.dart';
 import 'core/app_theme.dart';
 import 'core/localization/app_locale_service.dart';
-import 'core/widgets/global_language_switcher.dart';
 import 'web_url_strategy.dart';
 import 'services/app_session_manager.dart';
 import 'services/biometric_lock_service.dart';
@@ -317,11 +316,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Stack(
           children: [
             child ?? const SizedBox.shrink(),
-            const Positioned(
-              right: 12,
-              bottom: 12,
-              child: SafeArea(child: GlobalLanguageSwitcher()),
-            ),
           ],
         ),
       ),

@@ -56,16 +56,14 @@ void main() {
       expect(canUse, isTrue);
     });
 
-    test(
-        'keeps the biometric flow available when a fingerprint is stored even if the app flag is stale',
-        () {
+    test('requires biometrics to be explicitly enabled', () {
       final canUse = TransactionAuthenticationService.canUseBiometricFlow(
         biometricsEnabled: false,
         biometricsAvailable: true,
         hasStoredFingerprint: true,
       );
 
-      expect(canUse, isTrue);
+      expect(canUse, isFalse);
     });
 
     test('reset clears biometric attempt tracking', () {

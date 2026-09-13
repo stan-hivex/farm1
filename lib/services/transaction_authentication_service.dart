@@ -46,7 +46,7 @@ class TransactionAuthenticationService {
   }) {
     return biometricsAvailable &&
         hasStoredFingerprint &&
-        (biometricsEnabled || hasStoredFingerprint);
+        biometricsEnabled;
   }
 
   static TransactionAuthenticationOutcome resolveOutcome({

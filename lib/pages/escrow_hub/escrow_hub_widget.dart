@@ -10,6 +10,7 @@ import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
 import '/services/transaction_receipt_service.dart';
+import '/backend/api_requests/escrow_api_service.dart';
 import '/backend/api_requests/user_api_service.dart';
 
 import 'package:flutter/material.dart';
@@ -220,9 +221,10 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
           )
           .then((r) => r.toTransactionAuthenticationResult());
       if (authResult.biometricUsed == true) {
-        await ApiService.releaseEscrow(
-          escrowId,
-          // ApiService wrapper expects escrowId and supports biometric args via request
+        await EscrowApiService.releaseEscrow(
+          escrowId: escrowId,
+          biometricAuth: true,
+          deviceFingerprint: authResult.deviceFingerprint,
         );
       } else {
         final pinController = TextEditingController();
@@ -259,7 +261,10 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
           return;
         }
 
-        await ApiService.releaseEscrow(escrowId);
+        await EscrowApiService.releaseEscrow(
+          escrowId: escrowId,
+          pin: pin,
+        );
       }
 
       await AppSessionManager().syncNow(
@@ -364,14 +369,15 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
             List<dynamic> suggestionUsers = [];
 
             Future<void> searchUsers(String value) async {
-              if (value.trim().length < 3) {
+              if (!UserApiService.shouldSearchSuggestions(value)) {
                 setState(() => suggestionUsers = []);
                 return;
               }
 
               try {
-                final resp = await ApiService.searchUsers(value.trim());
-                final users = resp['data'] ?? resp;
+                final users = await UserApiService.searchUsers(
+                  query: value.trim(),
+                );
                 if (!mounted) return;
                 setState(() => suggestionUsers = users);
               } catch (_) {
@@ -439,42 +445,44 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                             ),
                             child: Column(
                               children: suggestionUsers.map((u) {
-                                final user = u as Map<String, dynamic>;
+                                final user = u is Map
+                                    ? Map<String, dynamic>.from(u)
+                                    : <String, dynamic>{};
+                                final username =
+                                    (user['username'] ?? '').toString().trim();
+                                final phone = (user['phone'] ??
+                                        user['phone_number'] ??
+                                        user['mobile'] ??
+                                        '')
+                                    .toString()
+                                    .trim();
+                                final identifier = username.isNotEmpty
+                                    ? username
+                                    : phone;
                                 return ListTile(
                                   dense: true,
                                   leading: CircleAvatar(
                                     child: Text(
-                                      (user['username'] ?? 'u')
-                                              .toString()
-                                              .trim()
+                                      (username.isNotEmpty ? username : phone)
                                               .isNotEmpty
-                                          ? (user['username'] ?? 'u')
-                                              .toString()
-                                              .trim()[0]
+                                          ? (username.isNotEmpty
+                                                  ? username
+                                                  : phone)[0]
                                               .toUpperCase()
                                           : '?',
                                     ),
                                   ),
-                                  title: Text((user['username'] ?? '')
-                                          .toString()
-                                          .trim()
-                                          .isNotEmpty
-                                      ? '@${(user['username'] ?? '').toString().trim()}${((user['phone'] ?? '').toString().trim().isNotEmpty) ? ' • ${(user['phone'] ?? '').toString().trim()}' : ''}'
-                                      : (user['phone'] ?? '')
-                                          .toString()
-                                          .trim()),
+                                  title: Text(UserApiService.getSuggestionLabel(
+                                    user,
+                                  )),
+                                  enabled: identifier.isNotEmpty,
                                   onTap: () {
-                                    sellerController.text =
-                                        ((user['username'] ?? '')
-                                                .toString()
-                                                .trim()
-                                                .isNotEmpty
-                                            ? (user['username'] ?? '')
-                                                .toString()
-                                                .trim()
-                                            : (user['phone'] ?? '')
-                                                .toString()
-                                                .trim());
+                                    if (identifier.isEmpty) return;
+                                    sellerController
+                                      ..text = identifier
+                                      ..selection = TextSelection.collapsed(
+                                        offset: identifier.length,
+                                      );
                                     setState(() => suggestionUsers = []);
                                   },
                                 );

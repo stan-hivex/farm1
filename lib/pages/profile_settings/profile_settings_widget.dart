@@ -729,19 +729,14 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                               SwitchListTile(
                                 contentPadding: EdgeInsets.zero,
                                 activeThumbColor: Colors.green,
-                                value: Theme.of(context).brightness ==
-                                    Brightness.dark,
+                                value: FFAppState().themeMode == ThemeMode.dark,
                                 onChanged: (value) {
-                                  setState(() {
-                                    FFAppState().setThemeMode(value
-                                        ? ThemeMode.dark
-                                        : ThemeMode.light);
-                                  });
+                                  FFAppState().themeMode =
+                                      value ? ThemeMode.dark : ThemeMode.light;
                                 },
                                 title: Text('Dark Mode'),
                                 subtitle: Text(
-                                  Theme.of(context).brightness ==
-                                          Brightness.dark
+                                  FFAppState().themeMode == ThemeMode.dark
                                       ? 'Dark theme enabled'
                                       : 'Light theme enabled',
                                 ),

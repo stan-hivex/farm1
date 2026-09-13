@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '/backend/services/api_service.dart';
 import '/backend/api_requests/user_api_service.dart';
 import '/backend/api_requests/payment_request_api_service.dart';
@@ -14,6 +16,7 @@ import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum TransferRequestCardState {
   pending,
@@ -120,6 +123,144 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
   List<dynamic> transactions = [];
   final Set<int> _selectedTransactions = <int>{};
   List<dynamic> userSuggestions = [];
+  List<Map<String, String>> _favoriteRecipients = [];
+
+  String get _favoriteRecipientsKey =>
+      'send_receive_favorite_recipients_${FFAppState().userId}';
+
+  Future<void> _loadFavoriteRecipients() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getStringList(_favoriteRecipientsKey) ?? [];
+    final favorites = <Map<String, String>>[];
+    for (final value in stored) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) {
+          final favorite = decoded.map<String, String>(
+            (key, item) => MapEntry(key.toString(), item?.toString() ?? ''),
+          );
+          if (_favoriteIdentifier(favorite).isNotEmpty) {
+            favorites.add(favorite);
+          }
+        }
+      } catch (_) {
+        // Ignore malformed entries from an older local store.
+      }
+    }
+    if (!mounted) return;
+    setState(() => _favoriteRecipients = favorites);
+  }
+
+  String _favoriteIdentifier(Map<String, String> favorite) {
+    final username = favorite['username']?.trim() ?? '';
+    return username.isNotEmpty
+        ? username
+        : favorite['phone_number']?.trim() ?? '';
+  }
+
+  String _userIdentifier(dynamic user) {
+    final username = _parseStringValue(user['username']);
+    return username.isNotEmpty
+        ? username
+        : _parseStringValue(user['phone_number']);
+  }
+
+  Map<String, String> _favoriteFromUser(dynamic user) {
+    final username = _parseStringValue(user['username']);
+    final phoneNumber = _parseStringValue(
+      user['phone_number'] ?? user['phone'] ?? user['mobile'],
+    );
+    final name = [
+      _parseStringValue(user['first_name']),
+      _parseStringValue(user['last_name']),
+    ].where((part) => part.isNotEmpty).join(' ');
+    return {
+      'username': username,
+      'phone_number': phoneNumber,
+      'name': name,
+    };
+  }
+
+  bool _isFavorite(dynamic user) {
+    final identifier = _userIdentifier(user);
+    return identifier.isNotEmpty &&
+        _favoriteRecipients.any(
+            (favorite) => _favoriteIdentifier(favorite) == identifier);
+  }
+
+  Future<void> _toggleFavorite(dynamic user) async {
+    final favorite = _favoriteFromUser(user);
+    final identifier = _favoriteIdentifier(favorite);
+    if (identifier.isEmpty) return;
+
+    final updated = List<Map<String, String>>.from(_favoriteRecipients);
+    final existingIndex = updated.indexWhere(
+        (item) => _favoriteIdentifier(item) == identifier);
+    if (existingIndex >= 0) {
+      updated.removeAt(existingIndex);
+    } else {
+      updated.add(favorite);
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _favoriteRecipientsKey,
+      updated.map((item) => jsonEncode(item)).toList(),
+    );
+    if (!mounted) return;
+    setState(() => _favoriteRecipients = updated);
+  }
+
+  void _selectFavorite(Map<String, String> favorite) {
+    final identifier = _favoriteIdentifier(favorite);
+    if (identifier.isEmpty) return;
+    recipientController
+      ..text = identifier
+      ..selection = TextSelection.collapsed(offset: identifier.length);
+    setState(() => userSuggestions = []);
+  }
+
+  Widget _buildFavoriteRecipients() {
+    final theme = FlutterFlowTheme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.star_rounded, color: Colors.amber.shade700, size: 20),
+            const SizedBox(width: 6),
+            Text(
+              'Favourite recipients',
+              style: theme.titleSmall.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_favoriteRecipients.isEmpty)
+          Text(
+            'Star a user from search results to add them here.',
+            style: theme.bodySmall.copyWith(color: theme.secondaryText),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _favoriteRecipients.map((favorite) {
+              final identifier = _favoriteIdentifier(favorite);
+              final name = favorite['name']?.trim() ?? '';
+              return InputChip(
+                avatar: const Icon(Icons.person_rounded, size: 18),
+                label: Text(name.isEmpty ? '@$identifier' : name),
+                onPressed: () => _selectFavorite(favorite),
+                onDeleted: () => _toggleFavorite(favorite),
+                deleteIcon: const Icon(Icons.star_rounded, color: Colors.amber),
+                tooltip: 'Use $identifier',
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
 
   Future<void> _downloadSelectedTransactions() async {
     final selected = _selectedTransactions
@@ -159,6 +300,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
     fetchWallet();
     fetchPendingRequests();
     fetchMyTransferRequests();
+    _loadFavoriteRecipients();
   }
 
   @override
@@ -1547,8 +1689,21 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
         child: Text(initial),
       ),
       title: Text('@$username'),
+      trailing: IconButton(
+        tooltip: _isFavorite(user)
+            ? 'Remove from favourites'
+            : 'Add to favourites',
+        icon: Icon(
+          _isFavorite(user)
+              ? Icons.star_rounded
+              : Icons.star_border_rounded,
+          color: _isFavorite(user) ? Colors.amber.shade700 : null,
+        ),
+        onPressed: () => _toggleFavorite(user),
+      ),
       onTap: () {
-        recipientController.text = username;
+        final identifier = _userIdentifier(user);
+        recipientController.text = identifier.isEmpty ? username : identifier;
 
         setState(() {
           userSuggestions = [];
@@ -1789,6 +1944,8 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 18),
+                                _buildFavoriteRecipients(),
                                 const SizedBox(
                                   height: 32,
                                 ),
