@@ -212,6 +212,8 @@ class RouteGuardService {
       '/verify-email',
       '/otp',
       '/otppage',
+      '/privacyPolicy',
+      '/termsOfService',
     ];
 
     return path == '/' ||

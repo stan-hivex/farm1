@@ -40,15 +40,8 @@ class AuthService {
 
   SupabaseClient get _supabase => SupabaseConfig.client;
 
-  /// Sign up a new user with email and password.
-  ///
-  /// Flow:
-  /// 1. Create account in Supabase
-  /// 2. Supabase sends verification email
-  /// 3. User clicks link in email
-  /// 4. Session is established
-  /// 5. Backend creates FARM user, wallet, and issues JWT
-  Future<AuthResponse> signUp({
+  /// Register a new FARM account and start backend phone verification.
+  Future<Map<String, dynamic>> signUp({
     required String email,
     required String password,
     required String firstName,
@@ -60,16 +53,7 @@ class AuthService {
     String? turnstileToken,
   }) async {
     try {
-      final response = await _supabase.auth.signUp(
-        email: email,
-        password: password,
-      );
-
-      if (response.user == null) {
-        throw Exception('Sign up failed: User is null');
-      }
-
-      await ApiService.register(
+      return await ApiService.register(
         firstName: firstName,
         lastName: lastName,
         username: username,
@@ -81,7 +65,6 @@ class AuthService {
         turnstileToken: turnstileToken,
       );
 
-      return response;
     } on AuthException catch (e) {
       throw Exception('Sign up error: ${e.message}');
     } catch (e) {

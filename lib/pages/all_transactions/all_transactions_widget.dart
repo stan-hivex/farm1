@@ -386,10 +386,18 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                       final peer =
                           _resolveTransactionPeer(tx, isOutgoing: isOutgoing);
                       final payerUsername = !isOutgoing
-                          ? (tx['sender_username']?.toString().trim().isNotEmpty == true
+                          ? (tx['sender_username']
+                                      ?.toString()
+                                      .trim()
+                                      .isNotEmpty ==
+                                  true
                               ? '@${tx['sender_username']}'
                               : peer)
-                          : (tx['recipient_username']?.toString().trim().isNotEmpty == true
+                          : (tx['recipient_username']
+                                      ?.toString()
+                                      .trim()
+                                      .isNotEmpty ==
+                                  true
                               ? '@${tx['recipient_username']}'
                               : peer);
                       final peerWithMerchant = merchantName.isNotEmpty
@@ -427,127 +435,134 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                     }
                                   }),
                                 ),
-                              CircleAvatar(
-                                radius: 22,
-                                backgroundColor: theme.secondaryBackground,
-                                child: Icon(
-                                  isOutgoing
-                                      ? Icons.north_east_rounded
-                                      : Icons.south_west_rounded,
-                                  color: theme.primaryText,
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor: theme.secondaryBackground,
+                                  child: Icon(
+                                    isOutgoing
+                                        ? Icons.north_east_rounded
+                                        : Icons.south_west_rounded,
+                                    color: theme.primaryText,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            type,
-                                            style: theme.titleSmall.copyWith(
-                                                fontWeight: FontWeight.w700),
-                                          ),
-                                        ),
-                                        if (TransactionReceiptService.transactionId(tx)
-                                            .isNotEmpty)
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  'ID: ${TransactionReceiptService.transactionId(tx)}',
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: theme.bodySmall,
-                                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              type,
+                                              style: theme.titleSmall.copyWith(
+                                                fontWeight: FontWeight.w700,
                                               ),
-                                              IconButton(
-                                                tooltip: 'Copy transaction ID',
-                                                visualDensity:
-                                                    VisualDensity.compact,
-                                                icon: const Icon(Icons.copy_rounded,
-                                                    size: 18),
-                                                onPressed: () async {
-                                                  await Clipboard.setData(
-                                                    ClipboardData(
-                                                      text: TransactionReceiptService
-                                                          .transactionId(tx),
-                                                    ),
-                                                  );
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(context)
-                                                        .showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                            'Transaction ID copied'),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color: _statusColor(status)
-                                                .withAlpha(
-                                                    (0.12 * 255).round()),
-                                            borderRadius:
-                                                BorderRadius.circular(999),
-                                          ),
-                                          child: Text(
-                                            status,
-                                            style: TextStyle(
-                                              color: _statusColor(status),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w700,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      tx['description']?.toString() ??
-                                          tx['reference']?.toString() ??
-                                          'Transaction updated',
-                                      style: theme.bodyMedium,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '$peerLabel • $dateText',
-                                      style: theme.bodySmall.copyWith(
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            _formatDate(tx['created_at'] ??
-                                                tx['createdAt'] ??
-                                                tx['timestamp']),
-                                            style: theme.bodySmall,
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: _statusColor(status)
+                                                  .withAlpha(
+                                                      (0.12 * 255).round()),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              status,
+                                              style: TextStyle(
+                                                color: _statusColor(status),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
                                           ),
+                                        ],
+                                      ),
+                                      if (TransactionReceiptService
+                                              .transactionId(tx)
+                                          .isNotEmpty)
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                'ID: ${TransactionReceiptService.transactionId(tx)}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: theme.bodySmall,
+                                              ),
+                                            ),
+                                            IconButton(
+                                              tooltip: 'Copy transaction ID',
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              icon: const Icon(
+                                                  Icons.copy_rounded,
+                                                  size: 18),
+                                              onPressed: () async {
+                                                await Clipboard.setData(
+                                                  ClipboardData(
+                                                    text:
+                                                        TransactionReceiptService
+                                                            .transactionId(tx),
+                                                  ),
+                                                );
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text(
+                                                          'Transaction ID copied'),
+                                                    ),
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ],
                                         ),
-                                        Text(
-                                          amountText,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            color: isOutgoing
-                                                ? Colors.redAccent
-                                                : Colors.green,
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        tx['description']?.toString() ??
+                                            tx['reference']?.toString() ??
+                                            'Transaction updated',
+                                        style: theme.bodyMedium,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '$peerLabel • $dateText',
+                                        style: theme.bodySmall.copyWith(
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              _formatDate(tx['created_at'] ??
+                                                  tx['createdAt'] ??
+                                                  tx['timestamp']),
+                                              style: theme.bodySmall,
+                                            ),
                                           ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                          Text(
+                                            amountText,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: isOutgoing
+                                                  ? Colors.redAccent
+                                                  : Colors.green,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
                               ],
                             ),
                           ),

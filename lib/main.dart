@@ -64,8 +64,6 @@ void main() async {
   // Attempt to restore persisted session and perform a silent refresh before
   // the app is started so routing decisions can use restored auth state.
   await StartupAuthenticator().restoreSession();
-  await NotificationService.initialize();
-  await SocketService.initialize();
   await FlutterFlowTheme.initialize();
 
   final prefs = await SharedPreferences.getInstance();
@@ -105,6 +103,10 @@ void main() async {
         ),
       ),
     );
+
+    // These services are optional at launch. They must not prevent the first
+    // frame when device permissions or the backend are unavailable.
+    unawaited(_initializeOptionalServices());
   }, (error, stack) {
     // Print uncaught errors to console so they appear in the browser devtools
     // and in the terminal running `flutter run`.
@@ -116,6 +118,22 @@ void main() async {
       print(stack.toString());
     } catch (_) {}
   });
+}
+
+Future<void> _initializeOptionalServices() async {
+  try {
+    await NotificationService.initialize();
+  } catch (error, stack) {
+    debugPrint('[Main] Notification initialization skipped: $error');
+    debugPrintStack(stackTrace: stack);
+  }
+
+  try {
+    await SocketService.initialize();
+  } catch (error, stack) {
+    debugPrint('[Main] Socket initialization skipped: $error');
+    debugPrintStack(stackTrace: stack);
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -140,11 +158,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Timer? _refreshTimer;
 
   ThemeMode _effectiveThemeMode(String currentLocation) {
-    try {
-      return context.watch<FFAppState>().themeMode;
-    } on ProviderNotFoundException {
-      return FFAppState().themeMode;
-    }
+    return FFAppState().themeMode;
+  }
+
+  void _handleThemeModeChanged() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   // =========================================
@@ -183,6 +202,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
 
     _appStateNotifier = AppStateNotifier.instance;
+    FFAppState().addListener(_handleThemeModeChanged);
 
     _router = createRouter(
       _appStateNotifier,
@@ -196,6 +216,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    FFAppState().removeListener(_handleThemeModeChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

@@ -8,6 +8,7 @@ import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/components/kyc_required_widget.dart';
+import '/services/transaction_receipt_service.dart';
 
 class DepositpageWidget extends StatefulWidget {
   const DepositpageWidget({super.key});
@@ -31,6 +32,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
   double walletBalance = 0;
   List<dynamic> recentDeposits = [];
+  final Set<int> _selectedDeposits = <int>{};
 
   // Deposit fees are disabled. The amount entered by the user is the amount credited.
   final Map<String, double> _feeRates = {
@@ -48,9 +50,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   };
 
   double get amount => double.tryParse(amountController.text.trim()) ?? 0;
-  double get feeRate => _feeRates[selectedMethod] ?? 0.02;
-  double get fee => amount * feeRate;
-  double get total => amount + fee;
+  double get feeRate => _feeRates[selectedMethod] ?? 0.0;
+  double get fee => 0;
+  double get total => amount;
 
   Map<String, double?> get _activeDepositLimits =>
       _depositLimits[selectedMethod] ?? _depositLimits['CARD']!;
@@ -102,7 +104,8 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
       final resp = await ApiService.getWallet();
       if (!mounted) return;
       final data = resp['data'] as Map<String, dynamic>? ?? resp;
-      final bal = (data['balance'] ?? data['available_balance'] ?? 0).toString();
+      final bal =
+          (data['balance'] ?? data['available_balance'] ?? 0).toString();
       setState(() => walletBalance = double.tryParse(bal) ?? 0);
     } catch (e) {
       debugPrint('fetchWallet error: $e');
@@ -123,6 +126,67 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     }
   }
 
+  Map<String, dynamic> _depositReceipt(
+      Map<String, dynamic> deposit, Map<String, dynamic> metadata) {
+    final receipt = Map<String, dynamic>.from(deposit);
+    final farmAmount =
+        deposit['amount_farm'] ?? metadata['amount_farm'] ?? deposit['amount'];
+    final reference = deposit['reference'] ??
+        deposit['transaction_reference'] ??
+        metadata['reference'];
+    final method = _depositMethodLabel(deposit, metadata);
+    final provider = deposit['payment_provider'] ??
+        deposit['provider'] ??
+        metadata['provider'];
+
+    receipt['amount'] = farmAmount;
+    receipt['transaction_type'] = 'Deposit';
+    receipt['description'] = 'FARM deposit via $method';
+    receipt['currency'] = 'FARM';
+    receipt['payment_method'] = method;
+    if (provider != null) receipt['payment_provider'] = provider;
+    if (reference != null) receipt['transaction_reference'] = reference;
+    if (deposit['amount_fiat'] != null || metadata['amount_fiat'] != null) {
+      receipt['fiat_amount'] =
+          metadata['amount_fiat'] ?? deposit['amount_fiat'];
+      receipt['fiat_currency'] =
+          metadata['currency_fiat'] ?? deposit['currency'] ?? selectedCurrency;
+    }
+    return receipt;
+  }
+
+  List<Map<String, dynamic>> get _selectedDepositReceipts => _selectedDeposits
+          .where((index) => index >= 0 && index < recentDeposits.length)
+          .map((index) {
+        final deposit = Map<String, dynamic>.from(recentDeposits[index] as Map);
+        final metadata = deposit['metadata'] is Map
+            ? Map<String, dynamic>.from(deposit['metadata'] as Map)
+            : <String, dynamic>{};
+        return _depositReceipt(deposit, metadata);
+      }).toList();
+
+  Future<void> _downloadSelectedDeposits() async {
+    try {
+      await TransactionReceiptService.downloadReceipts(
+          _selectedDepositReceipts);
+      if (!mounted) return;
+      setState(() => _selectedDeposits.clear());
+      _snack('Selected receipts saved to gallery');
+    } catch (error) {
+      if (mounted) _snack('Could not save receipts: $error');
+    }
+  }
+
+  Future<void> _shareSelectedDeposits() async {
+    try {
+      await TransactionReceiptService.shareReceipts(_selectedDepositReceipts);
+      if (!mounted) return;
+      setState(() => _selectedDeposits.clear());
+    } catch (error) {
+      if (mounted) _snack('Could not share receipts: $error');
+    }
+  }
+
   // ── Create deposit (Paystack for CARD/MOBILE_MONEY, Ivorypay for CRYPTO) ─
   Future<void> _createDeposit() async {
     if (isLoading) return;
@@ -135,7 +199,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     setState(() => isLoading = true);
 
     try {
-        final paymentMethodRaw = selectedMethod == 'CARD'
+      final paymentMethodRaw = selectedMethod == 'CARD'
           ? 'card'
           : selectedMethod == 'BANK_TRANSFER'
               ? 'bank_transfer'
@@ -159,7 +223,8 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
         body['phone'] = FFAppState().phone;
       }
 
-      final path = selectedMethod == 'CRYPTO' ? '/crypto/deposit' : '/deposit/create';
+      final path =
+          selectedMethod == 'CRYPTO' ? '/crypto/deposit' : '/deposit/create';
 
       if (!mounted) return;
 
@@ -269,7 +334,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
         });
       } else {
         _snack(
-          data['message'] ?? data['error']?.toString() ?? 'Deposit failed. Please try again.',
+          data['message'] ??
+              data['error']?.toString() ??
+              'Deposit failed. Please try again.',
         );
       }
 
@@ -333,14 +400,14 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     final farmAmount = deposit['amount_farm'] ?? metadata['amount_farm'];
     final usdAmount = deposit['amount_usd'] ?? metadata['amount_usd'];
     final usdToFarmRate =
-      deposit['usd_to_farm_rate'] ?? metadata['usd_to_farm_rate'];
+        deposit['usd_to_farm_rate'] ?? metadata['usd_to_farm_rate'];
 
     if (method == 'CRYPTO' && farmAmount != null && usdAmount != null) {
       final rateText = usdToFarmRate == null
-        ? ''
-        : ' (1 USD = ${_formatDepositNumber(usdToFarmRate)} FARM)';
+          ? ''
+          : ' (1 USD = ${_formatDepositNumber(usdToFarmRate)} FARM)';
       return 'USD ${_formatDepositNumber(usdAmount)} = '
-        '${_formatDepositNumber(farmAmount)} FARM$rateText';
+          '${_formatDepositNumber(farmAmount)} FARM$rateText';
     }
 
     final currency = metadata['currency_fiat'] ?? deposit['currency'] ?? 'KES';
@@ -599,8 +666,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14)),
                   ),
-                  onPressed:
-                      (isLoading || !_hasValidDepositAmount) ? null : _createDeposit,
+                  onPressed: (isLoading || !_hasValidDepositAmount)
+                      ? null
+                      : _createDeposit,
                   child: isLoading
                       ? const CircularProgressIndicator(color: Colors.white)
                       : Text('Deposit Funds',
@@ -614,9 +682,30 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
               const SizedBox(height: 32),
 
               // Recent deposits
-              Text('Recent Deposits',
-                  style: GoogleFonts.plusJakartaSans(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Recent Deposits',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  if (_selectedDeposits.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Share selected receipts',
+                          icon: const Icon(Icons.share_rounded),
+                          onPressed: _shareSelectedDeposits,
+                        ),
+                        IconButton(
+                          tooltip: 'Download selected receipts',
+                          icon: const Icon(Icons.download_rounded),
+                          onPressed: _downloadSelectedDeposits,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
               const SizedBox(height: 12),
 
               if (recentDeposits.isEmpty)
@@ -629,77 +718,96 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                   ),
                 )
               else
-                ...recentDeposits.map((d) {
+                ...recentDeposits.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final d = entry.value;
                   final deposit = Map<String, dynamic>.from(d as Map);
                   final status = (d['status'] ?? 'pending') as String;
                   final isComplete = status == 'completed';
                   final meta = deposit['metadata'] is Map
                       ? Map<String, dynamic>.from(deposit['metadata'] as Map)
                       : <String, dynamic>{};
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.secondaryBackground,
-                      border:
-                          Border.all(color: theme.secondaryText.withAlpha(70)),
-                      borderRadius: BorderRadius.circular(14),
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: () => TransactionReceiptService.showDetails(
+                      context,
+                      _depositReceipt(deposit, meta),
                     ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: isComplete
-                                ? Colors.green.shade50
-                                : Colors.orange.shade50,
-                            shape: BoxShape.circle,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.secondaryBackground,
+                        border: Border.all(
+                            color: theme.secondaryText.withAlpha(70)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: _selectedDeposits.contains(index),
+                            onChanged: (selected) => setState(() {
+                              if (selected == true) {
+                                _selectedDeposits.add(index);
+                              } else {
+                                _selectedDeposits.remove(index);
+                              }
+                            }),
                           ),
-                          child: Icon(
-                            isComplete
-                                ? Icons.check_circle_outline
-                                : Icons.hourglass_top,
-                            color: isComplete ? Colors.green : Colors.orange,
-                            size: 20,
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: isComplete
+                                  ? Colors.green.shade50
+                                  : Colors.orange.shade50,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isComplete
+                                  ? Icons.check_circle_outline
+                                  : Icons.hourglass_top,
+                              color: isComplete ? Colors.green : Colors.orange,
+                              size: 20,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _depositDateLabel(deposit),
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  color: theme.secondaryText,
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _depositDateLabel(deposit),
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 11,
+                                    color: theme.secondaryText,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _depositAmountLabel(deposit, meta),
-                                style: GoogleFonts.plusJakartaSans(
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.primaryText),
-                              ),
-                              Text(
-                                '≈ ${d['amount']} FARM • $status',
-                                style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12, color: theme.secondaryText),
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  _depositAmountLabel(deposit, meta),
+                                  style: GoogleFonts.plusJakartaSans(
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.primaryText),
+                                ),
+                                Text(
+                                  '≈ ${d['amount']} FARM • $status',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 12, color: theme.secondaryText),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          _depositMethodLabel(deposit, meta),
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: theme.secondaryText,
+                          Text(
+                            _depositMethodLabel(deposit, meta),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: theme.secondaryText,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 }),

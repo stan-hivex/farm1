@@ -1,4 +1,6 @@
-﻿import '/components/button/button_widget.dart';
+﻿import 'dart:ui' as ui;
+
+import '/components/button/button_widget.dart';
 import '/components/merchant_stat_card/merchant_stat_card_widget.dart';
 import '/components/merchant_transaction_item/merchant_transaction_item_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -221,6 +223,76 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
     return dateTimeFormatEastAfricanTime('MMM d, yyyy • h:mm a', parsed);
   }
 
+  Future<Uint8List> _addBusinessNameToQr(Uint8List qrBytes) async {
+    final codec = await ui.instantiateImageCodec(qrBytes);
+    final frame = await codec.getNextFrame();
+    final qrImage = frame.image;
+    const headerHeight = 76.0;
+    final width = qrImage.width.toDouble();
+    final height = qrImage.height.toDouble() + headerHeight;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, width, height),
+      Paint()..color = Colors.white,
+    );
+
+    final businessName = (merchant?['business_name'] ??
+                merchant?['businessName'] ??
+                'FARM Merchant')
+            .toString()
+            .trim()
+            .isEmpty
+        ? 'FARM Merchant'
+        : (merchant?['business_name'] ?? merchant?['businessName'])
+            .toString()
+            .trim();
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: businessName,
+        style: TextStyle(
+          color: Colors.black,
+          fontSize: (width * 0.06).clamp(18.0, 30.0),
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: ui.TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '...',
+    )..layout(maxWidth: width - 32);
+    textPainter.paint(
+      canvas,
+      Offset((width - textPainter.width) / 2, (headerHeight - textPainter.height) / 2),
+    );
+
+    canvas.drawImage(
+      qrImage,
+      Offset(0, headerHeight),
+      Paint()..filterQuality = FilterQuality.high,
+    );
+
+    final composedImage = await recorder
+        .endRecording()
+        .toImage(width.toInt(), height.toInt());
+    final data = await composedImage.toByteData(format: ui.ImageByteFormat.png);
+    composedImage.dispose();
+    qrImage.dispose();
+    codec.dispose();
+    if (data == null) {
+      throw Exception('Could not create labeled QR image');
+    }
+    return data.buffer.asUint8List();
+  }
+
+  Future<Uint8List> _getLabeledQrBytes(String qrSource) async {
+    final qrBytes = resolveMerchantQrBytes(qrSource);
+    if (qrBytes == null || qrBytes.isEmpty) {
+      throw Exception('QR payload could not be decoded');
+    }
+    return _addBusinessNameToQr(Uint8List.fromList(qrBytes));
+  }
+
   Widget _buildWeeklySalesChart() {
     final theme = FlutterFlowTheme.of(context);
     final highestSale = weeklyData.fold<double>(0, (highest, value) => value > highest ? value : highest);
@@ -322,11 +394,16 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                           width: plotWidth / weeklyData.length,
                           child: Transform.translate(
                             offset: Offset(0, labelOffset.clamp(0, plotHeight - 14)),
-                            child: Text(
-                              _formatChartAmount(value),
-                              textAlign: TextAlign.center,
-                              style: theme.bodySmall.copyWith(fontSize: 9, fontWeight: FontWeight.w700),
-                            ),
+                            child: value == 0
+                                ? const SizedBox.shrink()
+                                : Text(
+                                    _formatChartAmount(value),
+                                    textAlign: TextAlign.center,
+                                    style: theme.bodySmall.copyWith(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                           ),
                         );
                       }),
@@ -507,10 +584,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
     }
 
     try {
-      final bytes = resolveMerchantQrBytes(qrSource);
-      if (bytes == null || bytes.isEmpty) {
-        throw Exception('QR payload could not be decoded');
-      }
+      final bytes = await _getLabeledQrBytes(qrSource);
 
       final fileName =
           'farm_merchant_qr_${DateTime.now().millisecondsSinceEpoch}.png';
@@ -548,12 +622,8 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
         return;
       }
 
-      final bytes = resolveMerchantQrBytes(qrSource);
-      if (bytes == null || bytes.isEmpty) {
-        throw Exception('QR payload could not be decoded');
-      }
-
-      await QrDownloadService.instance.shareQr(Uint8List.fromList(bytes));
+      final bytes = await _getLabeledQrBytes(qrSource);
+      await QrDownloadService.instance.shareQr(bytes);
     } catch (e) {
       showError('Failed to share QR code: ${e.toString()}');
     }

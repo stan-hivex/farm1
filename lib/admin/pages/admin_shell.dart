@@ -18,7 +18,6 @@ import 'payouts_page.dart';
 import '../services/admin_api_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
-import '../core/admin_guard.dart';
 import '../../pages/loginpage/loginpage_widget.dart';
 import '../widgets/admin_sidebar.dart';
 import '../core/admin_navigation.dart';
@@ -39,14 +38,9 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _startPeriodicRefresh();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final ok = await AdminGuard.isAuthenticated();
-      if (!ok && mounted) {
-        debugPrint(
-            '[AUTH] Admin session check unavailable; preserving session.');
-        return;
-      }
-      unawaited(_refreshAdminSession());
+      unawaited(_refreshAdminSession(force: true));
     });
   }
 
@@ -62,7 +56,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
-      unawaited(_refreshAdminSession());
+      unawaited(_refreshAdminSession(force: true));
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
@@ -77,22 +71,18 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _refreshAdminSession() async {
+  Future<void> _refreshAdminSession({bool force = false}) async {
     if (!mounted) return;
-    final ok = await AdminGuard.isAuthenticated();
-    if (!ok) {
-      debugPrint('[AUTH] Admin refresh unavailable; preserving session.');
-      return;
-    }
-
     try {
-      final refreshed = await AdminApiService.ensureValidSession();
-      if (refreshed && mounted) {
+      final token = await AdminApiService.getValidAccessToken(force: force);
+      if (token.isNotEmpty && mounted) {
         setState(() {
           _pageRevision += 1;
         });
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[AUTH] Admin refresh unavailable; preserving session: $e');
+    }
   }
 
   final List<_NavItem> _navItems = [

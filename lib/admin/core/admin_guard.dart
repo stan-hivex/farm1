@@ -25,7 +25,8 @@ class AdminGuard {
     debugPrint('[AdminGuard] isAuthenticated persistedTokenPresent=${adminToken.isNotEmpty} persistedRole=$adminRole');
 
     // If a persisted token exists but is expired, attempt a forced refresh
-    final hasPersisted = adminToken.isNotEmpty &&
+    final hasPersisted = (adminToken.isNotEmpty ||
+        (session?.refreshToken.isNotEmpty ?? false)) &&
         (adminRole == 'admin' || adminRole == 'super_admin');
     if (hasPersisted && _isJwtValid(adminToken)) {
       return true;

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -245,6 +244,8 @@ GoRouter createRouter(
             pendingLoginId:
                 params.getParam('pendingLoginId', ParamType.String) ?? '',
             phone: params.getParam('phone', ParamType.String) ?? '',
+            countryCode:
+              params.getParam('countryCode', ParamType.String),
           ),
         ),
         FFRoute(

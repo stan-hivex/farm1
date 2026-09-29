@@ -12,6 +12,7 @@ import '/pages/superadmin/superadmin_dashboard_page.dart';
 import '/services/secure_storage_service.dart';
 import '/services/auth/auth_service.dart';
 import '/services/auth/biometric_login_service.dart';
+import '/services/auth/session_store_service.dart';
 import '/pages/forgot_password_page/forgot_password_page_widget.dart';
 import '/pages/otppage/otppage_widget.dart';
 
@@ -189,6 +190,13 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         await prefs.setString('userId', data['id'] ?? '');
         await prefs.setBool('isLoggedIn', true);
 
+        await AuthSessionStore.saveUserSession(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          role: normalizedRole,
+          userId: data['id'] ?? '',
+        );
+
         await prefs.remove('adminToken');
         await prefs.remove('adminRefreshToken');
         await prefs.remove('adminRole');
@@ -277,15 +285,18 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         countryCode: _selectedCountry['code'],
       );
 
-      if (response['requiresPhoneVerification'] == true) {
-        final pendingLoginId = response['pendingLoginId']?.toString() ?? '';
-        final verifiedPhone = response['phone']?.toString() ?? identifier;
+      final loginData = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : response;
+      if (loginData['requiresPhoneVerification'] == true) {
+        final pendingLoginId = loginData['pendingLoginId']?.toString() ?? '';
+        final verifiedPhone = loginData['phone']?.toString() ?? identifier;
         if (pendingLoginId.isEmpty) {
           throw Exception('Unable to start phone verification. Please try again.');
         }
         if (!mounted) return;
         context.go(
-          '${OtppageWidget.routePath}?pendingLoginId=${Uri.encodeComponent(pendingLoginId)}&phone=${Uri.encodeComponent(verifiedPhone)}',
+          '${OtppageWidget.routePath}?pendingLoginId=${Uri.encodeComponent(pendingLoginId)}&phone=${Uri.encodeComponent(verifiedPhone)}&countryCode=${Uri.encodeComponent(_selectedCountry['code'] ?? '')}',
         );
         return;
       }

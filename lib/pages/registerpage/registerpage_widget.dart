@@ -945,20 +945,6 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
                       final fullPhone =
                           '$_selectedCountryCode${phoneController.text.trim()}';
-                      final body = {
-                        'first_name': firstNameController.text.trim(),
-                        'last_name': lastNameController.text.trim(),
-                        'username': usernameController.text.trim(),
-                        'phone': fullPhone,
-                        'email': emailController.text.trim(),
-                        'password': passwordController.text.trim(),
-                        'country': _selectedCountry?.trim() ?? '',
-                        'referral_code': referralController.text.trim(),
-                      };
-
-                      print('REGISTER DATA');
-                      print(body);
-
                       final email = emailController.text.trim();
                       final password = passwordController.text.trim();
 

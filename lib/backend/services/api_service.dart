@@ -179,9 +179,6 @@ class ApiService {
         body: attachTurnstileToken(
           {
             'identifier': identifier,
-            'phone': identifier,
-            if (countryCode != null && countryCode.isNotEmpty)
-              'country_code': countryCode,
             'password': password,
           },
           turnstileToken: turnstileToken,

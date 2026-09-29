@@ -27,6 +27,7 @@ class AdminDashboardPage extends StatefulWidget {
 
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Map<String, dynamic> _stats = <String, dynamic>{};
+  List<Map<String, dynamic>> _revenueSeries = <Map<String, dynamic>>[];
   bool _loading = true;
   String? _error;
   String _adminName = 'Admin';
@@ -60,14 +61,21 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     debugPrint('Loading dashboard statistics...');
     try {
-      final res = await AdminApiService.getDashboardStats();
-      final normalized = _normalizeDashboardPayload(res);
+      final results = await Future.wait([
+        AdminApiService.getDashboardStats(),
+        AdminApiService.getAnalytics(),
+      ]);
+      final normalized = <String, dynamic>{
+        ..._normalizeDashboardPayload(results[0]),
+        ..._normalizeDashboardPayload(results[1]),
+      };
       if (normalized.isEmpty) {
         throw Exception('Dashboard payload was empty or malformed.');
       }
       if (!mounted) return;
       setState(() {
         _stats = normalized;
+        _revenueSeries = _normalizeRevenueSeries(normalized['revenue_series']);
       });
       debugPrint('Dashboard statistics loaded.');
       debugPrint('Stats payload = $_stats');
@@ -81,6 +89,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         setState(() => _loading = false);
       }
     }
+  }
+
+  List<Map<String, dynamic>> _normalizeRevenueSeries(dynamic raw) {
+    if (raw is! List) return <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => item['value'] != null)
+        .toList();
   }
 
   Map<String, dynamic> _normalizeDashboardPayload(dynamic payload) {
@@ -371,6 +388,21 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   Widget _buildAnalyticsCard(Color cardColor, Color accent) {
+    final values = _revenueSeries
+        .map((item) => double.tryParse(item['value'].toString()) ?? 0)
+        .toList();
+    final maximum =
+        values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b);
+    final previousTotal = values.length > 3
+        ? values.sublist(0, values.length - 3).fold<double>(0, (a, b) => a + b)
+        : 0.0;
+    final recentTotal = values.length > 3
+        ? values.sublist(values.length - 3).fold<double>(0, (a, b) => a + b)
+        : values.fold<double>(0, (a, b) => a + b);
+    final change = previousTotal == 0
+        ? (recentTotal > 0 ? 100.0 : 0.0)
+        : ((recentTotal - previousTotal) / previousTotal) * 100;
+
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
@@ -399,7 +431,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                           fontSize: 18,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
-                  Text('Last 7 days performance',
+                  Text('Completed platform fees, last 7 days',
                       style: GoogleFonts.plusJakartaSans(
                           color: context.onSurface.withOpacity(0.54),
                           fontSize: 12)),
@@ -412,35 +444,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   color: accent.withAlpha((0.18 * 255).round()),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: Text('+14.8%',
+                child: Text(
+                    '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
                     style: GoogleFonts.plusJakartaSans(
                         color: accent, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
           const SizedBox(height: 18),
-          SizedBox(
-            height: 170,
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(colors: [
-                        context.onSurface.withOpacity(0.12),
-                        context.onSurface.withOpacity(0.1)
-                      ]),
-                    ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: CustomPaint(
-                    painter: _MiniLineChartPainter(accent),
-                  ),
-                ),
-              ],
-            ),
+          _RevenueChart(
+            series: _revenueSeries,
+            maximum: maximum,
+            accent: accent,
+            textColor: context.onSurface,
+            mutedColor: context.onSurface.withOpacity(0.54),
           ),
         ],
       ),
@@ -669,13 +686,116 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 }
 
-class _MiniLineChartPainter extends CustomPainter {
+class _RevenueChart extends StatelessWidget {
+  final List<Map<String, dynamic>> series;
+  final double maximum;
   final Color accent;
+  final Color textColor;
+  final Color mutedColor;
 
-  _MiniLineChartPainter(this.accent);
+  const _RevenueChart({
+    required this.series,
+    required this.maximum,
+    required this.accent,
+    required this.textColor,
+    required this.mutedColor,
+  });
+
+  String _formatValue(double value) {
+    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
+    return value.toStringAsFixed(0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (series.isEmpty) {
+      return SizedBox(
+        height: 210,
+        child: Center(
+          child: Text('No completed fee revenue in this period',
+              style: GoogleFonts.plusJakartaSans(color: mutedColor)),
+        ),
+      );
+    }
+
+    final chartMaximum = maximum <= 0 ? 1.0 : maximum * 1.2;
+    return SizedBox(
+      height: 230,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 42,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(_formatValue(chartMaximum),
+                    style: TextStyle(color: mutedColor, fontSize: 10)),
+                Text(_formatValue(chartMaximum / 2),
+                    style: TextStyle(color: mutedColor, fontSize: 10)),
+                Text('0', style: TextStyle(color: mutedColor, fontSize: 10)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Expanded(
+                  child: CustomPaint(
+                    painter: _RevenueChartPainter(
+                      values: series
+                          .map((item) =>
+                              double.tryParse(item['value'].toString()) ?? 0)
+                          .toList(),
+                      maximum: chartMaximum,
+                      accent: accent,
+                      gridColor: textColor.withOpacity(0.1),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: series
+                      .map((item) => Text(
+                            item['label']?.toString() ?? '',
+                            style: TextStyle(color: mutedColor, fontSize: 10),
+                          ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RevenueChartPainter extends CustomPainter {
+  final List<double> values;
+  final double maximum;
+  final Color accent;
+  final Color gridColor;
+
+  _RevenueChartPainter({
+    required this.values,
+    required this.maximum,
+    required this.accent,
+    required this.gridColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final gridPaint = Paint()
+      ..color = gridColor
+      ..strokeWidth = 1;
+    for (var index = 0; index < 3; index++) {
+      final y = size.height * index / 2;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
     final paint = Paint()
       ..color = accent
       ..strokeWidth = 3
@@ -683,15 +803,13 @@ class _MiniLineChartPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final path = Path();
-    final points = [
-      Offset(0, size.height * 0.7),
-      Offset(size.width * 0.15, size.height * 0.55),
-      Offset(size.width * 0.33, size.height * 0.6),
-      Offset(size.width * 0.5, size.height * 0.35),
-      Offset(size.width * 0.68, size.height * 0.44),
-      Offset(size.width * 0.84, size.height * 0.28),
-      Offset(size.width, size.height * 0.18),
-    ];
+    final points = values.asMap().entries.map((entry) {
+      final x = values.length == 1
+          ? size.width / 2
+          : size.width * entry.key / (values.length - 1);
+      final y = size.height - (entry.value / maximum * size.height);
+      return Offset(x, y.clamp(0, size.height).toDouble());
+    }).toList();
 
     for (var i = 0; i < points.length; i++) {
       if (i == 0) {
@@ -702,8 +820,13 @@ class _MiniLineChartPainter extends CustomPainter {
     }
 
     canvas.drawPath(path, paint);
+    final pointPaint = Paint()..color = accent;
+    for (final point in points) {
+      canvas.drawCircle(point, 4, pointPaint);
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RevenueChartPainter oldDelegate) =>
+      oldDelegate.values != values || oldDelegate.maximum != maximum;
 }

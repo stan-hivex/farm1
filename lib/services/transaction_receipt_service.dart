@@ -80,6 +80,12 @@ class TransactionReceiptService {
       MapEntry('Fee charged', '${_displayValue(transaction['fee'] ?? 0)} FARM'),
       MapEntry('Net amount', '${_displayValue(transaction['net_amount'] ?? transaction['netAmount'] ?? amount)} FARM'),
       MapEntry('Currency', _displayValue(transaction['currency'] ?? 'FARM')),
+      if (transaction['fiat_amount'] != null)
+        MapEntry('Fiat amount', '${_displayValue(transaction['fiat_currency'] ?? '')} ${_displayValue(transaction['fiat_amount'])}'.trim()),
+      if (transaction['payment_method'] != null)
+        MapEntry('Payment method', _displayValue(transaction['payment_method'])),
+      if (transaction['payment_provider'] != null)
+        MapEntry('Payment provider', _displayValue(transaction['payment_provider'])),
       MapEntry('Description', _displayValue(transaction['description'] ?? '')),
       MapEntry('Transaction type', _displayValue(type)),
       MapEntry('Date and time', _dateTime(transaction)),

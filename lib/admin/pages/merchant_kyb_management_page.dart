@@ -48,10 +48,12 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
     }
   }
 
-  Future<void> _reviewMerchant(String merchantId, String status) async {
+  Future<void> _reviewMerchant(String merchantId, String status,
+      {String? rejectionReason}) async {
     setState(() => _processing[merchantId] = true);
     try {
-      await AdminApiService.decideMerchant(merchantId, status);
+      await AdminApiService.decideMerchant(merchantId, status,
+          rejectionReason: rejectionReason);
       _snack(
           status == 'approved'
               ? 'Merchant KYB approved ✓'
@@ -75,28 +77,19 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
         builder: (_) => AlertDialog(
           title: Text(m['business_name'] ?? m['name'] ?? 'Merchant'),
           content: SingleChildScrollView(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (m['business_name'] != null) Text('Business: ${m['business_name']}'),
-              if (m['contact_email'] != null) Text('Email: ${m['contact_email']}'),
-              if (m['contact_phone'] != null) Text('Phone: ${m['contact_phone']}'),
-              if (m['business_registration_number'] != null) Text('Reg #: ${m['business_registration_number']}'),
-              if (m['address'] != null) Text('Address: ${m['address']}'),
-              const SizedBox(height: 12),
-              if (m['documents'] != null && m['documents'] is List)
-                ...List<Widget>.from((m['documents'] as List).map((d) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: d['url'] != null ? Image.network(d['url'], height: 120) : const SizedBox(),
-                    ))),
-            ]),
+            child: _detailsColumn(m),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+            TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close')),
             TextButton(
                 onPressed: () {
                   Navigator.pop(context);
                   _showRejectDialog(merchantId);
                 },
-                child: Text('Reject', style: TextStyle(color: context.errorColor))),
+                child: Text('Reject',
+                    style: TextStyle(color: context.errorColor))),
             ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
@@ -146,7 +139,8 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
                 ElevatedButton.styleFrom(backgroundColor: context.errorColor),
             onPressed: () {
               Navigator.pop(context);
-              _reviewMerchant(merchantId, 'rejected');
+              _reviewMerchant(merchantId, 'rejected',
+                  rejectionReason: controller.text);
             },
             child: Text('Reject'),
           ),
@@ -173,6 +167,94 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
     return merchant['kyb_status']?.toString().toLowerCase() ??
         merchant['status']?.toString().toLowerCase() ??
         'pending';
+  }
+
+  String _detailLabel(String key) {
+    return key
+        .replaceAll('_', ' ')
+        .split(' ')
+        .map((part) => part.isEmpty
+            ? part
+            : '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
+
+  String _detailValue(dynamic value) {
+    if (value is Map || value is List) return value.toString();
+    return value?.toString() ?? '-';
+  }
+
+  List<MapEntry<String, dynamic>> _merchantDetailEntries(
+      Map<String, dynamic> merchant) {
+    const hidden = {
+      'id',
+      'user_id',
+      'approved_by',
+      'qr_secret',
+      'users_merchants_user_idTousers',
+      'merchant_payouts',
+    };
+    return merchant.entries
+        .where((entry) => !hidden.contains(entry.key))
+        .where(
+            (entry) => entry.value != null && entry.value.toString().isNotEmpty)
+        .toList();
+  }
+
+  Widget _detailsColumn(Map<String, dynamic> merchant) {
+    final applicant = merchant['users_merchants_user_idTousers'];
+    final entries = _merchantDetailEntries(merchant);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (applicant is Map) ...[
+          Text('Applicant account',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ...applicant.entries.map((entry) =>
+              _detailRow(_detailLabel(entry.key), _detailValue(entry.value))),
+          const Divider(height: 22),
+        ],
+        ...entries.map((entry) =>
+            _detailRow(_detailLabel(entry.key), _detailValue(entry.value))),
+        if (merchant['merchant_payouts'] is List &&
+            (merchant['merchant_payouts'] as List).isNotEmpty) ...[
+          const Divider(height: 22),
+          Text('Recent payouts',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ...((merchant['merchant_payouts'] as List)
+              .map((payout) => _detailRow('Payout', _detailValue(payout)))),
+        ],
+        if (merchant['decision_history'] is List &&
+            (merchant['decision_history'] as List).isNotEmpty) ...[
+          const Divider(height: 22),
+          Text('Decision history',
+              style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ...((merchant['decision_history'] as List).map(
+              (decision) => _detailRow('Decision', _detailValue(decision)))),
+        ],
+      ],
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11, color: context.onSurface.withOpacity(0.54))),
+          const SizedBox(height: 2),
+          SelectableText(value,
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13, color: context.onSurface)),
+        ],
+      ),
+    );
   }
 
   @override
@@ -361,12 +443,30 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
                                             context.onSurface.withOpacity(0.38),
                                         fontSize: 11)),
                               ],
+                              const SizedBox(height: 12),
+                              ExpansionTile(
+                                tilePadding: EdgeInsets.zero,
+                                childrenPadding: EdgeInsets.zero,
+                                title: Text('Submitted business details',
+                                    style: GoogleFonts.plusJakartaSans(
+                                        color: context.onSurface,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700)),
+                                children: [
+                                  ..._merchantDetailEntries(
+                                          Map<String, dynamic>.from(merchant))
+                                      .map((entry) => _detailRow(
+                                          _detailLabel(entry.key),
+                                          _detailValue(entry.value))),
+                                ],
+                              ),
                               const SizedBox(height: 18),
                               Align(
                                 alignment: Alignment.centerRight,
                                 child: TextButton.icon(
                                   onPressed: () => _showMerchantDetails(id),
-                                  icon: const Icon(Icons.info_outline, size: 16),
+                                  icon:
+                                      const Icon(Icons.info_outline, size: 16),
                                   label: const Text('View details'),
                                 ),
                               ),

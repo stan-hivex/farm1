@@ -7,6 +7,8 @@ void main() {
 
     expect(guard.isPublicRoute('/'), isTrue);
     expect(guard.isPublicRoute('/login'), isTrue);
+    expect(guard.isPublicRoute('/privacyPolicy'), isTrue);
+    expect(guard.isPublicRoute('/termsOfService'), isTrue);
     expect(guard.isPublicRoute('/sendReceive'), isFalse);
     expect(guard.isPublicRoute('/qRScanner'), isFalse);
     expect(guard.isPublicRoute('/allTransactions'), isFalse);

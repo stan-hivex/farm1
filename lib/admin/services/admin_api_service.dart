@@ -15,11 +15,18 @@ class AdminApiService {
   static const int _initialBackoffSeconds = 1;
   static const int _maxBackoffSeconds = 30;
 
+  static Future<AuthSession?> _getActiveSession() async {
+    final activeRole =
+        (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+    if (activeRole == 'admin' || activeRole == 'super_admin') {
+      return AuthSessionStore.readRoleSession(activeRole);
+    }
+    return null;
+  }
+
   static Future<String> _getToken() async {
     debugPrint('Reading admin/super admin session...');
-    final adminSession = await AuthSessionStore.readAdminSession();
-    final superAdminSession = await AuthSessionStore.readSuperAdminSession();
-    final session = superAdminSession ?? adminSession;
+    final session = await _getActiveSession();
     final token = session?.accessToken ?? '';
     final role = session?.role ?? '';
     debugPrint(
@@ -33,19 +40,15 @@ class AdminApiService {
       };
 
   static Future<String> _getRefreshToken() async {
-    final adminSession = await AuthSessionStore.readAdminSession();
-    final superAdminSession = await AuthSessionStore.readSuperAdminSession();
-    final session = superAdminSession ?? adminSession;
+    final session = await _getActiveSession();
     return session?.refreshToken ?? '';
   }
 
   static Future<String> _getStoredRole() async {
     final prefs = await SharedPreferences.getInstance();
-    final role = prefs.getString('adminRole') ?? '';
-    if (role.isNotEmpty) return role;
-    final adminSession = await AuthSessionStore.readAdminSession();
-    final superAdminSession = await AuthSessionStore.readSuperAdminSession();
-    return adminSession?.role ?? superAdminSession?.role ?? '';
+    final session = await _getActiveSession();
+    if (session?.role.isNotEmpty ?? false) return session!.role;
+    return prefs.getString('adminRole') ?? '';
   }
 
   static bool tokenNeedsRefresh(String token) {
@@ -57,12 +60,19 @@ class AdminApiService {
         DateTime.now().add(const Duration(seconds: _expiryThresholdSeconds)));
   }
 
+  static Future<String> getValidAccessToken({bool force = false}) async {
+    final valid = await ensureValidSession(force: force);
+    if (!valid) return '';
+    return _getToken();
+  }
+
   static Future<bool> ensureValidSession({bool force = false}) async {
     final token = await _getToken();
-    if (token.isEmpty) {
+    final refreshToken = await _getRefreshToken();
+    if (token.isEmpty && refreshToken.isEmpty) {
       return false;
     }
-    if (!force && !tokenNeedsRefresh(token)) {
+    if (!force && token.isNotEmpty && !tokenNeedsRefresh(token)) {
       return true;
     }
     // Serialize refresh attempts to avoid concurrent refreshes which can
@@ -157,6 +167,7 @@ class AdminApiService {
       }
 
       final prefs = await SharedPreferences.getInstance();
+      final activeSession = await _getActiveSession();
       await prefs.setString('adminToken', newAccessToken);
       await prefs.setString('adminRefreshToken', newRefreshToken);
       await prefs.setString('adminRole', role);
@@ -164,7 +175,7 @@ class AdminApiService {
         role: role,
         accessToken: newAccessToken,
         refreshToken: newRefreshToken,
-        userId: '',
+        userId: activeSession?.userId ?? FFAppState().userId,
       );
       FFAppState().accessToken = newAccessToken;
       FFAppState().refreshToken = newRefreshToken;
@@ -449,11 +460,16 @@ class AdminApiService {
       );
 
   static Future<Map<String, dynamic>> decideMerchant(
-          String merchantId, String status) =>
+          String merchantId, String status,
+          {String? rejectionReason}) =>
       _req(
         method: 'POST',
         path: '/admin/merchants/$merchantId/decision',
-        body: {'status': status},
+        body: {
+          'status': status,
+          if (rejectionReason != null && rejectionReason.trim().isNotEmpty)
+            'rejection_reason': rejectionReason.trim(),
+        },
       );
 
   static Future<Map<String, dynamic>> getMerchant(String merchantId) =>
@@ -486,6 +502,6 @@ class AdminApiService {
       _req(method: 'GET', path: '/admin/audit-logs?page=$page');
 
   // ── Analytics ─────────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getAnalytics({String period = 'month'}) =>
-      _req(method: 'GET', path: '/admin/system/stats?period=$period');
+    static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
+      _req(method: 'GET', path: '/admin/analytics?period=$period');
 }
