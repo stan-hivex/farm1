@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 
 class PayoutsPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -9,7 +10,8 @@ class PayoutsPage extends StatefulWidget {
   State<PayoutsPage> createState() => _PayoutsPageState();
 }
 
-class _PayoutsPageState extends State<PayoutsPage> {
+class _PayoutsPageState extends State<PayoutsPage>
+    with AdminPageRefreshMixin<PayoutsPage> {
   List<dynamic> _payouts = [];
   bool _loading = true;
   String _status = 'pending';
@@ -23,11 +25,13 @@ class _PayoutsPageState extends State<PayoutsPage> {
       final response = await AdminApiService.getPayouts(status: _status == 'all' ? null : _status);
       if (mounted) setState(() => _payouts = response['data'] ?? []);
     } catch (_) {
-      if (mounted) setState(() => _payouts = []);
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Future<void> _process(String id, String status) async {
     try {

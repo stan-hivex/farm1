@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/core/app_theme.dart';
 import '/core/theme_extensions.dart';
+import '../core/admin_guard.dart';
 import 'admin_dashboard_page.dart';
-import 'superadmins_management_page.dart';
 import 'user_management_page.dart';
 import 'kyc_management_page.dart';
 import 'transactions_management_page.dart';
@@ -11,14 +12,15 @@ import 'escrow_management_page.dart';
 import 'deposits_management_page.dart';
 import 'withdrawals_management_page.dart';
 import 'notifications_management_page.dart';
-import 'settings_management_page.dart';
-import 'fee_management_page.dart';
 import 'merchant_kyb_management_page.dart';
 import 'payouts_page.dart';
+import 'support_inbox_page.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '../../pages/loginpage/loginpage_widget.dart';
+import '../../pages/superadmin/superadmin_dashboard_page.dart';
 import '../widgets/admin_sidebar.dart';
 import '../core/admin_navigation.dart';
 
@@ -31,8 +33,8 @@ class AdminShell extends StatefulWidget {
 
 class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
   int _selectedIndex = 0;
-  int _pageRevision = 0;
   Timer? _refreshTimer;
+  bool _isAuthorized = false;
 
   @override
   void initState() {
@@ -40,8 +42,26 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _startPeriodicRefresh();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      unawaited(_refreshAdminSession(force: true));
+      await _authorizeAdminShell();
     });
+  }
+
+  Future<void> _authorizeAdminShell() async {
+    final role = (await AdminGuard.getAdminRole()).toLowerCase();
+    if (!mounted) return;
+
+    if (role == 'admin') {
+      setState(() => _isAuthorized = true);
+      unawaited(_refreshAdminSession(refreshData: false));
+      return;
+    }
+
+    AuthNavigation.replaceAllWithBuilder(
+      context,
+      role == 'super_admin'
+          ? (_) => const SuperadminDashboardPage()
+          : (_) => const LoginpageWidget(),
+    );
   }
 
   @override
@@ -56,7 +76,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
-      unawaited(_refreshAdminSession(force: true));
+      unawaited(_refreshAdminSession());
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
@@ -71,14 +91,12 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _refreshAdminSession({bool force = false}) async {
+  Future<void> _refreshAdminSession({bool refreshData = true}) async {
     if (!mounted) return;
     try {
-      final token = await AdminApiService.getValidAccessToken(force: force);
-      if (token.isNotEmpty && mounted) {
-        setState(() {
-          _pageRevision += 1;
-        });
+      final token = await AdminApiService.getValidAccessToken();
+      if (token.isNotEmpty && mounted && refreshData) {
+        AdminPageRefreshCoordinator.requestRefresh();
       }
     } catch (e) {
       debugPrint('[AUTH] Admin refresh unavailable; preserving session: $e');
@@ -87,7 +105,6 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   final List<_NavItem> _navItems = [
     _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.admin_panel_settings_rounded, label: 'Superadmins'),
     _NavItem(icon: Icons.people_rounded, label: 'Users'),
     _NavItem(icon: Icons.verified_user_rounded, label: 'KYC'),
     _NavItem(icon: Icons.swap_horiz_rounded, label: 'Transactions'),
@@ -96,9 +113,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _NavItem(icon: Icons.north_east_rounded, label: 'Withdrawals'),
     _NavItem(icon: Icons.payments_rounded, label: 'Payouts'),
     _NavItem(icon: Icons.campaign_rounded, label: 'Notifications'),
-    _NavItem(icon: Icons.settings_rounded, label: 'Settings'),
-    _NavItem(icon: Icons.percent_rounded, label: 'Fees'),
     _NavItem(icon: Icons.badge_rounded, label: 'Merchant KYB'),
+    _NavItem(icon: Icons.support_agent_rounded, label: 'Support'),
   ];
 
   void _goToDashboard() {
@@ -109,7 +125,6 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   List<Widget> get _pages => [
         AdminDashboardPage(onGoBack: _goToDashboard),
-        SuperadminsManagementPage(onGoBack: _goToDashboard),
         UserManagementPage(onGoBack: _goToDashboard),
         KycManagementPage(onGoBack: _goToDashboard),
         TransactionsManagementPage(onGoBack: _goToDashboard),
@@ -118,15 +133,14 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
         WithdrawalsManagementPage(onGoBack: _goToDashboard),
         PayoutsPage(onGoBack: _goToDashboard),
         NotificationsManagementPage(onGoBack: _goToDashboard),
-        SettingsManagementPage(onGoBack: _goToDashboard),
-        FeeManagementPage(onGoBack: _goToDashboard),
         MerchantKybManagementPage(onGoBack: _goToDashboard),
+        const SupportInboxPage(),
       ];
 
   Widget _buildCurrentPage() {
     final page = _pages[_selectedIndex];
     return KeyedSubtree(
-      key: ValueKey('admin-page-$_selectedIndex-$_pageRevision'),
+      key: ValueKey('admin-page-$_selectedIndex'),
       child: page,
     );
   }
@@ -144,33 +158,41 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 700;
+    if (!_isAuthorized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: const AdminSidebar(),
-      body: Row(
-        children: [
-          // Sidebar — only on wide screens
-          if (isWide) _buildSidebar(),
-
-          // Main content
-          Expanded(
-            child: Column(
+    return Theme(
+      data: AppTheme.lightTheme(),
+      child: Builder(
+        builder: (themedContext) {
+          final isWide = MediaQuery.of(themedContext).size.width > 700;
+          return Scaffold(
+            backgroundColor: Colors.white,
+            drawer: const AdminSidebar(),
+            body: Row(
               children: [
-                _buildTopBar(isWide),
-                Expanded(child: _buildCurrentPage()),
+                if (isWide) _buildSidebar(themedContext),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildTopBar(themedContext, isWide),
+                      Expanded(child: _buildCurrentPage()),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
+            bottomNavigationBar: isWide ? null : _buildBottomNav(themedContext),
+          );
+        },
       ),
-      // Bottom nav — only on narrow screens
-      bottomNavigationBar: isWide ? null : _buildBottomNav(),
     );
   }
 
-  Widget _buildSidebar() {
+  Widget _buildSidebar(BuildContext context) {
     return Container(
       width: 220,
       color: Colors.white,
@@ -276,10 +298,10 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTopBar(bool isWide) {
+  Widget _buildTopBar(BuildContext context, bool isWide) {
     return Container(
       height: 60,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: EdgeInsets.symmetric(horizontal: isWide ? 20 : 12),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
@@ -299,57 +321,76 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
                     color: context.onSurface)),
-          Row(children: [
-            Icon(Icons.notifications_none_rounded,
-                color: context.onSurface.withOpacity(0.7)),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: _logout,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.grey.shade300, width: 1),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isWide) ...[
+                Icon(Icons.notifications_none_rounded,
+                    color: context.onSurface.withOpacity(0.7)),
+                const SizedBox(width: 12),
+              ],
+              if (isWide)
+                GestureDetector(
+                  onTap: _logout,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.grey.shade300, width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.logout_rounded,
+                            size: 16, color: context.onSurface),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Logout',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: context.onSurface,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                IconButton(
+                  onPressed: _logout,
+                  tooltip: 'Logout',
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(Icons.logout_rounded, color: context.onSurface),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.logout_rounded,
-                        size: 16, color: context.onSurface),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Logout',
-                      style: GoogleFonts.plusJakartaSans(
+              if (isWide) ...[
+                const SizedBox(width: 12),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFF0A0F18), shape: BoxShape.circle),
+                  child: Center(
+                    child: Text(
+                      'AD',
+                      style: TextStyle(
                         color: context.onSurface,
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: const BoxDecoration(
-                  color: Color(0xFF0A0F18), shape: BoxShape.circle),
-              child: Center(
-                  child: Text('AD',
-                      style: TextStyle(
-                          color: context.onSurface,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold))),
-            ),
-          ]),
+              ],
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -384,7 +425,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                       children: [
                         Icon(
                           item.icon,
-                          size: 18,
+                          size: 22,
                           color: selected
                               ? const Color(0xFF0D47A1)
                               : context.onSurface.withOpacity(0.64),
@@ -396,7 +437,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
                             color: selected

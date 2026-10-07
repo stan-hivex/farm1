@@ -456,9 +456,8 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                         '')
                                     .toString()
                                     .trim();
-                                final identifier = username.isNotEmpty
-                                    ? username
-                                    : phone;
+                                final identifier =
+                                    username.isNotEmpty ? username : phone;
                                 return ListTile(
                                   dense: true,
                                   leading: CircleAvatar(

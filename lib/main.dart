@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:app_links/app_links.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +21,10 @@ import 'services/socket_service.dart';
 import 'services/auth/startup_authenticator.dart';
 import 'services/auth/route_guard_service.dart';
 import 'pages/biometric_unlock_page/biometric_unlock_page_widget.dart';
+import 'pages/all_transactions/all_transactions_widget.dart';
+import 'pages/dashboard/dashboard_widget.dart';
+import 'flutter_flow/nav/nav.dart' show appNavigatorKey;
+import 'admin/pages/admin_password_reset_page.dart';
 
 Widget buildSafeErrorWidget(FlutterErrorDetails details) {
   debugPrint('Suppressing app error overlay: ${details.exception}');
@@ -155,6 +160,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late AppStateNotifier _appStateNotifier;
 
   late GoRouter _router;
+  late AppLinks _appLinks;
+  StreamSubscription<Uri>? _appLinkSubscription;
+  String? _pendingPasswordResetCode;
+  String? _activePasswordResetCode;
   Timer? _refreshTimer;
 
   ThemeMode _effectiveThemeMode(String currentLocation) {
@@ -208,6 +217,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _appStateNotifier,
       initialLocation: widget.initialLocation,
     );
+    _appLinks = AppLinks();
+    _appLinkSubscription = _appLinks.uriLinkStream.listen(
+      _handleIncomingAppLink,
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint('[APP LINKS] Could not receive incoming link: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      },
+    );
+    unawaited(_handleInitialAppLink());
     final currentLocation = getRoute();
     print('Current route before redirect = $currentLocation');
     _startPeriodicRefresh();
@@ -216,9 +234,65 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     _refreshTimer?.cancel();
+    unawaited(_appLinkSubscription?.cancel());
     FFAppState().removeListener(_handleThemeModeChanged);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  Future<void> _handleInitialAppLink() async {
+    try {
+      final initialLink = await _appLinks.getInitialLink();
+      if (initialLink != null) _handleIncomingAppLink(initialLink);
+    } catch (error, stackTrace) {
+      debugPrint('[APP LINKS] Could not read initial link: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
+  }
+
+  void _handleIncomingAppLink(Uri uri) {
+    final continueUrl = uri.queryParameters['continueUrl'];
+    final continueUri = continueUrl == null ? null : Uri.tryParse(continueUrl);
+    final isPasswordResetContinuation =
+        continueUri?.host == 'farmapp-e2145.firebaseapp.com' &&
+            continueUri?.path == '/admin-reset-password';
+    final isPasswordResetHost = uri.path == '/admin-reset-password' &&
+        (uri.host == 'farmapp.africa' ||
+            uri.host == 'farmapp-e2145.firebaseapp.com');
+    final isFirebaseActionHost = uri.host == 'farmapp-e2145.firebaseapp.com' &&
+        uri.path.startsWith('/__/auth/action') &&
+        isPasswordResetContinuation;
+    final code = uri.queryParameters['oobCode'];
+    if (!(isPasswordResetHost || isFirebaseActionHost) ||
+        uri.queryParameters['mode'] != 'resetPassword' ||
+        code == null ||
+        code.isEmpty ||
+        code == _activePasswordResetCode) {
+      return;
+    }
+
+    _pendingPasswordResetCode = code;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openPendingAdminReset();
+    });
+  }
+
+  void _openPendingAdminReset() {
+    final code = _pendingPasswordResetCode;
+    final navigator = appNavigatorKey.currentState;
+    if (code == null || navigator == null) return;
+
+    _pendingPasswordResetCode = null;
+    _activePasswordResetCode = code;
+    unawaited(
+      navigator
+          .push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => ResetPasswordPage(oobCode: code),
+            ),
+          )
+          .whenComplete(() => _activePasswordResetCode = null),
+    );
   }
 
   @override
@@ -306,6 +380,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (_pendingPasswordResetCode != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openPendingAdminReset();
+      });
+    }
     final effectiveThemeMode = _effectiveThemeMode(getRoute());
     Locale locale = const Locale('en');
     Iterable<Locale> supportedLocales = const [Locale('en')];
@@ -331,7 +410,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop && !kIsWeb) {
             debugPrint('[APP] Android back - preserving session');
-            SystemNavigator.pop();
+            if (_router.routeInformationProvider.value.uri.path ==
+                AllTransactionsWidget.routePath) {
+              _router.go(DashboardWidget.routePath);
+            } else {
+              SystemNavigator.pop();
+            }
           }
         },
         child: Stack(

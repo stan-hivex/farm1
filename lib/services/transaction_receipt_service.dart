@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/services/api_service.dart';
 import '/utils/transaction_peer_resolver.dart';
 
 class TransactionReceiptService {
@@ -13,14 +14,39 @@ class TransactionReceiptService {
 
   static Future<void> showDetails(
     BuildContext context,
-    Map<String, dynamic> transaction,
-  ) async {
+    Map<String, dynamic> transaction, {
+    bool fetchLatest = false,
+  }) async {
+    var detailsTransaction = Map<String, dynamic>.from(transaction);
+    var detailsLoadError = false;
+    final transactionDbId = _text(transaction['id']);
+    if (fetchLatest && transactionDbId.isNotEmpty) {
+      try {
+        final response =
+            await ApiService.getTransactionDetails(transactionDbId);
+        final remote = response['data'];
+        if (remote is Map) {
+          detailsTransaction.addAll(
+            Map<String, dynamic>.from(remote)
+              ..removeWhere((_, value) => value == null),
+          );
+        } else {
+          detailsLoadError = true;
+        }
+      } catch (error) {
+        debugPrint('Could not fetch full transaction details: $error');
+        detailsLoadError = true;
+      }
+    }
+
+    if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => _TransactionDetailsSheet(
-        transaction: transaction,
+        transaction: detailsTransaction,
+        detailsLoadError: detailsLoadError,
       ),
     );
   }
@@ -46,53 +72,224 @@ class TransactionReceiptService {
 
   static String _text(dynamic value) => value?.toString().trim() ?? '';
 
+  static dynamic _firstValue(
+    Map<String, dynamic> transaction,
+    List<String> keys, {
+    Map<String, dynamic>? metadata,
+  }) {
+    for (final key in keys) {
+      final value = transaction[key] ?? metadata?[key];
+      final normalized = value?.toString().trim().toLowerCase();
+      if (value != null &&
+          normalized != null &&
+          normalized.isNotEmpty &&
+          !const {'n/a', 'na', 'null', 'undefined'}.contains(normalized)) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   static String _partyName(Map<String, dynamic> transaction,
       {required bool sender}) {
     final keys = sender
         ? ['sender_name', 'sender_username', 'sender']
-        : ['receiver_name', 'recipient_name', 'recipient_username', 'receiver_username', 'recipient'];
+        : [
+            'receiver_name',
+            'recipient_name',
+            'recipient_username',
+            'receiver_username',
+            'recipient'
+          ];
     for (final key in keys) {
       final value = _text(transaction[key]);
       if (value.isNotEmpty) return value.startsWith('@') ? value : '@$value';
     }
     final resolved = resolveTransactionPeer(transaction, outgoing: !sender);
-    if (resolved.isEmpty || resolved == 'unknown user') return 'Unknown';
+    if (resolved.isEmpty || resolved == 'unknown user') return '';
     return resolved.startsWith('@') ? resolved : '@$resolved';
   }
 
   static String _dateTime(Map<String, dynamic> transaction) {
-    final raw = transaction['created_at'] ?? transaction['createdAt'] ??
-        transaction['processed_at'] ?? transaction['timestamp'] ?? transaction['date'];
+    final raw = transaction['created_at'] ??
+        transaction['createdAt'] ??
+        transaction['processed_at'] ??
+        transaction['timestamp'] ??
+        transaction['date'];
     final parsed = DateTime.tryParse(_text(raw));
-    return parsed == null ? _text(raw) : dateTimeFormatEastAfricanTime('MMM d, yyyy • h:mm a EAT', parsed);
+    return parsed == null
+        ? _text(raw)
+        : dateTimeFormatEastAfricanTime('MMM d, yyyy • h:mm a EAT', parsed);
   }
 
   static List<MapEntry<String, String>> _details(
       Map<String, dynamic> transaction) {
-    final amount = transaction['amount'] ?? transaction['value'] ?? 'N/A';
-    final type = transaction['transaction_type'] ?? transaction['type'] ?? 'N/A';
+    final nestedData = transaction['data'] is Map
+        ? Map<String, dynamic>.from(transaction['data'] as Map)
+        : <String, dynamic>{};
+    final data = {...nestedData, ...transaction};
+    final metadata = data['metadata'] is Map
+        ? Map<String, dynamic>.from(data['metadata'] as Map)
+        : <String, dynamic>{};
+    final amount = _firstValue(
+          data,
+          [
+            'amount',
+            'amount_farm',
+            'amountFarm',
+            'transaction_amount',
+            'transactionAmount',
+            'value',
+          ],
+          metadata: metadata,
+        ) ??
+        'Unavailable';
+    final currency = _firstValue(
+          data,
+          ['currency', 'currency_code', 'currencyCode'],
+          metadata: metadata,
+        ) ??
+        'FARM';
+    final type = _firstValue(
+          data,
+          ['transaction_type', 'transactionType', 'type'],
+        ) ??
+        'Transaction';
     final typeText = _text(type).toLowerCase();
-    final isOutgoing = transaction['is_outgoing'] == true ||
-        typeText.contains('withdraw') || typeText.contains('send');
+    final fee = _firstValue(
+          data,
+          ['fee', 'fee_amount', 'feeAmount', 'transaction_fee'],
+          metadata: metadata,
+        ) ??
+        0;
+    final netAmount = _firstValue(
+          data,
+          ['net_amount', 'netAmount', 'settlement'],
+          metadata: metadata,
+        ) ??
+        _subtractAmounts(amount, fee);
+    final status = _firstValue(
+          data,
+          ['status', 'state', 'transaction_status', 'transactionStatus'],
+          metadata: metadata,
+        ) ??
+        'Unknown';
+    final isOutgoing = data['is_outgoing'] == true ||
+        typeText.contains('withdraw') ||
+        typeText.contains('send');
+    final fiatAmount = _firstValue(
+      data,
+      ['fiat_amount', 'amount_fiat', 'amount_usd'],
+      metadata: metadata,
+    );
+    final fiatCurrency = _firstValue(
+          data,
+          ['fiat_currency', 'currency_fiat'],
+          metadata: metadata,
+        ) ??
+        (metadata['amount_usd'] != null ? 'USD' : '');
     return [
-      MapEntry('Amount', '${_displayValue(amount)} FARM'),
-      MapEntry('Status', _displayValue(transaction['status'] ?? transaction['state'] ?? 'N/A')),
-      MapEntry('Fee charged', '${_displayValue(transaction['fee'] ?? 0)} FARM'),
-      MapEntry('Net amount', '${_displayValue(transaction['net_amount'] ?? transaction['netAmount'] ?? amount)} FARM'),
-      MapEntry('Currency', _displayValue(transaction['currency'] ?? 'FARM')),
-      if (transaction['fiat_amount'] != null)
-        MapEntry('Fiat amount', '${_displayValue(transaction['fiat_currency'] ?? '')} ${_displayValue(transaction['fiat_amount'])}'.trim()),
-      if (transaction['payment_method'] != null)
-        MapEntry('Payment method', _displayValue(transaction['payment_method'])),
-      if (transaction['payment_provider'] != null)
-        MapEntry('Payment provider', _displayValue(transaction['payment_provider'])),
-      MapEntry('Description', _displayValue(transaction['description'] ?? '')),
+      MapEntry('Amount', '${_displayValue(amount)} $currency'),
+      MapEntry('Status', _displayValue(status)),
+      MapEntry('Fee charged', '${_displayValue(fee)} $currency'),
+      MapEntry('Net amount', '${_displayValue(netAmount)} $currency'),
+      MapEntry('Currency', _displayValue(currency)),
+      if (fiatAmount != null)
+        MapEntry(
+            'Fiat amount', '$fiatCurrency ${_displayValue(fiatAmount)}'.trim()),
+      if (_firstValue(data, ['payment_method', 'paymentMethod', 'method'],
+              metadata: metadata) !=
+          null)
+        MapEntry(
+          'Payment method',
+          _displayValue(
+            _firstValue(data, ['payment_method', 'paymentMethod', 'method'],
+                metadata: metadata),
+          ),
+        ),
+      if (_firstValue(data, ['payment_provider', 'provider'],
+              metadata: metadata) !=
+          null)
+        MapEntry(
+          'Payment provider',
+          _displayValue(_firstValue(data, ['payment_provider', 'provider'],
+              metadata: metadata)),
+        ),
+      if (_firstValue(data, ['provider_reference', 'providerReference'],
+              metadata: metadata) !=
+          null)
+        MapEntry(
+          'Provider reference',
+          _displayValue(_firstValue(
+              data, ['provider_reference', 'providerReference'],
+              metadata: metadata)),
+        ),
+      if (_firstValue(
+              data, ['provider_transaction_id', 'providerTransactionId'],
+              metadata: metadata) !=
+          null)
+        MapEntry(
+          'Provider transaction ID',
+          _displayValue(_firstValue(
+              data, ['provider_transaction_id', 'providerTransactionId'],
+              metadata: metadata)),
+        ),
+      if (_firstValue(data, ['blockchain_tx_hash', 'blockchainTransactionHash'],
+              metadata: metadata) !=
+          null)
+        MapEntry(
+          'Blockchain transaction',
+          _displayValue(_firstValue(
+              data, ['blockchain_tx_hash', 'blockchainTransactionHash'],
+              metadata: metadata)),
+        ),
+      if (data['deposit_status'] != null)
+        MapEntry('Deposit status', _displayValue(data['deposit_status'])),
+      if (data['deposit_verified_at'] != null)
+        MapEntry('Provider verified at',
+            _dateTime({'created_at': data['deposit_verified_at']})),
+      if (data['deposit_credited_at'] != null)
+        MapEntry('Wallet credited at',
+            _dateTime({'created_at': data['deposit_credited_at']})),
+      if (data['withdrawal_method'] != null ||
+          data['withdrawal_network'] != null)
+        MapEntry(
+          'Withdrawal route',
+          [
+            data['withdrawal_method'],
+            data['crypto_asset'],
+            data['withdrawal_network'],
+          ]
+              .where((value) => value != null && value.toString().isNotEmpty)
+              .join(' • '),
+        ),
+      if (data['settlement_amount'] != null)
+        MapEntry(
+          'Withdrawal settlement',
+          '${_displayValue(data['settlement_amount'])} $currency',
+        ),
+      if (data['failure_reason'] != null &&
+          data['failure_reason'].toString().trim().isNotEmpty)
+        MapEntry('Failure reason', _displayValue(data['failure_reason'])),
+      MapEntry(
+          'Description',
+          _displayValue(
+              data['original_description'] ?? data['description'] ?? '')),
       MapEntry('Transaction type', _displayValue(type)),
-      MapEntry('Date and time', _dateTime(transaction)),
+      MapEntry('Date and time', _dateTime(data)),
       MapEntry('Is outgoing', isOutgoing ? 'Yes' : 'No'),
-      MapEntry('Sender', _partyName(transaction, sender: true)),
-      MapEntry('Receiver', _partyName(transaction, sender: false)),
+      if (_partyName(data, sender: true).isNotEmpty)
+        MapEntry('Sender', _partyName(data, sender: true)),
+      if (_partyName(data, sender: false).isNotEmpty)
+        MapEntry('Receiver', _partyName(data, sender: false)),
     ].where((entry) => entry.value.isNotEmpty).toList();
+  }
+
+  static dynamic _subtractAmounts(dynamic amount, dynamic fee) {
+    final parsedAmount = num.tryParse(amount.toString());
+    final parsedFee = num.tryParse(fee.toString());
+    if (parsedAmount == null || parsedFee == null) return amount;
+    return parsedAmount - parsedFee;
   }
 
   static Future<void> share(Map<String, dynamic> transaction) async {
@@ -109,7 +306,8 @@ class TransactionReceiptService {
       lines
         ..add('')
         ..add('Transaction ID: ${transactionId(transaction)}')
-        ..addAll(_details(transaction).map((entry) => '${entry.key}: ${entry.value}'));
+        ..addAll(_details(transaction)
+            .map((entry) => '${entry.key}: ${entry.value}'));
     }
     await SharePlus.instance.share(ShareParams(text: lines.join('\n')));
   }
@@ -134,14 +332,30 @@ class TransactionReceiptService {
   static Future<Uint8List> _renderReceipts(
       List<Map<String, dynamic>> transactions) async {
     const width = 900.0;
-    final sections = transactions
-        .map((transaction) => <String, dynamic>{
-              'title': _title(transaction),
-              'details': _details(transaction),
-              'amount': _displayValue(
-                  transaction['amount'] ?? transaction['value'] ?? 'N/A'),
-            })
-        .toList();
+    final sections = transactions.map((transaction) {
+      final metadata = transaction['metadata'] is Map
+          ? Map<String, dynamic>.from(transaction['metadata'] as Map)
+          : <String, dynamic>{};
+      return <String, dynamic>{
+        'title': _title(transaction),
+        'details': _details(transaction),
+        'amount': _displayValue(_firstValue(
+              transaction,
+              [
+                'amount',
+                'amount_farm',
+                'amountFarm',
+                'transaction_amount',
+                'transactionAmount',
+                'value',
+              ],
+              metadata: metadata,
+            ) ??
+            'Unavailable'),
+        'currency': _displayValue(
+            transaction['currency'] ?? transaction['currency_code'] ?? 'FARM'),
+      };
+    }).toList();
     final height = 80.0 +
         sections.fold<double>(0, (total, section) {
           final details = section['details'] as List<MapEntry<String, String>>;
@@ -175,7 +389,8 @@ class TransactionReceiptService {
       final details = section['details'] as List<MapEntry<String, String>>;
       drawText(section['title'] as String, 40, y,
           size: 26, weight: FontWeight.w600);
-      drawText('Amount: ${section['amount']} FARM', 40, y + 46,
+      drawText(
+          'Amount: ${section['amount']} ${section['currency']}', 40, y + 46,
           size: 30, weight: FontWeight.bold, color: Colors.green.shade800);
       y += 118;
       for (final entry in details) {
@@ -198,9 +413,13 @@ class TransactionReceiptService {
 }
 
 class _TransactionDetailsSheet extends StatelessWidget {
-  const _TransactionDetailsSheet({required this.transaction});
+  const _TransactionDetailsSheet({
+    required this.transaction,
+    required this.detailsLoadError,
+  });
 
   final Map<String, dynamic> transaction;
+  final bool detailsLoadError;
 
   @override
   Widget build(BuildContext context) {
@@ -220,6 +439,14 @@ class _TransactionDetailsSheet extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
+            if (detailsLoadError)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text(
+                  'Could not fetch the latest transaction details. Showing the information currently available.',
+                  style: TextStyle(color: Colors.orange),
+                ),
+              ),
             const SizedBox(height: 12),
             if (id.isNotEmpty)
               Row(

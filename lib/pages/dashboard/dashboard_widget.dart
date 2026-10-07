@@ -1890,7 +1890,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                       child: GestureDetector(
                                         onTap: () => TransactionReceiptService
                                             .showDetails(context,
-                                                Map<String, dynamic>.from(tx)),
+                                                Map<String, dynamic>.from(tx),
+                                                fetchLatest: true),
                                         child: TransactionItemWidget(
                                           amount: amount,
                                           icon: Icon(

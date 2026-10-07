@@ -15,6 +15,46 @@ class AdminApiService {
   static const int _initialBackoffSeconds = 1;
   static const int _maxBackoffSeconds = 30;
 
+  static Future<void> requestPasswordReset(String email) async {
+    final response = await http.post(
+      Uri.parse('${AdminConfig.api}/auth/password-reset/prepare'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email}),
+    );
+    final decoded = response.body.isEmpty
+        ? <String, dynamic>{}
+        : jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      final message = decoded['message'];
+      throw Exception(
+        message is List
+            ? message.join('\n')
+            : message ?? 'Could not send the password reset email',
+      );
+    }
+  }
+
+  static Future<void> completePasswordReset({
+    required String firebaseIdToken,
+    required String password,
+    required String confirmPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse('${AdminConfig.api}/auth/password-reset/complete'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'firebase_id_token': firebaseIdToken,
+        'password': password,
+        'confirm_password': confirmPassword,
+      }),
+    );
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      final message = decoded['message'];
+      throw Exception(message is List ? message.join('\n') : message);
+    }
+  }
+
   static Future<AuthSession?> _getActiveSession() async {
     final activeRole =
         (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
@@ -349,6 +389,46 @@ class AdminApiService {
   static Future<Map<String, dynamic>> getDashboardStats() =>
       _req(method: 'GET', path: '/admin/dashboard');
 
+  static Future<Map<String, dynamic>> getSuperadminDashboard() =>
+      _req(method: 'GET', path: '/superadmin/dashboard');
+
+  static Future<Map<String, dynamic>> getSuperadminWallet() =>
+      _req(method: 'GET', path: '/admin/wallet');
+
+  static Future<Map<String, dynamic>> getExchangeRates() =>
+      _req(method: 'GET', path: '/admin/exchange-rates');
+
+  static Future<Map<String, dynamic>> updateExchangeRates(
+          List<Map<String, dynamic>> rates) =>
+      _req(
+        method: 'PUT',
+        path: '/admin/exchange-rates',
+        body: {'rates': rates},
+      );
+
+  static Future<Map<String, dynamic>> getCurrencyRates() =>
+      _req(method: 'GET', path: '/admin/currency-rates');
+
+  static Future<Map<String, dynamic>> updateCurrencyRate(double usdKesRate) =>
+      _req(
+        method: 'PUT',
+        path: '/admin/currency-rates',
+        body: {'usd_kes_rate': usdKesRate},
+      );
+
+  static Future<Map<String, dynamic>> getSupportTickets() =>
+      _req(method: 'GET', path: '/admin/support/tickets');
+
+  static Future<Map<String, dynamic>> replyToSupportTicket(
+    String ticketId,
+    String message,
+  ) =>
+      _req(
+        method: 'POST',
+        path: '/admin/support/tickets/$ticketId/reply',
+        body: {'message': message},
+      );
+
   // ── Users ─────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getUsers({
     int page = 1,
@@ -372,8 +452,12 @@ class AdminApiService {
       _req(method: 'PATCH', path: '/admin/users/$userId/status', body: data);
 
   // ── KYC ───────────────────────────────────────────────────────────────────
-    static Future<Map<String, dynamic>> getKycQueue({int page = 1, String? status}) =>
-      _req(method: 'GET', path: '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
+  static Future<
+      Map<String,
+          dynamic>> getKycQueue({int page = 1, String? status}) => _req(
+      method: 'GET',
+      path:
+          '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
 
   static Future<Map<String, dynamic>> reviewKyc(String docId, String status,
           {String? rejectionReason}) =>
@@ -437,18 +521,31 @@ class AdminApiService {
       );
 
   static Future<Map<String, dynamic>> processWithdrawal(
-          String txId, String action) =>
+    String withdrawalId,
+    String action, {
+    String? reason,
+  }) =>
       _req(
         method: 'POST',
-        path: '/admin/withdrawals/$txId/process',
-        body: {'status': action},
+        path: action == 'failed'
+            ? '/admin/withdrawals/$withdrawalId/reject'
+            : '/admin/withdrawals/$withdrawalId/approve',
+        body: action == 'failed' ? {'reason': reason} : null,
       );
 
-      static Future<Map<String, dynamic>> getPayouts({int page = 1, String? status}) =>
-        _req(method: 'GET', path: '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
+  static Future<
+      Map<String,
+          dynamic>> getPayouts({int page = 1, String? status}) => _req(
+      method: 'GET',
+      path:
+          '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
 
-      static Future<Map<String, dynamic>> processPayout(String payoutId, String status) =>
-        _req(method: 'POST', path: '/admin/payouts/$payoutId/process', body: {'status': status});
+  static Future<Map<String, dynamic>> processPayout(
+          String payoutId, String status) =>
+      _req(
+          method: 'POST',
+          path: '/admin/payouts/$payoutId/process',
+          body: {'status': status});
 
   // ── Merchants ─────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getMerchants(
@@ -502,6 +599,6 @@ class AdminApiService {
       _req(method: 'GET', path: '/admin/audit-logs?page=$page');
 
   // ── Analytics ─────────────────────────────────────────────────────────────
-    static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
+  static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
       _req(method: 'GET', path: '/admin/analytics?period=$period');
 }

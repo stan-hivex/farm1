@@ -8,19 +8,23 @@ class FaqPageWidget extends StatelessWidget {
   static const List<_FaqItem> _items = [
     _FaqItem(
       question: 'How do I deposit funds?',
-      answer: 'Open the deposit screen, choose your payment method, enter the amount and complete the checkout in the browser.',
+      answer:
+          'Open the deposit screen, enter an amount and choose Paystack for M-Pesa or card, or IvoryPay for crypto. Complete checkout in the app; your wallet updates after payment confirmation.',
     ),
     _FaqItem(
       question: 'How long do withdrawals take?',
-      answer: 'Most withdrawals are processed within a few minutes, depending on the selected method and network activity.',
+      answer:
+          'Most withdrawals are processed within a few minutes, depending on the selected method and network activity.',
     ),
     _FaqItem(
       question: 'How do I verify my account?',
-      answer: 'Complete the KYC flow from the profile or dashboard and upload the requested identity documents.',
+      answer:
+          'Complete the KYC flow from the profile or dashboard and upload the requested identity documents.',
     ),
     _FaqItem(
       question: 'Can I recover my PIN?',
-      answer: 'Use the forgot PIN flow to reset your PIN securely from the login screen.',
+      answer:
+          'Use the forgot PIN flow to reset your PIN securely from the login screen.',
     ),
   ];
 
@@ -42,7 +46,8 @@ class FaqPageWidget extends StatelessWidget {
         itemBuilder: (context, index) {
           final item = _items[index];
           return Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: ExpansionTile(
               title: Text(item.question, style: theme.titleSmall),
               childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),

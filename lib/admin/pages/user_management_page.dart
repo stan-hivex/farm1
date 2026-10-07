@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 
 class UserManagementPage extends StatefulWidget {
   static const String routeName = 'user_management';
@@ -15,7 +16,8 @@ class UserManagementPage extends StatefulWidget {
   State<UserManagementPage> createState() => _UserManagementPageState();
 }
 
-class _UserManagementPageState extends State<UserManagementPage> {
+class _UserManagementPageState extends State<UserManagementPage>
+    with AdminPageRefreshMixin<UserManagementPage> {
   List<dynamic> _users = [];
   bool _loading = true;
   String? _error;
@@ -52,11 +54,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
       });
       await _loadSummaryCounts();
     } catch (e) {
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      if (mounted && _users.isEmpty) {
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Future<void> _updateStatus(String userId, bool suspend) async {
     try {
@@ -132,18 +140,31 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   ),
                 ),
                 const SizedBox(width: 16),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${user['first_name']} ${user['last_name']}',
-                      style: GoogleFonts.plusJakartaSans(
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${user['first_name']} ${user['last_name']}',
+                        softWrap: true,
+                        style: GoogleFonts.plusJakartaSans(
                           fontWeight: FontWeight.bold,
                           fontSize: 18,
-                          color: context.onSurface)),
-                  const SizedBox(height: 4),
-                  Text('@${user['username']}',
-                      style: GoogleFonts.plusJakartaSans(
+                          color: context.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '@${user['username']}',
+                        softWrap: true,
+                        style: GoogleFonts.plusJakartaSans(
                           color: context.onSurface.withValues(alpha: 0.6),
-                          fontSize: 13)),
-                ]),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ]),
               const SizedBox(height: 24),
               _detailRow('Phone', user['phone'] ?? '-'),
@@ -218,7 +239,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back_rounded),
                       color: context.onSurface,
-                      onPressed: widget.onGoBack ?? () => Navigator.of(context).maybePop(),
+                      onPressed: widget.onGoBack ??
+                          () => Navigator.of(context).maybePop(),
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -257,7 +279,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             Expanded(
               child: _loading && _users.isEmpty
                   ? Center(child: CircularProgressIndicator())
-                  : _error != null
+                  : _error != null && _users.isEmpty
                       ? Center(
                           child: Text(_error!,
                               style: TextStyle(color: context.onSurface)))
@@ -300,7 +322,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
           style: TextStyle(color: context.onSurface),
           decoration: InputDecoration(
             hintText: 'Search users by name, phone, email...',
-            hintStyle: TextStyle(color: context.onSurface.withValues(alpha: 0.54)),
+            hintStyle:
+                TextStyle(color: context.onSurface.withValues(alpha: 0.54)),
             prefixIcon: Icon(Icons.search_rounded,
                 color: context.onSurface.withValues(alpha: 0.7)),
             suffixIcon: _search.isNotEmpty
@@ -491,7 +514,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
               const SizedBox(height: 6),
               Text(u['email'] ?? '-',
                   style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withValues(alpha: 0.7), fontSize: 12)),
+                      color: context.onSurface.withValues(alpha: 0.7),
+                      fontSize: 12)),
               const SizedBox(height: 6),
               Wrap(
                 runSpacing: 6,
@@ -587,17 +611,33 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _detailRow(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 14),
-        child:
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label,
-              style: GoogleFonts.plusJakartaSans(
-                  color: context.onSurface.withValues(alpha: 0.54), fontSize: 13)),
-          Text(value,
-              style: GoogleFonts.plusJakartaSans(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 104,
+              child: Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  color: context.onSurface.withValues(alpha: 0.54),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                value,
+                textAlign: TextAlign.end,
+                softWrap: true,
+                style: GoogleFonts.plusJakartaSans(
                   color: context.onSurface,
                   fontWeight: FontWeight.w600,
-                  fontSize: 13)),
-        ]),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
 
   Color _kycColor(String? s) {

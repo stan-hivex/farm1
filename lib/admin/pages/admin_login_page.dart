@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/admin_navigation.dart';
 import '../services/admin_api_service.dart';
 import 'admin_shell.dart';
+import '../../pages/superadmin/superadmin_dashboard_page.dart';
+import '../../pages/forgot_password_page/forgot_password_page_widget.dart';
 
 class AdminLoginPage extends StatefulWidget {
   const AdminLoginPage({super.key});
@@ -29,14 +31,17 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      await AdminApiService.login(
+      final response = await AdminApiService.login(
         _usernameController.text.trim(),
         _passwordController.text,
       );
       if (mounted) {
+        final role = response['data']?['user']?['role']?.toString();
         AuthNavigation.replaceAllWithBuilder(
           context,
-          (_) => const AdminShell(),
+          role == 'super_admin'
+              ? (_) => const SuperadminDashboardPage()
+              : (_) => const AdminShell(),
         );
       }
     } catch (error) {
@@ -66,19 +71,25 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Admin Login', style: GoogleFonts.plusJakartaSans(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text('Admin Login',
+                          style: GoogleFonts.plusJakartaSans(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _usernameController,
-                        decoration: const InputDecoration(labelText: 'Username'),
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        decoration:
+                            const InputDecoration(labelText: 'Username'),
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _passwordController,
-                        decoration: const InputDecoration(labelText: 'Password'),
+                        decoration:
+                            const InputDecoration(labelText: 'Password'),
                         obscureText: true,
-                        validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                        validator: (v) =>
+                            v == null || v.isEmpty ? 'Required' : null,
                       ),
                       const SizedBox(height: 20),
                       SizedBox(
@@ -86,6 +97,20 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
                         child: ElevatedButton(
                           onPressed: _isLoading ? null : _login,
                           child: Text(_isLoading ? 'Signing in...' : 'Sign In'),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          const ForgotPasswordPageWidget(),
+                                    ),
+                                  ),
+                          child: const Text('Forgot password?'),
                         ),
                       ),
                     ],

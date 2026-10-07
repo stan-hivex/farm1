@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/services/api_service.dart';
 import '/services/app_session_manager.dart';
 
 class SocketService {
@@ -15,6 +16,7 @@ class SocketService {
 
   io.Socket? _socket;
   bool _initialized = false;
+  String _identifiedToken = '';
   Timer? _refreshTimer;
 
   static Future<void> initialize() async {
@@ -22,18 +24,41 @@ class SocketService {
     if (service._initialized) return;
 
     service._initialized = true;
+    FFAppState().addListener(service._handleAuthStateChanged);
     service._connect();
+  }
+
+  void _handleAuthStateChanged() {
+    final token = FFAppState().accessToken;
+    if (token == _identifiedToken) return;
+
+    final wasIdentified = _identifiedToken.isNotEmpty;
+    _identifiedToken = token;
+
+    if (wasIdentified) {
+      _socket?.disconnect();
+      _socket = null;
+    }
+
+    if (token.isEmpty) return;
+
+    if (_socket == null) {
+      _connect();
+    } else if (_socket!.connected) {
+      _identify();
+    } else {
+      _socket!.connect();
+    }
   }
 
   void _connect() {
     final backendUrl = dotenv.env['BACKEND_URL'] ??
-      dotenv.env['API_BASE_URL'] ??
-      dotenv.env['API_URL'] ??
-      'http://localhost:3000';
+        dotenv.env['API_BASE_URL'] ??
+        dotenv.env['API_URL'] ??
+        'http://localhost:3000';
 
-    final normalizedUrl = backendUrl.endsWith('/ws')
-        ? backendUrl
-        : '$backendUrl/ws';
+    final normalizedUrl =
+        backendUrl.endsWith('/ws') ? backendUrl : '$backendUrl/ws';
 
     _socket = io.io(
       normalizedUrl,
@@ -56,7 +81,8 @@ class SocketService {
     });
 
     _socket!.onConnectError((error) {
-      debugPrint('[Socket] realtime connection unavailable; HTTP features remain available');
+      debugPrint(
+          '[Socket] realtime connection unavailable; HTTP features remain available');
     });
 
     _socket!.onDisconnect((reason) {
@@ -70,6 +96,7 @@ class SocketService {
 
     _socket!.on('balance:update', (data) {
       debugPrint('[Socket] balance:update: $data');
+      _applyBalanceUpdate(data);
       _scheduleAppRefresh();
     });
 
@@ -80,10 +107,36 @@ class SocketService {
     _socket!.connect();
   }
 
+  void _applyBalanceUpdate(dynamic data) {
+    final payload = data is Map ? data : null;
+    final nestedPayload = payload?['data'];
+    final rawBalance = payload?['balance'] ??
+        payload?['available_balance'] ??
+        (nestedPayload is Map
+            ? nestedPayload['balance'] ?? nestedPayload['available_balance']
+            : null);
+    final balance = rawBalance is num
+        ? rawBalance.toDouble()
+        : double.tryParse(rawBalance?.toString() ?? '');
+
+    if (balance == null || !balance.isFinite) {
+      debugPrint('[Socket] ignored balance:update with invalid balance: $data');
+      return;
+    }
+
+    ApiService.invalidateCache('/wallet');
+    FFAppState().walletBalance = balance;
+  }
+
   void _scheduleAppRefresh() {
+    if (!FFAppState().isLoggedIn) return;
     _refreshTimer?.cancel();
-    _refreshTimer = Timer(const Duration(seconds: 1), () {
-      AppSessionManager().refreshAppData();
+    _refreshTimer = Timer(const Duration(milliseconds: 250), () {
+      unawaited(AppSessionManager()
+          .refreshAfterTransaction()
+          .catchError((Object error) {
+        debugPrint('[Socket] transaction refresh failed: $error');
+      }));
     });
   }
 
@@ -94,6 +147,7 @@ class SocketService {
       return;
     }
 
+    _identifiedToken = token;
     _socket?.emit('identify', {'token': token});
     debugPrint('[Socket] identify sent');
   }
@@ -113,8 +167,11 @@ class SocketService {
   }
 
   void dispose() {
+    _refreshTimer?.cancel();
+    FFAppState().removeListener(_handleAuthStateChanged);
     _socket?.disconnect();
     _socket = null;
+    _identifiedToken = '';
     _initialized = false;
   }
 }

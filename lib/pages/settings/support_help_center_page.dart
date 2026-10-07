@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '/app_state.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
+import '/admin/pages/support_inbox_page.dart';
 
 class SupportHelpCenterPageWidget extends StatefulWidget {
   const SupportHelpCenterPageWidget({super.key});
@@ -34,6 +36,10 @@ class _SupportHelpCenterPageWidgetState
 
   @override
   Widget build(BuildContext context) {
+    if (FFAppState().isAdmin) {
+      return const SupportInboxPage();
+    }
+
     return Scaffold(
       backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       appBar: AppBar(

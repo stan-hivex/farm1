@@ -1093,7 +1093,10 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: () => TransactionReceiptService.showDetails(
-          context, Map<String, dynamic>.from(tx as Map)),
+        context,
+        Map<String, dynamic>.from(tx as Map),
+        fetchLatest: true,
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(18),

@@ -1055,7 +1055,10 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                   return InkWell(
                     borderRadius: BorderRadius.circular(16),
                     onTap: () => TransactionReceiptService.showDetails(
-                        context, Map<String, dynamic>.from(w as Map)),
+                      context,
+                      Map<String, dynamic>.from(w as Map),
+                      fetchLatest: true,
+                    ),
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(16),

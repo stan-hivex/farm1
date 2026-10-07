@@ -38,6 +38,24 @@ class AppSessionManager {
     }
   }
 
+  Future<void> refreshAfterTransaction() async {
+    if (!FFAppState().isLoggedIn) {
+      return;
+    }
+
+    try {
+      final response = await ApiService.getTransactions(
+        page: 1,
+        limit: 5,
+        timeoutSeconds: 4,
+      );
+      FFAppState().recentTransactions =
+          List<Map<String, dynamic>>.from(_extractList(response));
+    } catch (error) {
+      debugPrint('[AppSessionManager] Transaction refresh failed: $error');
+    }
+  }
+
   Future<void> _refreshAppDataInternal() async {
     if (_refreshInProgress) {
       debugPrint('[AppSessionManager][${_timeStamp()}] Refresh already in progress. Waiting for completion.');
@@ -70,7 +88,8 @@ class AppSessionManager {
         return res;
       } catch (e) {
         debugPrint('[AppSessionManager] $key fetch error: $e');
-        if (!background && retries > 0) {
+        final isRateLimited = e is ApiServiceException && e.statusCode == 429;
+        if (!background && retries > 0 && !isRateLimited) {
           await Future.delayed(const Duration(milliseconds: 300));
           try {
             final retryRes = await fetcher().timeout(Duration(seconds: timeoutSeconds));
@@ -153,6 +172,7 @@ class AppSessionManager {
             if (profileData['profile_image'] != null) {
               FFAppState().profileImageUrl = profileData['profile_image']?.toString() ?? FFAppState().profileImageUrl;
             }
+
           }
         }
 
@@ -389,4 +409,3 @@ class AppSessionManager {
     debugPrint('[AppSessionManager] syncNow completed. walletBalance=${FFAppState().walletBalance}, recentTransactions=${FFAppState().recentTransactions.length}');
   }
 }
-

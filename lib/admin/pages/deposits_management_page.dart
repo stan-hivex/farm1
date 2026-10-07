@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 
 class DepositsManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -12,7 +13,8 @@ class DepositsManagementPage extends StatefulWidget {
   State<DepositsManagementPage> createState() => _DepositsManagementPageState();
 }
 
-class _DepositsManagementPageState extends State<DepositsManagementPage> {
+class _DepositsManagementPageState extends State<DepositsManagementPage>
+    with AdminPageRefreshMixin<DepositsManagementPage> {
   List<dynamic> _deposits = [];
   bool _loading = true;
   String _statusFilter = 'all';
@@ -42,7 +44,11 @@ class _DepositsManagementPageState extends State<DepositsManagementPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Color _sc(String? s) {
     switch (s) {
@@ -80,7 +86,21 @@ class _DepositsManagementPageState extends State<DepositsManagementPage> {
       if (explicit?.contains('card') == true) return 'CARD';
       return 'PAYSTACK';
     }
-    return value.isNotEmpty ? value.toUpperCase() : 'UNKNOWN';
+    return value.isNotEmpty ? value.toUpperCase() : 'Not specified';
+  }
+
+  String _userLabel(Map record) {
+    final username = (record['username'] ?? '').toString().trim();
+    final name = (record['user_name'] ?? '').toString().trim();
+    final email = (record['user_email'] ?? '').toString().trim();
+    final phone = (record['user_phone'] ?? '').toString().trim();
+    final identity = username.isNotEmpty ? '@$username' : '';
+    if (identity.isNotEmpty && name.isNotEmpty) return '$identity · $name';
+    if (identity.isNotEmpty) return identity;
+    if (name.isNotEmpty) return name;
+    if (email.isNotEmpty) return email;
+    if (phone.isNotEmpty) return phone;
+    return 'Not linked';
   }
 
   @override
@@ -120,7 +140,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage> {
                                 final meta = d['metadata'] as Map? ?? {};
                                 final color = _sc(d['status']);
                                 final method = _paymentMethodLabel(meta, d);
-                                final username = (d['username'] ?? '').toString();
+                                final userLabel = _userLabel(d);
                                 final userId = (d['user_id'] ?? '').toString();
                                 final reference = (d['transaction_reference'] ?? d['id'] ?? '-').toString();
                                 final amountLabel = d['amount_display']?.toString() ??
@@ -158,58 +178,74 @@ class _DepositsManagementPageState extends State<DepositsManagementPage> {
                                                 CrossAxisAlignment.start,
                                             children: [
                                           Text(
-                                              'User: ${username.isNotEmpty ? '@$username' : 'Unknown'}',
+                                              'User: $userLabel',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface,
                                                       fontWeight:
                                                           FontWeight.bold,
-                                                      fontSize: 13)),
+                                                      fontSize: 14)),
                                           Text('User ID: ${userId.isNotEmpty ? userId : '-'}',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
-                                                          .withOpacity(0.7),
-                                                      fontSize: 11)),
+                                                          .withOpacity(0.78),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
                                           Text('ID: $reference',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
                                                           .withOpacity(0.7),
-                                                      fontSize: 11)),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
                                           Text('Method: $method',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
                                                           .withOpacity(0.54),
-                                                      fontSize: 11)),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
                                           Text('Amount: $amountLabel',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
                                                           .withOpacity(0.54),
-                                                      fontSize: 11)),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
                                           Text('Status: $statusLabel',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
                                                           .withOpacity(0.54),
-                                                      fontSize: 11)),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
                                           Text('Date: $dateLabel',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
                                                           .withOpacity(0.54),
-                                                      fontSize: 11)),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600)),
                                           Text('Time: $timeLabel',
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
                                                           .withOpacity(0.54),
-                                                      fontSize: 11)),
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500)),
                                         ])),
-                                    const SizedBox(width: 8),
-                                    Column(
+                                    if (MediaQuery.of(context).size.width >=
+                                        480) ...[
+                                      const SizedBox(width: 8),
+                                      Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.end,
                                         children: [
@@ -240,6 +276,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage> {
                                                             FontWeight.bold)),
                                           ),
                                         ]),
+                                    ],
                                   ]),
                                 );
                               }))),

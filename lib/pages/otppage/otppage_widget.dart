@@ -9,9 +9,8 @@ import '/utils/browser_platform_stub.dart'
     if (dart.library.html) '/utils/browser_platform_web.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
-import '/core/theme_extensions.dart';
-import '/flutter_flow/flutter_flow_widgets.dart';
 import '/services/auth/auth_service.dart';
+import '/services/biometric_enrollment_prompt.dart';
 import '/pages/superadmin/superadmin_dashboard_page.dart';
 
 import 'package:flutter/material.dart';
@@ -474,9 +473,9 @@ class _OtppageWidgetState extends State<OtppageWidget> {
           ),
         );
 
-        Future.delayed(const Duration(milliseconds: 800), () {
+        Future.delayed(const Duration(milliseconds: 800), () async {
           if (!mounted) return;
-          _navigateAfterLogin(response);
+          await _navigateAfterLogin(response);
         });
       } else {
         throw Exception(response['message'] ?? 'Unable to complete login.');
@@ -545,9 +544,9 @@ class _OtppageWidgetState extends State<OtppageWidget> {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Phone verified. Logging you in...'),
               backgroundColor: Colors.green));
-          Future.delayed(const Duration(milliseconds: 800), () {
+          Future.delayed(const Duration(milliseconds: 800), () async {
             if (!mounted) return;
-            _navigateAfterLogin(response);
+            await _navigateAfterLogin(response);
           });
           return;
         }
@@ -589,11 +588,15 @@ class _OtppageWidgetState extends State<OtppageWidget> {
     await _completeFirebaseVerification(credential);
   }
 
-  void _navigateAfterLogin(Map<String, dynamic> response) {
+  Future<void> _navigateAfterLogin(Map<String, dynamic> response) async {
     final payload =
         response['data'] is Map ? response['data'] as Map : response;
     final user = payload['user'] is Map ? payload['user'] as Map : const {};
     final role = user['role']?.toString().toLowerCase() ?? 'user';
+    if (role == 'user') {
+      await BiometricEnrollmentPrompt.showAfterLogin(context);
+    }
+    if (!mounted) return;
     if (role == 'super_admin') {
       context.go(SuperadminDashboardPage.routePath);
     } else if (role == 'admin') {
@@ -758,19 +761,28 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  FFButtonWidget(
-                    onPressed: _model.isLoading ? null : _verifyManualCode,
-                    text: _model.isLoading ? 'Verifying...' : 'Verify Code',
-                    options: FFButtonOptions(
-                      width: double.infinity,
-                      height: 56,
-                      color: FlutterFlowTheme.of(context).primary,
-                      textStyle: TextStyle(
-                        color: context.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _model.isLoading ? null : _verifyManualCode,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.black,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(16),
+                      child: Text(
+                        _model.isLoading ? 'Verifying...' : 'Verify Code',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -779,19 +791,28 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                     child: const Text('Resend Code'),
                   ),
                 ] else if (_verificationRequestFailed) ...[
-                  FFButtonWidget(
-                    onPressed: _isVerifying ? null : _resendCode,
-                    text: 'Try Again',
-                    options: FFButtonOptions(
-                      width: double.infinity,
-                      height: 56,
-                      color: FlutterFlowTheme.of(context).primary,
-                      textStyle: TextStyle(
-                        color: context.onSurface,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: _isVerifying ? null : _resendCode,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.black,
+                        disabledForegroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                       ),
-                      borderRadius: BorderRadius.circular(16),
+                      child: const Text(
+                        'Try Again',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ] else ...[

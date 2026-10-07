@@ -137,29 +137,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
         _loading = false;
       });
     } catch (e) {
-      try {
-        final fallback = await ApiService.getTransactions(page: 1, limit: 100);
-        final rawAll = fallback['data'];
-        final all = rawAll is List
-            ? rawAll.map<Map<String, dynamic>>((item) {
-                if (item is Map) return Map<String, dynamic>.from(item);
-                return <String, dynamic>{};
-              }).toList()
-            : <Map<String, dynamic>>[];
-
-        final filtered = all.where((tx) => _matchesFilters(tx)).toList();
-        if (!mounted) return;
-        setState(() {
-          _transactions = filtered;
-          _loading = false;
-        });
-      } catch (inner) {
-        if (!mounted) return;
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
     }
   }
 
@@ -258,6 +240,17 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.goNamed('Dashboard');
+            }
+          },
+        ),
         title: const Text('Transactions'),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
@@ -417,7 +410,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                       return InkWell(
                         borderRadius: BorderRadius.circular(16),
                         onTap: () =>
-                            TransactionReceiptService.showDetails(context, tx),
+                            TransactionReceiptService.showDetails(
+                          context,
+                          tx,
+                          fetchLatest: true,
+                        ),
                         child: Card(
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16)),

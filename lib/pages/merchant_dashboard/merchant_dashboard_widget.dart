@@ -1,4 +1,4 @@
-﻿import 'dart:ui' as ui;
+import 'dart:ui' as ui;
 
 import '/components/button/button_widget.dart';
 import '/components/merchant_stat_card/merchant_stat_card_widget.dart';

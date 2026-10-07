@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-import '/core/theme_extensions.dart';
 
 import '../core/admin_config.dart';
+import '../services/admin_api_service.dart';
 
 class AddSuperadminPage extends StatefulWidget {
   const AddSuperadminPage({super.key});
@@ -16,123 +16,189 @@ class AddSuperadminPage extends StatefulWidget {
 
 class _AddSuperadminPageState extends State<AddSuperadminPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _countryController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _submitting = false;
-  String? _message;
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _usernameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
+    _countryController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    setState(() {
-      _submitting = true;
-      _message = null;
-    });
-
+    setState(() => _submitting = true);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('adminToken') ?? '';
-      if (token.isEmpty) throw Exception('Admin session expired');
+      final token = await AdminApiService.getValidAccessToken();
+      if (token.isEmpty) throw Exception('Superadmin session expired');
 
       final response = await http.post(
-        Uri.parse('${AdminConfig.api}/admin/superadmins'),
+        Uri.parse('${AdminConfig.api}/admin/superadmin/create'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({
-          'name': _nameController.text.trim(),
+          'first_name': _firstNameController.text.trim(),
+          'last_name': _lastNameController.text.trim(),
+          'username': _usernameController.text.trim(),
           'email': _emailController.text.trim(),
           'phone': _phoneController.text.trim(),
-          'password': _passwordController.text.trim(),
+          'country': _countryController.text.trim(),
+          'password': _passwordController.text,
         }),
       );
 
       final body = response.body.isNotEmpty
           ? jsonDecode(response.body) as Map<String, dynamic>
           : <String, dynamic>{};
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        setState(() => _message = body['message'] ?? 'Superadmin created successfully');
-        _nameController.clear();
-        _emailController.clear();
-        _phoneController.clear();
-        _passwordController.clear();
-      } else {
-        throw Exception(body['message'] ?? 'Unable to create superadmin');
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final message =
+            body['message']?.toString() ?? 'Unable to create superadmin';
+        throw Exception(message);
       }
-    } catch (e) {
-      setState(() => _message = e.toString());
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              body['message']?.toString() ?? 'Superadmin created successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
   }
 
+  Widget _textField(
+    String label,
+    TextEditingController controller, {
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    String? Function(String?)? validator,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextFormField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white70),
+          filled: true,
+          fillColor: const Color(0xFF162033),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+        ),
+        validator: validator ??
+            (value) =>
+                (value ?? '').trim().isEmpty ? '$label is required' : null,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    const accent = Color(0xFFD4AF37);
     return Scaffold(
-      appBar: AppBar(title: Text('Add Superadmin')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+      backgroundColor: const Color(0xFF0B1320),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0B1320),
+        foregroundColor: Colors.white,
+        title: Text(
+          'Create Superadmin',
+          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: SafeArea(
         child: Form(
           key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
             children: [
               Text(
-                'Create a new admin superuser.',
-                style: TextStyle(fontSize: 16),
+                'Create an account with superadmin access.',
+                style: GoogleFonts.plusJakartaSans(color: Colors.white70),
               ),
               const SizedBox(height: 20),
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Full name'),
-                validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _emailController,
+              _textField('First name', _firstNameController),
+              _textField('Last name', _lastNameController),
+              _textField('Username', _usernameController),
+              _textField(
+                'Email',
+                _emailController,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'Email'),
-                validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
+                validator: (value) =>
+                    (value ?? '').contains('@') ? null : 'Enter a valid email',
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _phoneController,
+              _textField(
+                'Phone',
+                _phoneController,
                 keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(labelText: 'Phone'),
-                validator: (value) => (value ?? '').trim().isEmpty ? 'Required' : null,
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _passwordController,
+              _textField('Country', _countryController),
+              _textField(
+                'Password',
+                _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(labelText: 'Password'),
-                validator: (value) => (value ?? '').length < 6 ? 'Minimum 6 characters' : null,
+                validator: (value) => (value ?? '').length < 12
+                    ? 'Password must be at least 12 characters'
+                    : null,
               ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _submitting ? null : _submit,
-                child: _submitting
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text('Create Superadmin'),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _submitting ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accent,
+                    foregroundColor: Colors.black,
+                  ),
+                  child: _submitting
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          'Create Superadmin',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                ),
               ),
-              if (_message != null) ...[
-                const SizedBox(height: 16),
-                Text(_message!, style: TextStyle(color: context.successColor)),
-              ],
             ],
           ),
         ),

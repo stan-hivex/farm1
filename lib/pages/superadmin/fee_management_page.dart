@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
-import '../services/admin_api_service.dart';
+import '/admin/services/admin_api_service.dart';
+import '/admin/services/admin_page_refresh_coordinator.dart';
 
 class FeeManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -12,7 +13,8 @@ class FeeManagementPage extends StatefulWidget {
   State<FeeManagementPage> createState() => _FeeManagementPageState();
 }
 
-class _FeeManagementPageState extends State<FeeManagementPage> {
+class _FeeManagementPageState extends State<FeeManagementPage>
+    with AdminPageRefreshMixin<FeeManagementPage> {
   final _bgColor = Colors.white;
   final _cardColor = Colors.white;
   final _accent = const Color(0xFFEAF2FF);
@@ -40,6 +42,7 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
       for (final c in _controllers.values) {
         c.dispose();
       }
+
       _controllers.clear();
       setState(() {
         _fees = list;
@@ -49,11 +52,16 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
         }
       });
     } catch (e) {
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      if (mounted && _fees.isEmpty) {
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   List<dynamic> _normalizeFees(dynamic payload) {
     if (payload is List) {
@@ -154,11 +162,19 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
                   Center(child: CircularProgressIndicator())
                 ])
               : ListView(padding: const EdgeInsets.all(20), children: [
-                  Text('Fee Management',
-                      style: GoogleFonts.plusJakartaSans(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: context.onSurface)),
+                  Row(children: [
+                    IconButton(
+                      tooltip: 'Go back',
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      onPressed: widget.onGoBack ??
+                          () => Navigator.of(context).maybePop(),
+                    ),
+                    Text('Fee Management',
+                        style: GoogleFonts.plusJakartaSans(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: context.onSurface)),
+                  ]),
                   const SizedBox(height: 6),
                   Text('Review and update platform fee configurations.',
                       style: GoogleFonts.plusJakartaSans(

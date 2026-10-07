@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 import '/services/transaction_receipt_service.dart';
 
 class TransactionsManagementPage extends StatefulWidget {
@@ -15,7 +16,8 @@ class TransactionsManagementPage extends StatefulWidget {
 }
 
 class _TransactionsManagementPageState
-    extends State<TransactionsManagementPage> {
+    extends State<TransactionsManagementPage>
+    with AdminPageRefreshMixin<TransactionsManagementPage> {
   List<dynamic> _txns = [];
   bool _loading = true;
   String _typeFilter = 'all';
@@ -53,7 +55,11 @@ class _TransactionsManagementPageState
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Color _statusColor(String? s) {
     switch (s) {
@@ -70,6 +76,20 @@ class _TransactionsManagementPageState
     }
   }
 
+  String _userLabel(Map record) {
+    final username = (record['username'] ?? '').toString().trim();
+    final name = (record['user_name'] ?? '').toString().trim();
+    final email = (record['user_email'] ?? '').toString().trim();
+    final phone = (record['user_phone'] ?? '').toString().trim();
+    final identity = username.isNotEmpty ? '@$username' : '';
+    if (identity.isNotEmpty && name.isNotEmpty) return '$identity · $name';
+    if (identity.isNotEmpty) return identity;
+    if (name.isNotEmpty) return name;
+    if (email.isNotEmpty) return email;
+    if (phone.isNotEmpty) return phone;
+    return 'Not linked';
+  }
+
   @override
   Widget build(BuildContext context) {
     final bgColor = Colors.white;
@@ -81,6 +101,20 @@ class _TransactionsManagementPageState
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 16, 4),
+              child: Row(children: [
+                IconButton(
+                  tooltip: 'Go back',
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed:
+                      widget.onGoBack ?? () => Navigator.of(context).maybePop(),
+                ),
+                Text('Transactions',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20, fontWeight: FontWeight.bold)),
+              ]),
+            ),
             _filters(accent),
             if (_loading && _txns.isEmpty)
               const Expanded(
@@ -133,119 +167,149 @@ class _TransactionsManagementPageState
                           final visible = _txns.where((item) {
                             if (_search.trim().isEmpty) return true;
                             final query = _search.toLowerCase();
-                            return item.toString().toLowerCase().contains(query);
+                            return item
+                                .toString()
+                                .toLowerCase()
+                                .contains(query);
                           }).toList();
-                          if (i >= visible.length) return const SizedBox.shrink();
+                          if (i >= visible.length)
+                            return const SizedBox.shrink();
                           final t = visible[i];
                           final color = _statusColor(t['status']);
                           final meta = t['metadata'] as Map? ?? {};
-                          final method = (t['method'] ?? meta['payment_method'] ?? meta['method'] ?? '-').toString().toUpperCase();
-                          final username = (t['username'] ?? '').toString();
+                          final methodValue = (t['method'] ??
+                                  meta['payment_method'] ??
+                                  meta['method'] ??
+                                  '')
+                              .toString()
+                              .toUpperCase();
+                          final method =
+                              methodValue == 'UNKNOWN' || methodValue.isEmpty
+                                  ? 'Not specified'
+                                  : methodValue;
+                          final userLabel = _userLabel(t);
                           final userId = (t['user_id'] ?? '').toString();
-                          final reference = (t['transaction_reference'] ?? t['id'] ?? '-').toString();
+                          final reference =
+                              (t['transaction_reference'] ?? t['id'] ?? '-')
+                                  .toString();
                           final amountLabel = t['amount_display']?.toString() ??
                               '${double.tryParse(t['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'} FARM';
-                          final statusLabel = (t['status_display'] ?? t['status'] ?? '-').toString().toUpperCase();
+                          final statusLabel =
+                              (t['status_display'] ?? t['status'] ?? '-')
+                                  .toString()
+                                  .toUpperCase();
                           final dateLabel = (t['date'] ?? '-').toString();
                           final timeLabel = (t['time'] ?? '-').toString();
                           return InkWell(
-                            onTap: () => _showTransactionDetails(Map<String, dynamic>.from(t as Map)),
+                            onTap: () => _showTransactionDetails(
+                                Map<String, dynamic>.from(t as Map)),
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: cardColor,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                  color: context.onSurface.withOpacity(0.1)),
-                            ),
-                            child: Row(children: [
-                              Container(
-                                width: 40,
-                                height: 40,
-                                decoration: BoxDecoration(
-                                    color:
-                                        color.withAlpha((0.14 * 255).round()),
-                                    borderRadius: BorderRadius.circular(10)),
-                                child: Icon(Icons.swap_horiz_rounded,
-                                    color: color, size: 20),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: cardColor,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: context.onSurface.withOpacity(0.1)),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                  child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                    Text(
-                                        'User: ${username.isNotEmpty ? '@$username' : 'Unknown'}',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 12,
-                                            color: context.onSurface)),
-                                    Text('User ID: ${userId.isNotEmpty ? userId : '-'}',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                    Text('ID: $reference',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                    Text('Method: $method',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                    Text('Amount: $amountLabel',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                    Text('Status: $statusLabel',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                    Text('Date: $dateLabel',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                    Text('Time: $timeLabel',
-                                        style: GoogleFonts.plusJakartaSans(
-                                            color: context.onSurface
-                                                .withOpacity(0.54),
-                                            fontSize: 11)),
-                                  ])),
-                              const SizedBox(width: 8),
-                              Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                        amountLabel,
-                                        style: GoogleFonts.plusJakartaSans(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13,
-                                            color: context.onSurface)),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                          color: color
-                                              .withAlpha((0.16 * 255).round()),
-                                          borderRadius:
-                                              BorderRadius.circular(6)),
-                                      child: Text(
-                                          statusLabel,
+                              child: Row(children: [
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                      color:
+                                          color.withAlpha((0.14 * 255).round()),
+                                      borderRadius: BorderRadius.circular(10)),
+                                  child: Icon(Icons.swap_horiz_rounded,
+                                      color: color, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text('User: $userLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: color,
-                                              fontSize: 9,
-                                              fontWeight: FontWeight.bold)),
-                                    ),
-                                  ]),
-                            ]),
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13,
+                                              color: context.onSurface)),
+                                      Text(
+                                          'User ID: ${userId.isNotEmpty ? userId : '-'}',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('ID: $reference',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Method: $method',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Amount: $amountLabel',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Status: $statusLabel',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Date: $dateLabel',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Time: $timeLabel',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                    ])),
+                                if (MediaQuery.of(context).size.width >=
+                                    480) ...[
+                                  const SizedBox(width: 8),
+                                  Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(amountLabel,
+                                            style: GoogleFonts.plusJakartaSans(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13,
+                                                color: context.onSurface)),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                              color: color.withAlpha(
+                                                  (0.16 * 255).round()),
+                                              borderRadius:
+                                                  BorderRadius.circular(6)),
+                                          child: Text(statusLabel,
+                                              style:
+                                                  GoogleFonts.plusJakartaSans(
+                                                      color: color,
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.bold)),
+                                        ),
+                                      ]),
+                                ],
+                              ]),
                             ),
                           );
                         },
@@ -290,15 +354,16 @@ class _TransactionsManagementPageState
                         style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: _typeFilter == f ? Colors.white : Colors.black)),
+                            color: _typeFilter == f
+                                ? Colors.white
+                                : Colors.black)),
                     selected: _typeFilter == f,
-                    selectedColor: _typeFilter == f ? Colors.black : Colors.white,
+                    selectedColor:
+                        _typeFilter == f ? Colors.black : Colors.white,
                     backgroundColor:
                         _typeFilter == f ? Colors.black : Colors.white,
                     side: BorderSide(
-                        color: _typeFilter == f
-                            ? Colors.black
-                            : Colors.black54,
+                        color: _typeFilter == f ? Colors.black : Colors.black54,
                         width: 1),
                     onSelected: (_) {
                       setState(() {
@@ -329,16 +394,17 @@ class _TransactionsManagementPageState
                         style: GoogleFonts.plusJakartaSans(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: _statusFilter == s ? Colors.white : Colors.black)),
+                            color: _statusFilter == s
+                                ? Colors.white
+                                : Colors.black)),
                     selected: _statusFilter == s,
                     selectedColor:
                         _statusFilter == s ? Colors.black : Colors.white,
                     backgroundColor:
                         _statusFilter == s ? Colors.black : Colors.white,
                     side: BorderSide(
-                        color: _statusFilter == s
-                            ? Colors.black
-                            : Colors.black54,
+                        color:
+                            _statusFilter == s ? Colors.black : Colors.black54,
                         width: 1),
                     onSelected: (_) {
                       setState(() {

@@ -4,10 +4,10 @@ import '/core/theme_extensions.dart';
 import '../core/admin_guard.dart';
 import '../core/admin_navigation.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/pages/loginpage/loginpage_widget.dart';
-import 'add_superadmin_page.dart';
 import 'deposits_management_page.dart';
 import 'escrow_management_page.dart';
 import 'notifications_management_page.dart';
@@ -25,9 +25,9 @@ class AdminDashboardPage extends StatefulWidget {
   State<AdminDashboardPage> createState() => _AdminDashboardPageState();
 }
 
-class _AdminDashboardPageState extends State<AdminDashboardPage> {
+class _AdminDashboardPageState extends State<AdminDashboardPage>
+    with AdminPageRefreshMixin<AdminDashboardPage> {
   Map<String, dynamic> _stats = <String, dynamic>{};
-  List<Map<String, dynamic>> _revenueSeries = <Map<String, dynamic>>[];
   bool _loading = true;
   String? _error;
   String _adminName = 'Admin';
@@ -61,21 +61,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
     debugPrint('Loading dashboard statistics...');
     try {
-      final results = await Future.wait([
-        AdminApiService.getDashboardStats(),
-        AdminApiService.getAnalytics(),
-      ]);
-      final normalized = <String, dynamic>{
-        ..._normalizeDashboardPayload(results[0]),
-        ..._normalizeDashboardPayload(results[1]),
-      };
+      final response = await AdminApiService.getDashboardStats();
+      final normalized = _normalizeDashboardPayload(response);
       if (normalized.isEmpty) {
         throw Exception('Dashboard payload was empty or malformed.');
       }
       if (!mounted) return;
       setState(() {
         _stats = normalized;
-        _revenueSeries = _normalizeRevenueSeries(normalized['revenue_series']);
       });
       debugPrint('Dashboard statistics loaded.');
       debugPrint('Stats payload = $_stats');
@@ -91,14 +84,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     }
   }
 
-  List<Map<String, dynamic>> _normalizeRevenueSeries(dynamic raw) {
-    if (raw is! List) return <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .where((item) => item['value'] != null)
-        .toList();
-  }
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Map<String, dynamic> _normalizeDashboardPayload(dynamic payload) {
     if (payload is! Map<String, dynamic> && payload is! Map) {
@@ -174,8 +161,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 _buildHeader(accent, muted),
                 const SizedBox(height: 24),
                 _buildOverviewRow(s, cardColor, accent),
-                const SizedBox(height: 24),
-                _buildAnalyticsCard(cardColor, accent),
                 const SizedBox(height: 24),
                 _buildQuickActions(cardColor, accent),
                 const SizedBox(height: 24),
@@ -298,33 +283,42 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   Widget _buildOverviewRow(
       Map<String, dynamic> s, Color cardColor, Color accent) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.55,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        _metricCard('Total Users', '${s['total_users'] ?? 0}', 'Active people',
-            cardColor, accent, () => _navigateTo(const UserManagementPage())),
-        _metricCard(
-            'Active Escrows',
-            '${s['active_escrows'] ?? 0}',
-            'Escrow flows',
-            cardColor,
-            accent,
-            () => _navigateTo(const EscrowManagementPage())),
-        _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}', 'Review queue',
-            cardColor, accent, () => _navigateTo(const KycManagementPage())),
-        _metricCard(
-            'Pending Payouts',
-            '${s['pending_payouts'] ?? 0}',
-            'Awaiting settlement',
-            cardColor,
-            accent,
-            () => _navigateTo(const PayoutsPage())),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const spacing = 16.0;
+        final cardWidth = (constraints.maxWidth - spacing) / 2;
+        final cardHeight = cardWidth < 160 ? 142.0 : 132.0;
+        return GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: spacing,
+          mainAxisSpacing: spacing,
+          childAspectRatio: cardWidth / cardHeight,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _metricCard('Total Users', '${s['total_users'] ?? 0}',
+                'Active people', cardColor, accent,
+                () => _navigateTo(const UserManagementPage())),
+            _metricCard(
+                'Active Escrows',
+                '${s['active_escrows'] ?? 0}',
+                'Escrow flows',
+                cardColor,
+                accent,
+                () => _navigateTo(const EscrowManagementPage())),
+            _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}',
+                'Review queue', cardColor, accent,
+                () => _navigateTo(const KycManagementPage())),
+            _metricCard(
+                'Pending Payouts',
+                '${s['pending_payouts'] ?? 0}',
+                'Awaiting settlement',
+                cardColor,
+                accent,
+                () => _navigateTo(const PayoutsPage())),
+          ],
+        );
+      },
     );
   }
 
@@ -355,11 +349,16 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(title,
-                      style: GoogleFonts.plusJakartaSans(
-                          color: context.onSurface.withOpacity(0.7),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500)),
+                  Expanded(
+                    child: Text(title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                            color: context.onSurface.withOpacity(0.7),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 6),
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -367,99 +366,27 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(Icons.trending_up_rounded,
-                        size: 18, color: accent),
+                        size: 20, color: const Color(0xFF0D47A1)),
                   ),
                 ],
               ),
               Text(value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface,
-                      fontSize: 26,
+                    fontSize: 28,
                       fontWeight: FontWeight.w900)),
               Text(caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface.withOpacity(0.54),
-                      fontSize: 12)),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500)),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAnalyticsCard(Color cardColor, Color accent) {
-    final values = _revenueSeries
-        .map((item) => double.tryParse(item['value'].toString()) ?? 0)
-        .toList();
-    final maximum =
-        values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b);
-    final previousTotal = values.length > 3
-        ? values.sublist(0, values.length - 3).fold<double>(0, (a, b) => a + b)
-        : 0.0;
-    final recentTotal = values.length > 3
-        ? values.sublist(values.length - 3).fold<double>(0, (a, b) => a + b)
-        : values.fold<double>(0, (a, b) => a + b);
-    final change = previousTotal == 0
-        ? (recentTotal > 0 ? 100.0 : 0.0)
-        : ((recentTotal - previousTotal) / previousTotal) * 100;
-
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: context.onSurface.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-              color: context.background.withAlpha((0.14 * 255).round()),
-              blurRadius: 18,
-              offset: const Offset(0, 10)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Revenue Overview',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: context.onSurface,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  Text('Completed platform fees, last 7 days',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: context.onSurface.withOpacity(0.54),
-                          fontSize: 12)),
-                ],
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: accent.withAlpha((0.18 * 255).round()),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                    '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
-                    style: GoogleFonts.plusJakartaSans(
-                        color: accent, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          _RevenueChart(
-            series: _revenueSeries,
-            maximum: maximum,
-            accent: accent,
-            textColor: context.onSurface,
-            mutedColor: context.onSurface.withOpacity(0.54),
-          ),
-        ],
       ),
     );
   }
@@ -474,11 +401,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             Text('Quick Actions',
                 style: GoogleFonts.plusJakartaSans(
                     color: context.onSurface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800)),
             Text('Manage the platform',
                 style: GoogleFonts.plusJakartaSans(
-                    color: context.onSurface.withOpacity(0.54), fontSize: 12)),
+                    color: context.onSurface.withOpacity(0.68),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500)),
           ],
         ),
         const SizedBox(height: 12),
@@ -486,12 +415,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           spacing: 14,
           runSpacing: 14,
           children: [
-            _actionChip(
-                'Add Superadmin',
-                Icons.admin_panel_settings_rounded,
-                accent,
-                cardColor,
-                () => _navigateTo(const AddSuperadminPage())),
             _actionChip('Manage Users', Icons.manage_accounts_rounded, accent,
                 cardColor, () => _navigateTo(const UserManagementPage())),
             _actionChip(
@@ -504,6 +427,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 () => _navigateTo(const WithdrawalsManagementPage())),
             _actionChip('Escrows', Icons.verified_user_rounded, accent,
                 cardColor, () => _navigateTo(const EscrowManagementPage())),
+            _actionChip(
+                'Pending Disputes (${_stats['pending_disputes'] ?? 0})',
+                Icons.gavel_rounded,
+                accent,
+                cardColor,
+                () => _navigateTo(
+                    const EscrowManagementPage(initialFilter: 'disputed'))),
             _actionChip(
                 'Notifications',
                 Icons.campaign_rounded,
@@ -559,17 +489,29 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: accent.withAlpha((0.16 * 255).round()),
+                  color: const Color(0xFF0D47A1),
                   borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF0D47A1).withValues(alpha: 0.22),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-                child: Icon(icon, color: accent, size: 18),
+                child: Icon(icon, color: Colors.white, size: 25),
               ),
               const SizedBox(width: 12),
               Text(label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface, fontWeight: FontWeight.w600)),
+                      color: context.onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -684,149 +626,4 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)}K';
     return n.toStringAsFixed(2);
   }
-}
-
-class _RevenueChart extends StatelessWidget {
-  final List<Map<String, dynamic>> series;
-  final double maximum;
-  final Color accent;
-  final Color textColor;
-  final Color mutedColor;
-
-  const _RevenueChart({
-    required this.series,
-    required this.maximum,
-    required this.accent,
-    required this.textColor,
-    required this.mutedColor,
-  });
-
-  String _formatValue(double value) {
-    if (value >= 1000) return '${(value / 1000).toStringAsFixed(1)}K';
-    return value.toStringAsFixed(0);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (series.isEmpty) {
-      return SizedBox(
-        height: 210,
-        child: Center(
-          child: Text('No completed fee revenue in this period',
-              style: GoogleFonts.plusJakartaSans(color: mutedColor)),
-        ),
-      );
-    }
-
-    final chartMaximum = maximum <= 0 ? 1.0 : maximum * 1.2;
-    return SizedBox(
-      height: 230,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: 42,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(_formatValue(chartMaximum),
-                    style: TextStyle(color: mutedColor, fontSize: 10)),
-                Text(_formatValue(chartMaximum / 2),
-                    style: TextStyle(color: mutedColor, fontSize: 10)),
-                Text('0', style: TextStyle(color: mutedColor, fontSize: 10)),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(
-                  child: CustomPaint(
-                    painter: _RevenueChartPainter(
-                      values: series
-                          .map((item) =>
-                              double.tryParse(item['value'].toString()) ?? 0)
-                          .toList(),
-                      maximum: chartMaximum,
-                      accent: accent,
-                      gridColor: textColor.withOpacity(0.1),
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: series
-                      .map((item) => Text(
-                            item['label']?.toString() ?? '',
-                            style: TextStyle(color: mutedColor, fontSize: 10),
-                          ))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RevenueChartPainter extends CustomPainter {
-  final List<double> values;
-  final double maximum;
-  final Color accent;
-  final Color gridColor;
-
-  _RevenueChartPainter({
-    required this.values,
-    required this.maximum,
-    required this.accent,
-    required this.gridColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final gridPaint = Paint()
-      ..color = gridColor
-      ..strokeWidth = 1;
-    for (var index = 0; index < 3; index++) {
-      final y = size.height * index / 2;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final paint = Paint()
-      ..color = accent
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    final points = values.asMap().entries.map((entry) {
-      final x = values.length == 1
-          ? size.width / 2
-          : size.width * entry.key / (values.length - 1);
-      final y = size.height - (entry.value / maximum * size.height);
-      return Offset(x, y.clamp(0, size.height).toDouble());
-    }).toList();
-
-    for (var i = 0; i < points.length; i++) {
-      if (i == 0) {
-        path.moveTo(points[i].dx, points[i].dy);
-      } else {
-        path.lineTo(points[i].dx, points[i].dy);
-      }
-    }
-
-    canvas.drawPath(path, paint);
-    final pointPaint = Paint()..color = accent;
-    for (final point in points) {
-      canvas.drawCircle(point, 4, pointPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _RevenueChartPainter oldDelegate) =>
-      oldDelegate.values != values || oldDelegate.maximum != maximum;
 }

@@ -1,23 +1,24 @@
 import 'dart:async';
-import 'dart:convert' as convert;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import '/core/app_config.dart';
-import '/backend/api_requests/api_manager.dart';
+import 'superadmin_revenue_chart.dart';
+import '/core/app_theme.dart';
 import '/pages/loginpage/loginpage_widget.dart';
 import '/pages/superadmin/add_admin_page.dart';
 import '/pages/superadmin/superadmin_wallet_page.dart';
-import '/pages/settings/support_help_center_page.dart';
+import '/pages/superadmin/fee_management_page.dart';
 import '/admin/pages/user_management_page.dart';
 import '/admin/pages/kyc_management_page.dart';
 import '/admin/pages/transactions_management_page.dart';
 import '/admin/pages/escrow_management_page.dart';
+import '/admin/pages/merchant_kyb_management_page.dart';
+import '/admin/pages/add_superadmin_page.dart';
+import '/admin/pages/support_inbox_page.dart';
 import '/admin/core/admin_navigation.dart';
 import '/admin/services/admin_api_service.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import '/admin/services/admin_page_refresh_coordinator.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/services/transaction_receipt_service.dart';
@@ -37,8 +38,11 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     with WidgetsBindingObserver {
   Map<String, dynamic>? _dashboardData;
   Map<String, dynamic>? _superadminWallet;
+  List<Map<String, dynamic>> _revenueSeries = <Map<String, dynamic>>[];
   bool _loading = true;
+  bool _loadingRevenueSeries = true;
   String? _error;
+  String? _revenueSeriesError;
 
   bool _loadingExchangeRates = true;
   bool _savingExchangeRates = false;
@@ -100,9 +104,10 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
   Future<void> _refreshSessionAndReload() async {
     if (!mounted) return;
     try {
-      await AdminApiService.ensureValidSession(force: true);
+      await AdminApiService.ensureValidSession();
       final token = await AdminApiService.getValidAccessToken();
       if (token.isEmpty) return;
+      AdminPageRefreshCoordinator.requestRefresh();
       await Future.wait([
         _loadDashboardData(),
         _loadSuperadminWallet(),
@@ -114,24 +119,10 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
 
   Future<void> _loadSuperadminWallet() async {
     try {
-      final token = await AdminApiService.getValidAccessToken();
-      if (token.isEmpty) throw Exception('Not authenticated');
-
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'superadminWallet',
-        apiUrl: '${AppConfig.api}/admin/wallet',
-        callType: ApiCallType.GET,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        params: {},
-        returnBody: true,
-      );
-
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      if (decoded == null) throw Exception('Invalid wallet response');
-      setState(() => _superadminWallet = decoded['data'] ?? decoded);
+      final response = await AdminApiService.getSuperadminWallet();
+      if (mounted) {
+        setState(() => _superadminWallet = response['data'] ?? response);
+      }
     } catch (e) {
       debugPrint('[SuperadminDashboardPage] _loadSuperadminWallet failed: $e');
     }
@@ -140,72 +131,66 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
   Future<void> _loadDashboardData() async {
     debugPrint('[SuperadminDashboardPage] _loadDashboardData started');
     setState(() {
-      _loading = true;
+      _loading = _dashboardData == null;
       _error = null;
+      _loadingRevenueSeries = true;
+      _revenueSeriesError = null;
     });
     try {
-      final token = await AdminApiService.getValidAccessToken();
-      debugPrint(
-          '[SuperadminDashboardPage] _loadDashboardData token length=${token.length}');
-      if (token.isEmpty) {
-        throw Exception('Not authenticated');
-      }
-
-      // Fetch dashboard data from backend
-      debugPrint(
-          '[SuperadminDashboardPage] _loadDashboardData calling ${AppConfig.api}/superadmin/dashboard');
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'superadminDashboard',
-        apiUrl: '${AppConfig.api}/superadmin/dashboard',
-        callType: ApiCallType.GET,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        params: {},
-        returnBody: true,
-      );
-      debugPrint(
-          '[SuperadminDashboardPage] _loadDashboardData response status=${response.statusCode} body=${response.bodyText}');
-
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      if (decoded == null) {
-        throw Exception('Invalid dashboard response');
-      }
+      final decoded = await AdminApiService.getSuperadminDashboard();
 
       if (decoded['status'] == 'success' || decoded['data'] != null) {
-        setState(() => _dashboardData = decoded['data'] ?? decoded);
+        if (mounted) {
+          setState(() => _dashboardData = decoded['data'] ?? decoded);
+        }
+        try {
+          final analytics = await AdminApiService.getAnalytics();
+          final analyticsPayload = analytics['data'];
+          final analyticsData = analyticsPayload is Map
+              ? Map<String, dynamic>.from(analyticsPayload)
+              : analytics;
+          final rawSeries = analyticsData['revenue_series'];
+          if (rawSeries is! List) {
+            throw Exception(
+                'Revenue analytics did not include a revenue series.');
+          }
+          if (mounted) {
+            setState(() {
+              _revenueSeries = rawSeries
+                  .whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+                  .where((item) => item['value'] != null)
+                  .toList();
+            });
+          }
+        } catch (e) {
+          debugPrint(
+              '[SuperadminDashboardPage] Revenue analytics load failed: $e');
+          if (mounted) {
+            setState(() {
+              _revenueSeriesError = e.toString().replaceAll('Exception: ', '');
+            });
+          }
+        } finally {
+          if (mounted) setState(() => _loadingRevenueSeries = false);
+        }
       } else {
         throw Exception(decoded['message'] ?? 'Failed to load dashboard');
       }
     } catch (e, st) {
       debugPrint('[SuperadminDashboardPage] _loadDashboardData failed: $e');
       debugPrint(st.toString());
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      if (mounted) {
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
-      // Refresh superadmin wallet info when dashboard refresh completes
       _loadSuperadminWallet();
     }
   }
 
   Widget _wrapWithWillPop(Widget child) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) {
-          return;
-        }
-        if (kIsWeb) {
-          Navigator.of(context).maybePop();
-          return;
-        }
-        try {
-          await SystemNavigator.pop();
-        } catch (_) {}
-      },
-      child: child,
-    );
+    return PopScope(canPop: true, child: child);
   }
 
   Future<void> _logout() async {
@@ -229,28 +214,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
       _loadingExchangeRates = true;
     });
     try {
-      final token = await AdminApiService.getValidAccessToken();
-      debugPrint(
-          '[SuperadminDashboardPage] _loadExchangeRates token length=${token.length}');
-      if (token.isEmpty) throw Exception('Not authenticated');
-
-      debugPrint(
-          '[SuperadminDashboardPage] _loadExchangeRates calling ${AppConfig.api}/admin/exchange-rates');
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'superadminExchangeRates',
-        apiUrl: '${AppConfig.api}/admin/exchange-rates',
-        callType: ApiCallType.GET,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        params: {},
-        returnBody: true,
-      );
-
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      if (decoded == null) throw Exception('Invalid exchange rate response');
-      final rates = decoded['data'] as List<dynamic>? ?? [];
+      final response = await AdminApiService.getExchangeRates();
+      final rates = response['data'] as List<dynamic>? ?? [];
 
       String kesFarm = '1';
       String farmKes = '1';
@@ -281,10 +246,11 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         );
       }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loadingExchangeRates = false;
         });
+      }
     }
   }
 
@@ -301,39 +267,19 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
       _savingExchangeRates = true;
     });
     try {
-      final token = await AdminApiService.getValidAccessToken();
-      if (token.isEmpty) throw Exception('Not authenticated');
-
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'superadminUpdateExchangeRates',
-        apiUrl: '${AppConfig.api}/admin/exchange-rates',
-        callType: ApiCallType.PUT,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
+      final response = await AdminApiService.updateExchangeRates([
+        {
+          'base_currency': 'KES',
+          'target_currency': 'FARM',
+          'rate': double.parse(_kesToFarmCtrl.text.trim()),
         },
-        params: {},
-        body: convert.jsonEncode({
-          'rates': [
-            {
-              'base_currency': 'KES',
-              'target_currency': 'FARM',
-              'rate': double.parse(_kesToFarmCtrl.text.trim()),
-            },
-            {
-              'base_currency': 'FARM',
-              'target_currency': 'KES',
-              'rate': double.parse(_farmToKesCtrl.text.trim()),
-            },
-          ],
-        }),
-        bodyType: BodyType.JSON,
-        returnBody: true,
-      );
-
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      final message = decoded?['message'] ?? 'Exchange rates updated';
-      if (!response.succeeded) throw Exception(message);
+        {
+          'base_currency': 'FARM',
+          'target_currency': 'KES',
+          'rate': double.parse(_farmToKesCtrl.text.trim()),
+        },
+      ]);
+      final message = response['message'] ?? 'Exchange rates updated';
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -351,10 +297,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         );
       }
     } finally {
-      if (mounted)
-        setState(() {
-          _savingExchangeRates = false;
-        });
+      if (mounted) setState(() => _savingExchangeRates = false);
     }
   }
 
@@ -363,10 +306,23 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     await _openAdminPage(const UserManagementPage());
   }
 
+  Future<void> _openMerchantKybPage() async {
+    if (!mounted) return;
+    await _openAdminPage(const MerchantKybManagementPage());
+  }
+
   Future<void> _openAdminPage(Widget page) async {
     if (!mounted) return;
+    final themedPage = page is UserManagementPage ||
+            page is KycManagementPage ||
+            page is TransactionsManagementPage ||
+            page is EscrowManagementPage ||
+            page is MerchantKybManagementPage ||
+            page is SupportInboxPage
+        ? Theme(data: AppTheme.lightTheme(), child: page)
+        : page;
     await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => page),
+      MaterialPageRoute(builder: (_) => themedPage),
     );
   }
 
@@ -432,9 +388,140 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
+  Widget _buildMerchantKybCard(Color cardColor, Color accent, Color muted) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Merchant',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Review merchant KYB details and approve or reject applications.',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: muted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              Icon(Icons.storefront_rounded, color: accent),
+            ],
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _openMerchantKybPage,
+              icon: const Icon(Icons.open_in_new_rounded, color: Colors.black),
+              label: Text(
+                'Open Merchant KYB',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeeManagementCard(Color cardColor, Color accent, Color muted) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white10),
+      ),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.percent_rounded, color: accent, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                'Fee Management',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Review and update platform fee configurations.',
+            style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
+          ),
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: () => _openAdminPage(const FeeManagementPage()),
+              icon: const Icon(Icons.open_in_new_rounded, color: Colors.black),
+              label: Text(
+                'Open Fee Management',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openAddAdminPage() async {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const AddAdminPage()),
+    );
+    await _loadDashboardData();
+  }
+
+  Future<void> _openAddSuperadminPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AddSuperadminPage()),
     );
     await _loadDashboardData();
   }
@@ -446,14 +533,14 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     final accent = const Color(0xFFD4AF37);
     final muted = Colors.white70;
 
-    if (_loading) {
+    if (_loading && _dashboardData == null) {
       return _wrapWithWillPop(Scaffold(
         backgroundColor: bgColor,
         body: const Center(child: CircularProgressIndicator()),
       ));
     }
 
-    if (_error != null) {
+    if (_error != null && _dashboardData == null) {
       return _wrapWithWillPop(Scaffold(
         backgroundColor: bgColor,
         body: Center(
@@ -522,6 +609,10 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 _buildSuperadminFees(
                     _superadminWallet, cardColor, accent, muted),
                 const SizedBox(height: 28),
+                _buildFeeManagementCard(cardColor, accent, muted),
+                const SizedBox(height: 28),
+                _buildRevenueOverview(cardColor, accent, muted),
+                const SizedBox(height: 28),
                 _buildKYCEarnings(data, cardColor, accent, muted),
                 const SizedBox(height: 28),
                 _buildSystemHealth(data, cardColor, accent, muted),
@@ -531,6 +622,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 _buildAddAdminSection(data, cardColor, accent, muted),
                 const SizedBox(height: 28),
                 _buildSystemUsersCard(cardColor, accent, muted),
+                const SizedBox(height: 28),
+                _buildMerchantKybCard(cardColor, accent, muted),
                 const SizedBox(height: 28),
                 _buildRecentActivities(data, cardColor, muted),
                 const SizedBox(height: 24),
@@ -776,7 +869,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                   '${data['support_tickets'] ?? 0}',
                   Colors.blue,
                   cardColor,
-                  () => _openAdminPage(const SupportHelpCenterPageWidget())),
+                  () => _openAdminPage(const SupportInboxPage())),
               const SizedBox(width: 12),
               _buildAdminActivityCard(
                   'Disputes',
@@ -803,6 +896,29 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 backgroundColor: accent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              onPressed: _openAddSuperadminPage,
+              icon: Icon(Icons.admin_panel_settings_rounded, color: accent),
+              label: Text(
+                'Add Superadmin',
+                style: GoogleFonts.plusJakartaSans(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: accent),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ),
@@ -950,6 +1066,130 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRevenueOverview(Color cardColor, Color accent, Color muted) {
+    final values = _revenueSeries
+        .map((item) => double.tryParse(item['value'].toString()) ?? 0)
+        .toList();
+    final maximum =
+        values.isEmpty ? 0.0 : values.reduce((a, b) => a > b ? a : b);
+    final previousTotal = values.length > 3
+        ? values.sublist(0, values.length - 3).fold<double>(0, (a, b) => a + b)
+        : 0.0;
+    final recentTotal = values.length > 3
+        ? values.sublist(values.length - 3).fold<double>(0, (a, b) => a + b)
+        : values.fold<double>(0, (a, b) => a + b);
+    final change = previousTotal == 0
+        ? (recentTotal > 0 ? 100.0 : 0.0)
+        : ((recentTotal - previousTotal) / previousTotal) * 100;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: accent.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Revenue Overview',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      'Completed platform fees, last 7 days',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text(
+                  '${change >= 0 ? '+' : ''}${change.toStringAsFixed(1)}%',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (_loadingRevenueSeries)
+            SizedBox(
+              height: 210,
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: accent,
+                ),
+              ),
+            )
+          else if (_revenueSeriesError != null)
+            SizedBox(
+              height: 210,
+              child: Center(
+                child: Text(
+                  'Unable to load revenue data: $_revenueSeriesError',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.plusJakartaSans(
+                    color: muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            )
+          else if (_revenueSeries.isEmpty)
+            SizedBox(
+              height: 210,
+              child: Center(
+                child: Text(
+                  'No completed fee revenue in this period',
+                  style: GoogleFonts.plusJakartaSans(color: muted),
+                ),
+              ),
+            )
+          else
+            SuperadminRevenueChart(
+              series: _revenueSeries,
+              maximum: maximum,
+              accent: accent,
+              muted: muted,
+            ),
+        ],
       ),
     );
   }
@@ -1363,23 +1603,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
   Future<void> _loadCurrencyRate() async {
     setState(() => _loadingCurrencyRate = true);
     try {
-      final token = await AdminApiService.getValidAccessToken();
-      if (token.isEmpty) throw Exception('Not authenticated');
-
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'superadminCurrencyRate',
-        apiUrl: '${AppConfig.api}/admin/currency-rates',
-        callType: ApiCallType.GET,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        params: {},
-        returnBody: true,
-      );
-
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      final rows = decoded?['data'] as List<dynamic>? ?? [];
+      final response = await AdminApiService.getCurrencyRates();
+      final rows = response['data'] as List<dynamic>? ?? [];
       if (rows.isEmpty) {
         _usdToKesCtrl.text = '150';
         _farmToUsdCtrl.text = '0.00666667';
@@ -1413,27 +1638,10 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
 
     setState(() => _savingCurrencyRate = true);
     try {
-      final token = await AdminApiService.getValidAccessToken();
-      if (token.isEmpty) throw Exception('Not authenticated');
-
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'superadminUpdateCurrencyRate',
-        apiUrl: '${AppConfig.api}/admin/currency-rates',
-        callType: ApiCallType.PUT,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: convert.jsonEncode({
-          'usd_kes_rate': double.parse(_usdToKesCtrl.text.trim()),
-        }),
-        bodyType: BodyType.JSON,
-        returnBody: true,
+      final response = await AdminApiService.updateCurrencyRate(
+        double.parse(_usdToKesCtrl.text.trim()),
       );
-
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      final message = decoded?['message'] ?? 'Conversion rate updated';
-      if (!response.succeeded) throw Exception(message);
+      final message = response['message'] ?? 'Conversion rate updated';
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1594,7 +1802,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             accent,
             cardColor,
             Icons.support_agent,
-            () => _openAdminPage(const SupportHelpCenterPageWidget())),
+            () => _openAdminPage(const SupportInboxPage())),
         const SizedBox(height: 12),
         _monitoringCard(
             'Pending Disputes',
@@ -1602,7 +1810,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             accent,
             cardColor,
             Icons.gavel_rounded,
-            () => _openAdminPage(const EscrowManagementPage())),
+            () => _openAdminPage(
+                const EscrowManagementPage(initialFilter: 'disputed'))),
       ],
     );
   }

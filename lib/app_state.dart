@@ -547,7 +547,7 @@ class FFAppState extends ChangeNotifier {
     await prefs.remove('lastAuthenticatedRoute');
     await prefs.remove('biometric_last_verified');
     await SecureStorageService.clearAuthData();
-    await SecureStorageService.deleteBiometricLastVerified();
+    await SecureStorageService.clearBiometricData();
     await AuthSessionStore.clearAllSessions();
     // Cached API responses can contain another user's profile or role.
     // Discard them together with the authenticated session.

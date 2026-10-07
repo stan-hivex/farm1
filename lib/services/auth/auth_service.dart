@@ -38,6 +38,30 @@ class AuthService {
 
   AuthService._internal();
 
+  static Map<String, dynamic> normalizeLoginResponse(Map<String, dynamic> response) {
+    final rawData = response['data'];
+    final data = rawData is Map
+        ? Map<String, dynamic>.from(rawData)
+        : <String, dynamic>{};
+
+    final user = data['user'];
+    final normalizedUser = user is Map
+        ? Map<String, dynamic>.from(user)
+        : <String, dynamic>{};
+
+    return {
+      'success': true,
+      'farmJwt': data['access_token']?.toString() ?? '',
+      'refreshToken': data['refresh_token']?.toString() ?? '',
+      'requiresPhoneVerification': data['requiresPhoneVerification'] == true,
+      'pendingLoginId': data['pendingLoginId']?.toString() ?? '',
+      'phone': data['phone']?.toString() ?? '',
+      'user': normalizedUser,
+      'loginMethod': 'backend',
+      'data': data,
+    };
+  }
+
   SupabaseClient get _supabase => SupabaseConfig.client;
 
   /// Register a new FARM account and start backend phone verification.
@@ -92,10 +116,15 @@ class AuthService {
         countryCode: countryCode,
       );
 
-      final responseData = response['data'] as Map<String, dynamic>? ?? {};
-      final farmJwt = responseData['access_token'] as String? ?? '';
-      final refreshToken = responseData['refresh_token'] as String? ?? '';
-      final backendUser = responseData['user'] as Map<String, dynamic>?;
+      final normalized = normalizeLoginResponse(response);
+      final responseData = normalized['data'] as Map<String, dynamic>? ?? {};
+      final farmJwt = normalized['farmJwt'] as String? ?? '';
+      final refreshToken = normalized['refreshToken'] as String? ?? '';
+      final backendUser = responseData['user'] is Map<String, dynamic>
+          ? responseData['user'] as Map<String, dynamic>
+          : (responseData['user'] is Map
+              ? Map<String, dynamic>.from(responseData['user'] as Map)
+              : null);
 
       // The backend decides whether this account needs phone verification.
       if (farmJwt.isNotEmpty) {
@@ -110,16 +139,7 @@ class AuthService {
         }
       }
 
-      return {
-        'success': true,
-        'farmJwt': farmJwt,
-        'refreshToken': refreshToken,
-        'requiresPhoneVerification': responseData['requiresPhoneVerification'] == true,
-        'pendingLoginId': responseData['pendingLoginId']?.toString() ?? '',
-        'phone': responseData['phone']?.toString() ?? '',
-        'user': backendUser,
-        'loginMethod': 'backend',
-      };
+      return normalized;
     } on AuthException catch (e) {
       throw Exception('Login error: ${e.message}');
     } catch (e) {

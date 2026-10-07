@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 
 class KycManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -13,7 +14,8 @@ class KycManagementPage extends StatefulWidget {
   State<KycManagementPage> createState() => _KycManagementPageState();
 }
 
-class _KycManagementPageState extends State<KycManagementPage> {
+class _KycManagementPageState extends State<KycManagementPage>
+    with AdminPageRefreshMixin<KycManagementPage> {
   List<dynamic> _queue = [];
   bool _loading = true;
   String? _error;
@@ -40,14 +42,21 @@ class _KycManagementPageState extends State<KycManagementPage> {
       _error = null;
     });
     try {
-      final res = await AdminApiService.getKycQueue(page: _page, status: _status);
+      final res =
+          await AdminApiService.getKycQueue(page: _page, status: _status);
       setState(() => _queue = res['data'] ?? []);
     } catch (e) {
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      if (mounted && _queue.isEmpty) {
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Future<void> _review(String docId, String status, {String? reason}) async {
     try {
@@ -76,10 +85,10 @@ class _KycManagementPageState extends State<KycManagementPage> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel')),
+              onPressed: () => Navigator.pop(context), child: Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: context.errorColor),
+            style:
+                ElevatedButton.styleFrom(backgroundColor: context.errorColor),
             onPressed: () {
               Navigator.pop(context);
               _review(docId, 'rejected', reason: ctrl.text.trim());
@@ -99,15 +108,33 @@ class _KycManagementPageState extends State<KycManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading && _queue.isEmpty) return Center(child: CircularProgressIndicator());
-    if (_error != null && _queue.isEmpty)
-      return Center(
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(_error!),
-        ElevatedButton(onPressed: _load, child: Text('Retry'))
-      ]));
-
     return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(8, 4, 16, 4),
+        child: Row(children: [
+          IconButton(
+            tooltip: 'Go back',
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed:
+                widget.onGoBack ?? () => Navigator.of(context).maybePop(),
+          ),
+          Text('KYC Management',
+              style: GoogleFonts.plusJakartaSans(
+                  fontSize: 20, fontWeight: FontWeight.bold)),
+        ]),
+      ),
+      if (_loading && _queue.isEmpty)
+        const Expanded(child: Center(child: CircularProgressIndicator()))
+      else if (_error != null && _queue.isEmpty)
+        Expanded(
+            child: Center(
+                child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+              Text(_error!),
+              ElevatedButton(onPressed: _load, child: const Text('Retry'))
+            ])))
+      else ...[
       SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -115,24 +142,58 @@ class _KycManagementPageState extends State<KycManagementPage> {
           for (final value in ['pending', 'rejected', 'all'])
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(label: Text(value.toUpperCase()), selected: _status == value, onSelected: (_) { setState(() => _status = value); _load(); }),
+              child: ChoiceChip(
+                  label: Text(value.toUpperCase()),
+                  selected: _status == value,
+                  onSelected: (_) {
+                    setState(() => _status = value);
+                    _load();
+                  }),
             ),
         ]),
       ),
-      Expanded(child: RefreshIndicator(
-      onRefresh: _load,
-      child: _queue.isEmpty
-          ? Center(child: Text('No pending KYC applications'))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _queue.where((doc) => _search.isEmpty || doc.toString().toLowerCase().contains(_search.toLowerCase())).length + 1,
-              itemBuilder: (_, i) {
-                if (i == 0) return Padding(padding: const EdgeInsets.only(bottom: 12), child: TextField(controller: _searchController, decoration: const InputDecoration(hintText: 'Search name, username, ID or document number', prefixIcon: Icon(Icons.search_rounded), border: OutlineInputBorder()), onChanged: (value) => setState(() => _search = value)));
-                final visible = _queue.where((doc) => _search.isEmpty || doc.toString().toLowerCase().contains(_search.toLowerCase())).toList();
-                return _kycCard(visible[i - 1]);
-              },
-            ),
+      Expanded(
+          child: RefreshIndicator(
+        onRefresh: _load,
+        child: _queue.isEmpty
+            ? Center(child: Text('No pending KYC applications'))
+            : ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _queue
+                        .where((doc) =>
+                            _search.isEmpty ||
+                            doc
+                                .toString()
+                                .toLowerCase()
+                                .contains(_search.toLowerCase()))
+                        .length +
+                    1,
+                itemBuilder: (_, i) {
+                  if (i == 0)
+                    return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: TextField(
+                            controller: _searchController,
+                            decoration: const InputDecoration(
+                                hintText:
+                                    'Search name, username, ID or document number',
+                                prefixIcon: Icon(Icons.search_rounded),
+                                border: OutlineInputBorder()),
+                            onChanged: (value) =>
+                                setState(() => _search = value)));
+                  final visible = _queue
+                      .where((doc) =>
+                          _search.isEmpty ||
+                          doc
+                              .toString()
+                              .toLowerCase()
+                              .contains(_search.toLowerCase()))
+                      .toList();
+                  return _kycCard(visible[i - 1]);
+                },
+              ),
       )),
+      ],
     ]);
   }
 
@@ -161,7 +222,8 @@ class _KycManagementPageState extends State<KycManagementPage> {
                 CircleAvatar(
                   backgroundColor: const Color.fromRGBO(255, 165, 0, 0.15),
                   radius: 22,
-                  child: Icon(Icons.person_rounded, color: context.warningColor),
+                  child:
+                      Icon(Icons.person_rounded, color: context.warningColor),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -207,9 +269,14 @@ class _KycManagementPageState extends State<KycManagementPage> {
             if (doc['document_number'] != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: Text('ID: ${doc['document_number']}',
-                    style: GoogleFonts.plusJakartaSans(
-                        color: context.textSecondary, fontSize: 12)),
+                child: SelectableText(
+                  'ID: ${doc['document_number']}',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: context.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -285,7 +352,8 @@ class _KycManagementPageState extends State<KycManagementPage> {
                     icon: Icon(Icons.close_rounded,
                         color: context.errorColor, size: 16),
                     label: Text('Reject',
-                        style: GoogleFonts.plusJakartaSans(color: context.errorColor)),
+                        style: GoogleFonts.plusJakartaSans(
+                            color: context.errorColor)),
                     onPressed: () => _showRejectDialog(doc['id']),
                   ),
                 ),
@@ -317,87 +385,141 @@ class _KycManagementPageState extends State<KycManagementPage> {
       builder: (_) => FutureBuilder<Map<String, dynamic>>(
         future: AdminApiService.getKycDoc(doc['id']?.toString() ?? ''),
         builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
-          if (snap.hasError) return AlertDialog(title: const Text('Error'), content: Text(snap.error.toString()), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))]);
+          if (snap.connectionState != ConnectionState.done)
+            return const SizedBox(
+                height: 200, child: Center(child: CircularProgressIndicator()));
+          if (snap.hasError)
+            return AlertDialog(
+                title: const Text('Error'),
+                content: Text(snap.error.toString()),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Close'))
+                ]);
           final d = (snap.data?['data'] ?? {}) as Map<String, dynamic>;
           final user = d['users_kyc_documents_user_idTousers'] as Map? ?? {};
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-            title: Text('KYC Application', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+            title: Text('KYC Application',
+                style:
+                    GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
             content: SingleChildScrollView(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // Prominent uploader info
-                  Row(children: [
-                    CircleAvatar(radius: 22, backgroundColor: const Color(0xFFEAF2FF), child: Icon(Icons.person, color: context.primaryColor)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        if (user['username'] != null) Text('@${user['username']}', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-                        if (user['email'] != null) Text(user['email'], style: GoogleFonts.plusJakartaSans(color: context.textSecondary, fontSize: 12)),
-                        if (user['phone'] != null) Text(user['phone'], style: GoogleFonts.plusJakartaSans(color: context.textSecondary, fontSize: 12)),
-                      ]),
-                    )
-                  ]),
-                  const SizedBox(height: 12),
-                  _detailRow('Name', '${d['first_name'] ?? user['first_name'] ?? ''} ${d['last_name'] ?? user['last_name'] ?? ''}'.trim()),
-                  _detailRow('Email', d['email']?.toString() ?? user['email']?.toString()),
-                  _detailRow('Phone', d['phone']?.toString() ?? user['phone']?.toString()),
-                const Divider(height: 24),
-                _detailRow('Document type', d['document_type']?.toString()),
-                _detailRow('Document number', d['document_number']?.toString()),
-                _detailRow('Date of birth', d['date_of_birth']?.toString()),
-                _detailRow('Gender', d['gender']?.toString()),
-                _detailRow('Nationality', d['nationality']?.toString()),
-                const Divider(height: 24),
-                _detailRow('Country', d['country']?.toString()),
-                _detailRow('State / County', d['county']?.toString()),
-                _detailRow('City', d['city']?.toString()),
-                _detailRow('Address', d['physical_address']?.toString()),
-                _detailRow('Postal code', d['postal_code']?.toString()),
-                finalImgsSection(d),
-                if (d['additional_documents'] != null && d['additional_documents'] is List)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('Additional documents', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 13)),
-                      const SizedBox(height: 10),
-                      Wrap(spacing: 8, runSpacing: 8, children: [
-                        ...List<Widget>.from((d['additional_documents'] as List).map((doc) {
-                          final url = doc is Map ? (doc['url'] ?? doc['src'])?.toString() : null;
-                          if (url == null) return const SizedBox();
-                          return GestureDetector(
-                            onTap: () => _openImageGallery([(url)], 0),
-                            child: Container(
-                              width: 120,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                color: context.surface,
-                                borderRadius: BorderRadius.circular(8),
-                                image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
-                              ),
-                            ),
-                          );
-                        }))
-                      ])
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Prominent uploader info
+                    Row(children: [
+                      CircleAvatar(
+                          radius: 22,
+                          backgroundColor: const Color(0xFFEAF2FF),
+                          child:
+                              Icon(Icons.person, color: context.primaryColor)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (user['username'] != null)
+                                Text('@${user['username']}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                        fontWeight: FontWeight.bold)),
+                              if (user['email'] != null)
+                                Text(user['email'],
+                                    style: GoogleFonts.plusJakartaSans(
+                                        color: context.textSecondary,
+                                        fontSize: 12)),
+                              if (user['phone'] != null)
+                                Text(user['phone'],
+                                    style: GoogleFonts.plusJakartaSans(
+                                        color: context.textSecondary,
+                                        fontSize: 12)),
+                            ]),
+                      )
                     ]),
-                  ),
-              ]),
+                    const SizedBox(height: 12),
+                    _detailRow(
+                        'Name',
+                        '${d['first_name'] ?? user['first_name'] ?? ''} ${d['last_name'] ?? user['last_name'] ?? ''}'
+                            .trim()),
+                    _detailRow('Email',
+                        d['email']?.toString() ?? user['email']?.toString()),
+                    _detailRow('Phone',
+                        d['phone']?.toString() ?? user['phone']?.toString()),
+                    const Divider(height: 24),
+                    _detailRow('Document type', d['document_type']?.toString()),
+                    _detailRow(
+                        'Document number', d['document_number']?.toString()),
+                    _detailRow('Date of birth', d['date_of_birth']?.toString()),
+                    _detailRow('Gender', d['gender']?.toString()),
+                    _detailRow('Nationality', d['nationality']?.toString()),
+                    const Divider(height: 24),
+                    _detailRow('Country', d['country']?.toString()),
+                    _detailRow('State / County', d['county']?.toString()),
+                    _detailRow('City', d['city']?.toString()),
+                    _detailRow('Address', d['physical_address']?.toString()),
+                    _detailRow('Postal code', d['postal_code']?.toString()),
+                    finalImgsSection(d),
+                    if (d['additional_documents'] != null &&
+                        d['additional_documents'] is List)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Additional documents',
+                                  style: GoogleFonts.plusJakartaSans(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13)),
+                              const SizedBox(height: 10),
+                              Wrap(spacing: 8, runSpacing: 8, children: [
+                                ...List<Widget>.from(
+                                    (d['additional_documents'] as List)
+                                        .map((doc) {
+                                  final url = doc is Map
+                                      ? (doc['url'] ?? doc['src'])?.toString()
+                                      : null;
+                                  if (url == null) return const SizedBox();
+                                  return GestureDetector(
+                                    onTap: () => _openImageGallery([(url)], 0),
+                                    child: Container(
+                                      width: 120,
+                                      height: 80,
+                                      decoration: BoxDecoration(
+                                        color: context.surface,
+                                        borderRadius: BorderRadius.circular(8),
+                                        image: DecorationImage(
+                                            image: NetworkImage(url),
+                                            fit: BoxFit.cover),
+                                      ),
+                                    ),
+                                  );
+                                }))
+                              ])
+                            ]),
+                      ),
+                  ]),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close')),
               TextButton(
                   onPressed: () {
                     Navigator.pop(context);
                     _showRejectDialog(d['id']);
                   },
-                  child: Text('Reject', style: TextStyle(color: context.errorColor))),
+                  child: Text('Reject',
+                      style: TextStyle(color: context.errorColor))),
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
                   _review(d['id'], 'verified');
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: context.successColor),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: context.successColor),
                 child: const Text('Approve'),
               ),
             ],
@@ -418,7 +540,8 @@ class _KycManagementPageState extends State<KycManagementPage> {
     addIf(d['front_image_url'] ?? d['front_image'] ?? d['front_image_path']);
     addIf(d['back_image_url'] ?? d['back_image']);
     addIf(d['selfie_image_url'] ?? d['selfie_image']);
-    if (d['additional_documents'] != null && d['additional_documents'] is List) {
+    if (d['additional_documents'] != null &&
+        d['additional_documents'] is List) {
       for (final doc in d['additional_documents']) {
         if (doc is String) imgs.add(doc);
         if (doc is Map && doc['url'] != null) imgs.add(doc['url'].toString());
@@ -430,7 +553,9 @@ class _KycManagementPageState extends State<KycManagementPage> {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Document images', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 13)),
+        Text('Document images',
+            style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.w600, fontSize: 13)),
         const SizedBox(height: 12),
         SizedBox(
           height: 110,
@@ -448,7 +573,8 @@ class _KycManagementPageState extends State<KycManagementPage> {
                   decoration: BoxDecoration(
                     color: context.surface,
                     borderRadius: BorderRadius.circular(10),
-                    image: DecorationImage(image: NetworkImage(url), fit: BoxFit.cover),
+                    image: DecorationImage(
+                        image: NetworkImage(url), fit: BoxFit.cover),
                   ),
                 ),
               );
@@ -469,12 +595,15 @@ class _KycManagementPageState extends State<KycManagementPage> {
           PageView.builder(
             controller: controller,
             itemCount: urls.length,
-            itemBuilder: (context, i) => InteractiveViewer(child: Image.network(urls[i], fit: BoxFit.contain)),
+            itemBuilder: (context, i) => InteractiveViewer(
+                child: Image.network(urls[i], fit: BoxFit.contain)),
           ),
           Positioned(
             top: 24,
             left: 12,
-            child: IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
+            child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => Navigator.pop(context)),
           ),
           Positioned(
             top: 24,
@@ -483,9 +612,13 @@ class _KycManagementPageState extends State<KycManagementPage> {
               IconButton(
                   icon: const Icon(Icons.copy, color: Colors.white),
                   onPressed: () async {
-                    final url = urls[controller.hasClients ? controller.page?.round() ?? initialIndex : initialIndex];
+                    final url = urls[controller.hasClients
+                        ? controller.page?.round() ?? initialIndex
+                        : initialIndex];
                     await Clipboard.setData(ClipboardData(text: url));
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Image URL copied to clipboard')));
+                    if (mounted)
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                          content: Text('Image URL copied to clipboard')));
                   }),
             ]),
           )
@@ -506,13 +639,14 @@ class _KycManagementPageState extends State<KycManagementPage> {
           ),
           child: url == null
               ? Center(
-                  child: Icon(Icons.image_not_supported, color: context.textSecondary))
+                  child: Icon(Icons.image_not_supported,
+                      color: context.textSecondary))
               : null,
         ),
         const SizedBox(height: 4),
         Text(label,
-            style:
-                GoogleFonts.plusJakartaSans(fontSize: 10, color: context.textSecondary)),
+            style: GoogleFonts.plusJakartaSans(
+                fontSize: 10, color: context.textSecondary)),
       ]);
 
   Widget _detailRow(String label, String? value) {
@@ -522,7 +656,7 @@ class _KycManagementPageState extends State<KycManagementPage> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(
-          width: 110,
+          width: 104,
           child: Text('$label:',
               style: GoogleFonts.plusJakartaSans(
                   color: context.onBackground.withOpacity(0.87),
@@ -531,8 +665,11 @@ class _KycManagementPageState extends State<KycManagementPage> {
         ),
         Expanded(
           child: Text(value.toString(),
+              softWrap: true,
               style: GoogleFonts.plusJakartaSans(
-                  color: context.textSecondary, fontSize: 12)),
+                  color: context.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
         ),
       ]),
     );

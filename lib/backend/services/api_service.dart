@@ -6,6 +6,21 @@ import '/core/app_config.dart';
 import '/app_state.dart';
 import '/services/auth/refresh_manager.dart';
 
+class ApiServiceException implements Exception {
+  const ApiServiceException({
+    required this.statusCode,
+    required this.message,
+    this.retryAfterSeconds,
+  });
+
+  final int statusCode;
+  final String message;
+  final int? retryAfterSeconds;
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   static http.Client _client = http.Client();
 
@@ -161,6 +176,17 @@ class ApiService {
     final message = decoded['message'] is String
         ? decoded['message'] as String
         : responseBody;
+    if (response.statusCode == 429) {
+      final retryAfter = int.tryParse(response.headers['retry-after'] ?? '');
+      final waitMessage = retryAfter == null
+          ? 'You are making requests too quickly. Please wait a moment and try again.'
+          : 'You are making requests too quickly. Please wait $retryAfter seconds and try again.';
+      throw ApiServiceException(
+        statusCode: response.statusCode,
+        message: waitMessage,
+        retryAfterSeconds: retryAfter,
+      );
+    }
     throw Exception(message.isNotEmpty
         ? message
         : 'Request failed (${response.statusCode})');
@@ -459,6 +485,13 @@ class ApiService {
             '${status != null ? "&status=$status" : ""}',
         timeoutSeconds: timeoutSeconds,
       );
+
+  static Future<Map<String, dynamic>> getTransactionDetails(String id) =>
+      _request(
+        method: 'GET',
+        path: '/transactions/${Uri.encodeComponent(id)}',
+      );
+
   static Future<Map<String, dynamic>> getGrowthHistory({
     required int days,
     int timeoutSeconds = 20,

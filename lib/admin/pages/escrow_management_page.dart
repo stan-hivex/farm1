@@ -2,20 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
+import '../services/admin_page_refresh_coordinator.dart';
 
 class EscrowManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
+  final String initialFilter;
 
-  const EscrowManagementPage({super.key, this.onGoBack});
+  const EscrowManagementPage({
+    super.key,
+    this.onGoBack,
+    this.initialFilter = 'all',
+  });
 
   @override
   State<EscrowManagementPage> createState() => _EscrowManagementPageState();
 }
 
-class _EscrowManagementPageState extends State<EscrowManagementPage> {
+class _EscrowManagementPageState extends State<EscrowManagementPage>
+    with AdminPageRefreshMixin<EscrowManagementPage> {
   List<dynamic> _escrows = [];
   bool _loading = true;
-  String _filter = 'all';
+  late String _filter;
   int _page = 1;
   String _search = '';
   final _searchController = TextEditingController();
@@ -29,6 +36,10 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
   @override
   void initState() {
     super.initState();
+    _filter = const ['all', 'active', 'completed', 'disputed', 'refunded']
+            .contains(widget.initialFilter)
+        ? widget.initialFilter
+        : 'all';
     _load();
   }
 
@@ -42,15 +53,20 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+
   }
+
+  @override
+  Future<void> refreshAdminPage() => _load();
 
   Future<void> _resolve(String escrowId, String winner) async {
     final ctrl = TextEditingController();
+    final outcome = winner == 'buyer' ? 'refund to buyer' : 'release to seller';
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
-        title: Text('Resolve Dispute — Award to $winner',
+        title: Text('Resolve Dispute — $outcome',
             style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.bold, color: context.onSurface)),
         content: TextField(
@@ -81,7 +97,12 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
               try {
                 await AdminApiService.resolveDispute(
                     escrowId, winner, ctrl.text.trim());
-                _snack('Dispute resolved — $winner wins', context.successColor);
+                _snack(
+                  winner == 'buyer'
+                      ? 'Dispute resolved — funds refunded to buyer'
+                      : 'Dispute resolved — funds released to seller',
+                  context.successColor,
+                );
                 _load();
               } catch (e) {
                 _snack(e.toString(), context.errorColor);
@@ -128,6 +149,20 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
       body: SafeArea(
         child: Column(
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 4, 16, 4),
+              child: Row(children: [
+                IconButton(
+                  tooltip: 'Go back',
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed:
+                      widget.onGoBack ?? () => Navigator.of(context).maybePop(),
+                ),
+                Text('Escrow Management',
+                    style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20, fontWeight: FontWeight.bold)),
+              ]),
+            ),
             _filterRow(accent),
             if (_loading && _escrows.isEmpty)
               const Expanded(
@@ -206,6 +241,9 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
     final seller = e['users_escrow_contracts_seller_idTousers'] as Map? ?? {};
     final color = _escrowColor(e['status']);
     final isDisputed = e['status'] == 'disputed';
+    final evidence = e['evidence'] is Map
+        ? Map<String, dynamic>.from(e['evidence'] as Map)
+        : <String, dynamic>{};
     final buyerUsername = (buyer['username']?.toString() ?? '').trim();
     final sellerUsername = (seller['username']?.toString() ?? '').trim();
     final buyerLabel = buyerUsername.isNotEmpty
@@ -228,6 +266,15 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
     final description = e['description']?.toString().trim().isNotEmpty == true
         ? e['description'].toString()
         : e['title']?.toString() ?? '-';
+    final disputeReason = evidence['reason']?.toString().trim() ?? '';
+    final disputedById = evidence['disputed_by']?.toString();
+    final disputedBy = disputedById != null &&
+            disputedById == buyer['id']?.toString()
+        ? 'Buyer'
+        : disputedById != null &&
+                disputedById == seller['id']?.toString()
+            ? 'Seller'
+            : 'A party';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -242,10 +289,15 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
             : Border.all(color: context.onSurface.withOpacity(0.1)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(e['reference_code'] ?? e['id'] ?? '',
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: SelectableText(
+              e['reference_code']?.toString() ?? e['id']?.toString() ?? '',
               style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.bold, fontSize: 13, color: accent)),
+                  fontWeight: FontWeight.bold, fontSize: 13, color: accent),
+            ),
+          ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
@@ -289,8 +341,8 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
                       fontSize: 12)),
               const SizedBox(height: 6),
               Text(
-                  e['resolution_note']?.toString().trim().isNotEmpty == true
-                      ? e['resolution_note'].toString()
+                  disputeReason.isNotEmpty
+                      ? 'Reported by $disputedBy: $disputeReason'
                       : 'This escrow is in dispute and requires admin resolution.',
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface.withOpacity(0.8),
@@ -306,7 +358,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10))),
                 onPressed: () => _resolve(e['id'], 'buyer'),
-                child: Text('Award Buyer',
+                child: Text('Refund Buyer',
                     style: GoogleFonts.plusJakartaSans(color: Colors.blue)),
               ),
             ),
@@ -318,7 +370,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10))),
                 onPressed: () => _resolve(e['id'], 'seller'),
-                child: Text('Award Seller',
+                child: Text('Release to Seller',
                     style: GoogleFonts.plusJakartaSans(
                         color: context.onBackground.withOpacity(0.87))),
               ),
@@ -340,18 +392,30 @@ class _EscrowManagementPageState extends State<EscrowManagementPage> {
 
   Widget _escrowDetail(String label, String value) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
-        child: Row(children: [
-          SizedBox(
-              width: 70,
-              child: Text(label,
-                  style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withOpacity(0.54),
-                      fontSize: 12))),
-          Text(value,
-              style: GoogleFonts.plusJakartaSans(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 76,
+              child: Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  color: context.onSurface.withOpacity(0.54),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            Expanded(
+              child: SelectableText(
+                value,
+                style: GoogleFonts.plusJakartaSans(
                   color: context.onSurface,
                   fontWeight: FontWeight.w600,
-                  fontSize: 12)),
-        ]),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
 }
