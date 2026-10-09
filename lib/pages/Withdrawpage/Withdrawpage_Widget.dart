@@ -12,6 +12,7 @@ import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
 import '/services/transaction_receipt_service.dart';
+import '/utils/transaction_history_utils.dart';
 
 class WithdrawpageWidget extends StatefulWidget {
   const WithdrawpageWidget({super.key});
@@ -250,9 +251,13 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
         if (body is List) {
-          setState(() => history = body);
+          setState(() =>
+              history = body.where(isVisibleTransactionHistoryItem).toList());
         } else if (body is Map<String, dynamic>) {
-          setState(() => history = body['data'] ?? body['withdrawals'] ?? []);
+          final items = body['data'] ?? body['withdrawals'] ?? [];
+          setState(() => history = items is List
+              ? items.where(isVisibleTransactionHistoryItem).toList()
+              : []);
         }
       }
     } catch (_) {
@@ -1054,11 +1059,24 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       status == 'completed' || status == 'success';
                   return InkWell(
                     borderRadius: BorderRadius.circular(16),
-                    onTap: () => TransactionReceiptService.showDetails(
-                      context,
-                      Map<String, dynamic>.from(w as Map),
-                      fetchLatest: true,
-                    ),
+                    onLongPress: () => setState(() {
+                      _selectedWithdrawals.add(index);
+                    }),
+                    onTap: () {
+                      if (_selectedWithdrawals.isNotEmpty) {
+                        setState(() {
+                          if (!_selectedWithdrawals.add(index)) {
+                            _selectedWithdrawals.remove(index);
+                          }
+                        });
+                        return;
+                      }
+                      TransactionReceiptService.showDetails(
+                        context,
+                        Map<String, dynamic>.from(w as Map),
+                        fetchLatest: true,
+                      );
+                    },
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(16),
@@ -1070,16 +1088,17 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       ),
                       child: Row(
                         children: [
-                          Checkbox(
-                            value: _selectedWithdrawals.contains(index),
-                            onChanged: (selected) => setState(() {
-                              if (selected == true) {
-                                _selectedWithdrawals.add(index);
-                              } else {
-                                _selectedWithdrawals.remove(index);
-                              }
-                            }),
-                          ),
+                          if (_selectedWithdrawals.isNotEmpty)
+                            Checkbox(
+                              value: _selectedWithdrawals.contains(index),
+                              onChanged: (selected) => setState(() {
+                                if (selected == true) {
+                                  _selectedWithdrawals.add(index);
+                                } else {
+                                  _selectedWithdrawals.remove(index);
+                                }
+                              }),
+                            ),
                           Container(
                             width: 42,
                             height: 42,

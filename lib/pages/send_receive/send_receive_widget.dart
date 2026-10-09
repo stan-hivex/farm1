@@ -1092,11 +1092,24 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
     return InkWell(
       borderRadius: BorderRadius.circular(20),
-      onTap: () => TransactionReceiptService.showDetails(
-        context,
-        Map<String, dynamic>.from(tx as Map),
-        fetchLatest: true,
-      ),
+      onLongPress: () => setState(() {
+        _selectedTransactions.add(index);
+      }),
+      onTap: () {
+        if (_selectedTransactions.isNotEmpty) {
+          setState(() {
+            if (!_selectedTransactions.add(index)) {
+              _selectedTransactions.remove(index);
+            }
+          });
+          return;
+        }
+        TransactionReceiptService.showDetails(
+          context,
+          Map<String, dynamic>.from(tx as Map),
+          fetchLatest: true,
+        );
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(18),
@@ -1106,16 +1119,17 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
         ),
         child: Row(
           children: [
-            Checkbox(
-              value: _selectedTransactions.contains(index),
-              onChanged: (selected) => setState(() {
-                if (selected == true) {
-                  _selectedTransactions.add(index);
-                } else {
-                  _selectedTransactions.remove(index);
-                }
-              }),
-            ),
+            if (_selectedTransactions.isNotEmpty)
+              Checkbox(
+                value: _selectedTransactions.contains(index),
+                onChanged: (selected) => setState(() {
+                  if (selected == true) {
+                    _selectedTransactions.add(index);
+                  } else {
+                    _selectedTransactions.remove(index);
+                  }
+                }),
+              ),
             Container(
               width: 52,
               height: 52,

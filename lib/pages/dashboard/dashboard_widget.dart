@@ -21,6 +21,7 @@ import '/services/transaction_authorization_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/utils/transaction_peer_resolver.dart';
+import '/utils/transaction_history_utils.dart';
 import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -107,7 +108,10 @@ class _DashboardWidgetState extends State<DashboardWidget>
       walletBalance = FFAppState().walletBalance;
       kesEquivalent = FFAppState().kesEquivalent;
       profileImageUrl = FFAppState().profileImageUrl;
-      transactions = FFAppState().recentTransactions;
+      transactions = FFAppState()
+          .recentTransactions
+          .where(isVisibleTransactionHistoryItem)
+          .toList();
       unreadNotificationsCount = FFAppState().unreadNotificationCount;
       isBalanceLoading = false;
       isTransactionsLoading = false;
@@ -153,7 +157,10 @@ class _DashboardWidgetState extends State<DashboardWidget>
       walletBalance = FFAppState().walletBalance;
       kesEquivalent = FFAppState().kesEquivalent;
       profileImageUrl = FFAppState().profileImageUrl;
-      transactions = FFAppState().recentTransactions;
+      transactions = FFAppState()
+          .recentTransactions
+          .where(isVisibleTransactionHistoryItem)
+          .toList();
       isBalanceLoading = false;
       isTransactionsLoading = false;
     });
@@ -230,7 +237,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       final items = response['data'] as List? ?? [];
       if (!mounted) return;
       setState(() {
-        transactions = items;
+        transactions = items.where(isVisibleTransactionHistoryItem).toList();
         isTransactionsLoading = false;
       });
     } catch (e) {

@@ -123,7 +123,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => LoginpageModel());
-    FFAppState().themeMode = ThemeMode.light;
     _initializeBiometric();
   }
 
@@ -229,7 +228,9 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
       }
     }
 
-    await BiometricEnrollmentPrompt.showAfterLogin(context);
+    if (FFAppState().role == 'user') {
+      await BiometricEnrollmentPrompt.showAfterLogin(context);
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

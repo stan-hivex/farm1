@@ -146,6 +146,19 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     }
   }
 
+  Future<void> _refreshAfterEscrowAction() async {
+    try {
+      await AppSessionManager().syncNow(
+        profileTimeoutSeconds: 5,
+        walletTimeoutSeconds: 5,
+        transactionsTimeoutSeconds: 5,
+      );
+    } catch (error) {
+      debugPrint('Escrow succeeded but wallet refresh failed: $error');
+    }
+    if (mounted) await fetchEscrows();
+  }
+
   Future<void> releaseEscrow(String escrowId, {double? releaseAmount}) async {
     // Find the escrow to get the amount
     final escrow = escrows.firstWhere((e) => e.id == escrowId);
@@ -267,12 +280,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
         );
       }
 
-      await AppSessionManager().syncNow(
-        profileTimeoutSeconds: 5,
-        walletTimeoutSeconds: 5,
-        transactionsTimeoutSeconds: 5,
-      );
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -280,8 +288,9 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
         ),
       );
 
-      fetchEscrows();
+      await _refreshAfterEscrowAction();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Release failed: $e'),
@@ -629,29 +638,20 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                     return;
                                   }
 
-                                  await ApiService.request(
-                                    method: 'POST',
-                                    path: '/escrow',
-                                    body: {
-                                      'seller_identifier':
-                                          sellerController.text.trim(),
-                                      'amount': amount,
-                                      'title': titleController.text.trim(),
-                                      'description':
-                                          descriptionController.text.trim(),
-                                      'pin': null,
-                                      'biometric_auth': true,
-                                      'device_fingerprint':
-                                          result.deviceFingerprint,
-                                    },
+                                  await EscrowApiService.createEscrow(
+                                    sellerIdentifier:
+                                        sellerController.text.trim(),
+                                    amount: amount,
+                                    title: titleController.text.trim(),
+                                    description:
+                                        descriptionController.text.trim(),
+                                    biometricAuth: true,
+                                    deviceFingerprint: result.deviceFingerprint,
                                   );
 
                                   if (!mounted) return;
-                                  await AppSessionManager().syncNow(
-                                    profileTimeoutSeconds: 5,
-                                    walletTimeoutSeconds: 5,
-                                    transactionsTimeoutSeconds: 5,
-                                  );
+                                  await _refreshAfterEscrowAction();
+                                  if (!mounted) return;
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
@@ -659,7 +659,6 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                           'Escrow created successfully. Fee deducted and credited to platform.'),
                                     ),
                                   );
-                                  await fetchEscrows();
                                 } catch (e) {
                                   if (!mounted) return;
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -737,18 +736,13 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                   (r) => r.toTransactionAuthenticationResult());
 
                       if (authResult?.biometricUsed == true) {
-                        await ApiService.request(
-                          method: 'POST',
-                          path: '/escrow',
-                          body: {
-                            'seller_identifier': sellerController.text.trim(),
-                            'amount': amount,
-                            'title': titleController.text.trim(),
-                            'description': descriptionController.text.trim(),
-                            'pin': null,
-                            'biometric_auth': true,
-                            'device_fingerprint': authResult?.deviceFingerprint,
-                          },
+                        await EscrowApiService.createEscrow(
+                          sellerIdentifier: sellerController.text.trim(),
+                          amount: amount,
+                          title: titleController.text.trim(),
+                          description: descriptionController.text.trim(),
+                          biometricAuth: true,
+                          deviceFingerprint: authResult?.deviceFingerprint,
                         );
                       } else {
                         if (pinController.text.trim().isEmpty) {
@@ -759,25 +753,18 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                           return;
                         }
 
-                        await ApiService.request(
-                          method: 'POST',
-                          path: '/escrow',
-                          body: {
-                            'seller_identifier': sellerController.text.trim(),
-                            'amount': amount,
-                            'title': titleController.text.trim(),
-                            'description': descriptionController.text.trim(),
-                            'pin': pinController.text.trim(),
-                          },
+                        await EscrowApiService.createEscrow(
+                          sellerIdentifier: sellerController.text.trim(),
+                          amount: amount,
+                          title: titleController.text.trim(),
+                          description: descriptionController.text.trim(),
+                          pin: pinController.text.trim(),
                         );
                       }
 
                       if (mounted) {
-                        await AppSessionManager().syncNow(
-                          profileTimeoutSeconds: 5,
-                          walletTimeoutSeconds: 5,
-                          transactionsTimeoutSeconds: 5,
-                        );
+                        await _refreshAfterEscrowAction();
+                        if (!mounted) return;
                         Navigator.pop(context);
 
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -787,10 +774,9 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                             ),
                           ),
                         );
-
-                        fetchEscrows();
                       }
                     } catch (e) {
+                      if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text('$e'),

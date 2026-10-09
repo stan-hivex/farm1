@@ -12,6 +12,7 @@ import '/services/secure_storage_service.dart';
 import '/services/app_session_manager.dart';
 import '/services/notification_service.dart';
 import '/services/auth/session_store_service.dart';
+import '/services/biometric_lock_service.dart';
 
 /// Centralized authentication service for the FARM app.
 ///
@@ -360,6 +361,14 @@ class AuthService {
     print('LOGOUT CALLED');
     print(StackTrace.current);
     Exception? logoutError;
+
+    if (FFAppState().isUser && FFAppState().biometricsEnabled) {
+      try {
+        await BiometricLockService().disableBiometrics();
+      } catch (e) {
+        debugPrint('Could not unregister biometrics during logout: $e');
+      }
+    }
 
     try {
       await ApiService.revokeAllSessions();

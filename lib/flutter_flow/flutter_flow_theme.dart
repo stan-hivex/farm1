@@ -19,25 +19,23 @@ abstract class FlutterFlowTheme {
     if (modeString != null) {
       return ThemeMode.values.firstWhere(
         (mode) => mode.name == modeString,
-        orElse: () => ThemeMode.system,
+        orElse: () => ThemeMode.light,
       );
     }
 
     final darkMode = _prefs?.getBool(kThemeModeKey);
     return darkMode == null
-        ? ThemeMode.system
+        ? ThemeMode.light
         : darkMode
             ? ThemeMode.dark
             : ThemeMode.light;
   }
 
   static void saveThemeMode(ThemeMode mode) {
-    if (mode == ThemeMode.system) {
-      _prefs?.remove(kThemeModeKey);
-    } else {
-      _prefs?.setString(kThemeModeKey, mode.name);
-      _prefs?.setBool(kThemeModeKey, mode == ThemeMode.dark);
-    }
+    final selectedMode =
+        mode == ThemeMode.system ? ThemeMode.light : mode;
+    _prefs?.setString(kThemeModeKey, selectedMode.name);
+    _prefs?.setBool(kThemeModeKey, selectedMode == ThemeMode.dark);
   }
 
   static FlutterFlowTheme of(BuildContext context) {

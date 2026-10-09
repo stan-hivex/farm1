@@ -47,11 +47,29 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
   final TextEditingController referralController = TextEditingController();
   Timer? _usernameCheckTimer;
+  final Map<String, Timer?> _contactCheckTimers = {
+    'email': null,
+    'phone': null,
+  };
   int _usernameCheckRequestId = 0;
   String? _usernameCheckResultFor;
   bool? _usernameAvailable;
   bool _usernameChecking = false;
   String? _usernameCheckError;
+  final Map<String, int> _contactCheckRequestIds = {'email': 0, 'phone': 0};
+  final Map<String, String?> _contactCheckResultFor = {
+    'email': null,
+    'phone': null,
+  };
+  final Map<String, bool?> _contactAvailable = {
+    'email': null,
+    'phone': null,
+  };
+  final Map<String, bool> _contactChecking = {'email': false, 'phone': false};
+  final Map<String, String?> _contactCheckErrors = {
+    'email': null,
+    'phone': null,
+  };
 
   final CountryService _countryService = CountryService();
 
@@ -612,6 +630,95 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
     return _checkUsernameAvailability(username, requestId);
   }
 
+  String _contactValue(String field) {
+    if (field == 'email') return emailController.text.trim().toLowerCase();
+    return '$_selectedCountryCode${phoneController.text.trim()}';
+  }
+
+  bool _isValidContact(String field, String value) {
+    if (field == 'email') {
+      return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
+    }
+    return RegExp(r'^\+?[1-9]\d{7,14}$').hasMatch(value);
+  }
+
+  void _onContactChanged(String field) {
+    _contactCheckTimers[field]?.cancel();
+    final requestId = (_contactCheckRequestIds[field] ?? 0) + 1;
+    final value = _contactValue(field);
+    setState(() {
+      _contactCheckRequestIds[field] = requestId;
+      _contactCheckResultFor[field] = null;
+      _contactAvailable[field] = null;
+      _contactChecking[field] = false;
+      _contactCheckErrors[field] = null;
+    });
+    if (!_isValidContact(field, value)) return;
+
+    setState(() => _contactChecking[field] = true);
+    _contactCheckTimers[field] = Timer(const Duration(milliseconds: 450), () {
+      _checkContactAvailability(field, value, requestId);
+    });
+  }
+
+  Future<bool?> _checkContactAvailability(
+    String field,
+    String value,
+    int requestId,
+  ) async {
+    try {
+      final query = Uri(queryParameters: {field: value}).query;
+      final response = await ApiService.request(
+        method: 'GET',
+        path: '/auth/registration-availability?$query',
+        requiresAuth: false,
+      );
+      final data = response['data'];
+      final availabilityKey =
+          field == 'email' ? 'emailAvailable' : 'phoneAvailable';
+      final available = data is Map && data[availabilityKey] is bool
+          ? data[availabilityKey] as bool
+          : null;
+      if (available == null) {
+        throw const FormatException('Invalid contact availability response');
+      }
+
+      if (mounted && requestId == _contactCheckRequestIds[field]) {
+        setState(() {
+          _contactCheckResultFor[field] = value;
+          _contactAvailable[field] = available;
+          _contactChecking[field] = false;
+          _contactCheckErrors[field] = null;
+        });
+      }
+      return available;
+    } catch (error) {
+      if (mounted && requestId == _contactCheckRequestIds[field]) {
+        setState(() {
+          _contactCheckResultFor[field] = value;
+          _contactAvailable[field] = null;
+          _contactChecking[field] = false;
+          _contactCheckErrors[field] = error.toString();
+        });
+      }
+      return null;
+    }
+  }
+
+  Future<bool?> _checkCurrentContactNow(String field) {
+    _contactCheckTimers[field]?.cancel();
+    final value = _contactValue(field);
+    final requestId = (_contactCheckRequestIds[field] ?? 0) + 1;
+    setState(() {
+      _contactCheckRequestIds[field] = requestId;
+      _contactCheckResultFor[field] = null;
+      _contactAvailable[field] = null;
+      _contactChecking[field] = true;
+      _contactCheckErrors[field] = null;
+    });
+    return _checkContactAvailability(field, value, requestId);
+  }
+
   String _dialCodeForCountry(Country country) {
     for (final entry in _countryCodeMap.entries) {
       if (entry.value == country.name) {
@@ -778,12 +885,14 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
       context,
       () => RegisterpageModel(),
     );
-    FFAppState().themeMode = ThemeMode.light;
   }
 
   @override
   void dispose() {
     _usernameCheckTimer?.cancel();
+    for (final timer in _contactCheckTimers.values) {
+      timer?.cancel();
+    }
     firstNameController.dispose();
     lastNameController.dispose();
     usernameController.dispose();
@@ -1131,6 +1240,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                                   _selectedCountryCode =
                                       _dialCodeForCountry(selectedCountry);
                                 });
+                                _onContactChanged('phone');
                                 field.didChange(_selectedCountryCode);
                               },
                               child: InputDecorator(
@@ -1181,11 +1291,41 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                             if (!RegExp(r'^[0-9]{6,15}$').hasMatch(value)) {
                               return 'Enter valid phone number';
                             }
+                            final phone = _contactValue('phone');
+                            if (_contactCheckResultFor['phone'] == phone &&
+                                _contactAvailable['phone'] == false) {
+                              return 'Phone number already exists. Use another number.';
+                            }
                             return null;
                           },
+                          onChanged: (_) => _onContactChanged('phone'),
                           decoration: inputDecoration(
                             context,
                             '700123456',
+                          ).copyWith(
+                            helperText: _contactCheckErrors['phone'] != null
+                                ? 'Could not check phone number. Try again before continuing.'
+                                : _contactCheckResultFor['phone'] ==
+                                            _contactValue('phone') &&
+                                        _contactAvailable['phone'] == false
+                                    ? 'Phone number already exists. Use another number.'
+                                    : _contactCheckResultFor['phone'] ==
+                                                _contactValue('phone') &&
+                                            _contactAvailable['phone'] == true
+                                        ? 'Phone number is available.'
+                                        : _contactChecking['phone'] == true
+                                            ? 'Checking phone number...'
+                                            : null,
+                            helperStyle: TextStyle(
+                              color: _contactCheckErrors['phone'] != null ||
+                                      (_contactAvailable['phone'] == false &&
+                                          _contactCheckResultFor['phone'] ==
+                                              _contactValue('phone'))
+                                  ? Colors.red
+                                  : _contactAvailable['phone'] == true
+                                      ? Colors.green
+                                      : null,
+                            ),
                           ),
                         ),
                       ),
@@ -1197,9 +1337,47 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   TextFormField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: inputDecoration(
-                      context,
-                      'Enter email',
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Email is required';
+                      }
+                      final email = value.trim().toLowerCase();
+                      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                          .hasMatch(email)) {
+                        return 'Enter a valid email address';
+                      }
+                      if (_contactCheckResultFor['email'] == email &&
+                          _contactAvailable['email'] == false) {
+                        return 'Email already exists. Use another email.';
+                      }
+                      return null;
+                    },
+                    onChanged: (_) => _onContactChanged('email'),
+                    decoration:
+                        inputDecoration(context, 'Enter email').copyWith(
+                      helperText: _contactCheckErrors['email'] != null
+                          ? 'Could not check email. Try again before continuing.'
+                          : _contactCheckResultFor['email'] ==
+                                      _contactValue('email') &&
+                                  _contactAvailable['email'] == false
+                              ? 'Email already exists. Use another email.'
+                              : _contactCheckResultFor['email'] ==
+                                          _contactValue('email') &&
+                                      _contactAvailable['email'] == true
+                                  ? 'Email is available.'
+                                  : _contactChecking['email'] == true
+                                      ? 'Checking email...'
+                                      : null,
+                      helperStyle: TextStyle(
+                        color: _contactCheckErrors['email'] != null ||
+                                (_contactAvailable['email'] == false &&
+                                    _contactCheckResultFor['email'] ==
+                                        _contactValue('email'))
+                            ? Colors.red
+                            : _contactAvailable['email'] == true
+                                ? Colors.green
+                                : null,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16.0),
@@ -1321,6 +1499,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                             _selectedCountryCode =
                                 _dialCodeForCountry(selectedCountry);
                           });
+                          _onContactChanged('phone');
                           field.didChange(selectedCountry.name);
                         },
                         child: InputDecorator(
@@ -1388,9 +1567,41 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         return;
                       }
 
+                      final contactAvailability = await Future.wait<bool?>([
+                        _checkCurrentContactNow('email'),
+                        _checkCurrentContactNow('phone'),
+                      ]);
+                      if (!mounted) return;
+                      if (contactAvailability[0] != true) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              contactAvailability[0] == false
+                                  ? 'Email already exists. Use another email.'
+                                  : 'Could not check email. Please try again.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+                      if (contactAvailability[1] != true) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              contactAvailability[1] == false
+                                  ? 'Phone number already exists. Use another number.'
+                                  : 'Could not check phone number. Please try again.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
+
                       final fullPhone =
                           '$_selectedCountryCode${phoneController.text.trim()}';
-                      final email = emailController.text.trim();
+                      final email = emailController.text.trim().toLowerCase();
                       final password = passwordController.text.trim();
 
                       if (!email.contains('@')) {
@@ -1436,16 +1647,18 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                       } catch (e) {
                         print('ERROR: $e');
 
-                        final message = e
-                                .toString()
-                                .contains('Could not connect to backend server')
+                        final errorText = e.toString().toLowerCase();
+                        final message = errorText
+                                .contains('could not connect to backend server')
                             ? 'common.network_error'.tr()
-                            : e
-                                    .toString()
-                                    .toLowerCase()
-                                    .contains('username taken')
+                            : errorText.contains('username taken')
                                 ? 'Username already exists. Choose another username.'
-                                : 'auth.registration_failed'.tr();
+                                : errorText.contains('phone already registered')
+                                    ? 'Phone number already exists. Use another number.'
+                                    : errorText.contains(
+                                            'email already registered')
+                                        ? 'Email already exists. Use another email.'
+                                        : 'auth.registration_failed'.tr();
 
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

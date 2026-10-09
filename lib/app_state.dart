@@ -121,17 +121,18 @@ class FFAppState extends ChangeNotifier {
           await SecureStorageService.readBiometricLastVerified();
     }
 
-    // Load theme mode
-    final themeModeString = prefs.getString('themeMode');
-    if (themeModeString != null) {
-      _themeMode = ThemeMode.values.firstWhere(
-        (mode) => mode.name == themeModeString,
-        orElse: () => ThemeMode.light,
-      );
-    }
+    // Theme is a device preference and is independent of the active session.
+    // Never fall back to the operating-system theme: only an explicit user
+    // choice may enable dark mode.
+    final themeModeString =
+        prefs.getString('themeMode') ?? prefs.getString('__theme_mode__');
+    final legacyDarkMode = prefs.getBool('__theme_mode__');
+    _themeMode = themeModeString == ThemeMode.dark.name ||
+            (themeModeString == null && legacyDarkMode == true)
+        ? ThemeMode.dark
+        : ThemeMode.light;
     if (_role.isEmpty || !_isLoggedIn) {
       _biometricsEnabled = false;
-      _themeMode = ThemeMode.light;
     }
 
     // Diagnostic auth restore log
@@ -497,16 +498,18 @@ class FFAppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.light;
   ThemeMode get themeMode => _themeMode;
   set themeMode(ThemeMode value) {
-    if (_themeMode == value) return;
-    _themeMode = value;
+    final selectedMode =
+        value == ThemeMode.system ? ThemeMode.light : value;
+    if (_themeMode == selectedMode) return;
+    _themeMode = selectedMode;
     notifyListeners();
     SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('themeMode', value.name),
+      (prefs) => prefs.setString('themeMode', selectedMode.name),
     );
-    FlutterFlowTheme.saveThemeMode(value);
+    FlutterFlowTheme.saveThemeMode(selectedMode);
   }
 
   Future<void> setThemeMode(ThemeMode value) async {
@@ -531,7 +534,6 @@ class FFAppState extends ChangeNotifier {
     hasPin = false;
     role = '';
     lastAuthenticatedRoute = '';
-    themeMode = ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('accessToken');
     await prefs.remove('refreshToken');
@@ -543,7 +545,6 @@ class FFAppState extends ChangeNotifier {
     await prefs.remove('isLoggedIn');
     await prefs.remove('biometricsEnabled');
     await prefs.remove('role');
-    await prefs.remove('themeMode');
     await prefs.remove('lastAuthenticatedRoute');
     await prefs.remove('biometric_last_verified');
     await SecureStorageService.clearAuthData();

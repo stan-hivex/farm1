@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '/app_state.dart';
 import '/services/auth/session_store_service.dart';
 import '../core/admin_config.dart';
@@ -31,6 +32,24 @@ class AdminApiService {
             ? message.join('\n')
             : message ?? 'Could not send the password reset email',
       );
+    }
+
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: email.trim(),
+        actionCodeSettings: ActionCodeSettings(
+          url: 'https://farmapp-e2145.firebaseapp.com/admin-reset-password',
+          handleCodeInApp: true,
+          androidPackageName: 'farmapp.africa',
+          androidInstallApp: true,
+          iOSBundleId: 'com.mycompany.farm',
+        ),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'user-not-found') {
+        return;
+      }
+      rethrow;
     }
   }
 

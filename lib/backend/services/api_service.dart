@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '/core/app_config.dart';
 import '/app_state.dart';
 import '/services/auth/refresh_manager.dart';
+import '/utils/transaction_history_utils.dart';
 
 class ApiServiceException implements Exception {
   const ApiServiceException({
@@ -185,6 +186,14 @@ class ApiService {
         statusCode: response.statusCode,
         message: waitMessage,
         retryAfterSeconds: retryAfter,
+      );
+    }
+    if (response.statusCode >= 500) {
+      throw ApiServiceException(
+        statusCode: response.statusCode,
+        message: message.isNotEmpty
+            ? message
+            : 'Server error (${response.statusCode})',
       );
     }
     throw Exception(message.isNotEmpty
@@ -477,14 +486,21 @@ class ApiService {
     int page = 1,
     int limit = 20,
     int timeoutSeconds = 20,
-  }) =>
-      _request(
+  }) async {
+    final response = await _request(
         method: 'GET',
         path: '/transactions?page=$page&limit=$limit'
             '${type != null ? "&type=$type" : ""}'
             '${status != null ? "&status=$status" : ""}',
         timeoutSeconds: timeoutSeconds,
       );
+    final items = response['data'];
+    if (items is List) {
+      response['data'] =
+          items.where(isVisibleTransactionHistoryItem).toList();
+    }
+    return response;
+  }
 
   static Future<Map<String, dynamic>> getTransactionDetails(String id) =>
       _request(
@@ -526,8 +542,15 @@ class ApiService {
         body: {'amount_fiat': amountFiat, 'currency': currency},
       );
 
-  static Future<Map<String, dynamic>> getDepositHistory() =>
-      _request(method: 'GET', path: '/payments/deposits');
+  static Future<Map<String, dynamic>> getDepositHistory() async {
+    final response = await _request(method: 'GET', path: '/payments/deposits');
+    final items = response['data'];
+    if (items is List) {
+      response['data'] =
+          items.where(isVisibleTransactionHistoryItem).toList();
+    }
+    return response;
+  }
 
   static Future<Map<String, dynamic>> getDepositStatus(String reference) =>
       _request(method: 'GET', path: '/payments/deposit/$reference');

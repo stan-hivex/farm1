@@ -18,12 +18,19 @@ class TransactionReceiptService {
     bool fetchLatest = false,
   }) async {
     var detailsTransaction = Map<String, dynamic>.from(transaction);
-    var detailsLoadError = false;
-    final transactionDbId = _text(transaction['id']);
-    if (fetchLatest && transactionDbId.isNotEmpty) {
+    final transactionId = _text(transaction['id']);
+    final transactionReference = _text(transaction['transaction_reference'] ??
+        transaction['reference'] ??
+        transaction['transaction_id'] ??
+        transaction['transactionId']);
+    final transactionLookupKey =
+        _isUuid(transactionId) || transactionReference.isEmpty
+            ? transactionId
+            : transactionReference;
+    if (fetchLatest && transactionLookupKey.isNotEmpty) {
       try {
         final response =
-            await ApiService.getTransactionDetails(transactionDbId);
+            await ApiService.getTransactionDetails(transactionLookupKey);
         final remote = response['data'];
         if (remote is Map) {
           detailsTransaction.addAll(
@@ -31,11 +38,10 @@ class TransactionReceiptService {
               ..removeWhere((_, value) => value == null),
           );
         } else {
-          detailsLoadError = true;
+          debugPrint('Transaction details response did not include a record.');
         }
       } catch (error) {
         debugPrint('Could not fetch full transaction details: $error');
-        detailsLoadError = true;
       }
     }
 
@@ -44,10 +50,8 @@ class TransactionReceiptService {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => _TransactionDetailsSheet(
-        transaction: detailsTransaction,
-        detailsLoadError: detailsLoadError,
-      ),
+      builder: (sheetContext) =>
+          _TransactionDetailsSheet(transaction: detailsTransaction),
     );
   }
 
@@ -71,6 +75,11 @@ class TransactionReceiptService {
           transaction['id']);
 
   static String _text(dynamic value) => value?.toString().trim() ?? '';
+
+  static bool _isUuid(String value) => RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        caseSensitive: false,
+      ).hasMatch(value);
 
   static dynamic _firstValue(
     Map<String, dynamic> transaction,
@@ -413,13 +422,9 @@ class TransactionReceiptService {
 }
 
 class _TransactionDetailsSheet extends StatelessWidget {
-  const _TransactionDetailsSheet({
-    required this.transaction,
-    required this.detailsLoadError,
-  });
+  const _TransactionDetailsSheet({required this.transaction});
 
   final Map<String, dynamic> transaction;
-  final bool detailsLoadError;
 
   @override
   Widget build(BuildContext context) {
@@ -439,14 +444,6 @@ class _TransactionDetailsSheet extends StatelessWidget {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            if (detailsLoadError)
-              const Padding(
-                padding: EdgeInsets.only(top: 8),
-                child: Text(
-                  'Could not fetch the latest transaction details. Showing the information currently available.',
-                  style: TextStyle(color: Colors.orange),
-                ),
-              ),
             const SizedBox(height: 12),
             if (id.isNotEmpty)
               Row(

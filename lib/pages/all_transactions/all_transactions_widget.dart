@@ -7,6 +7,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_peer_resolver.dart';
+import '/utils/transaction_history_utils.dart';
 import 'all_transactions_model.dart';
 
 export 'all_transactions_model.dart';
@@ -130,7 +131,10 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
             }).toList()
           : <Map<String, dynamic>>[];
 
-      final filtered = items.where((tx) => _matchesFilters(tx)).toList();
+      final filtered = items
+          .where(isVisibleTransactionHistoryItem)
+          .where(_matchesFilters)
+          .toList();
       if (!mounted) return;
       setState(() {
         _transactions = filtered;
@@ -331,9 +335,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                   runSpacing: 8,
                   children: [
                     _statusChip('All', 'all'),
-                    _statusChip('Pending', 'pending'),
                     _statusChip('Completed', 'completed'),
-                    _statusChip('Failed', 'failed'),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -409,12 +411,24 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
 
                       return InkWell(
                         borderRadius: BorderRadius.circular(16),
-                        onTap: () =>
-                            TransactionReceiptService.showDetails(
-                          context,
-                          tx,
-                          fetchLatest: true,
-                        ),
+                        onLongPress: () => setState(() {
+                          _selectedTransactions.add(index);
+                        }),
+                        onTap: () {
+                          if (_selectedTransactions.isNotEmpty) {
+                            setState(() {
+                              if (!_selectedTransactions.add(index)) {
+                                _selectedTransactions.remove(index);
+                              }
+                            });
+                            return;
+                          }
+                          TransactionReceiptService.showDetails(
+                            context,
+                            tx,
+                            fetchLatest: true,
+                          );
+                        },
                         child: Card(
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16)),
@@ -422,16 +436,18 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                             padding: const EdgeInsets.all(14),
                             child: Row(
                               children: [
-                                Checkbox(
-                                  value: _selectedTransactions.contains(index),
-                                  onChanged: (selected) => setState(() {
-                                    if (selected == true) {
-                                      _selectedTransactions.add(index);
-                                    } else {
-                                      _selectedTransactions.remove(index);
-                                    }
-                                  }),
-                                ),
+                                if (_selectedTransactions.isNotEmpty)
+                                  Checkbox(
+                                    value:
+                                        _selectedTransactions.contains(index),
+                                    onChanged: (selected) => setState(() {
+                                      if (selected == true) {
+                                        _selectedTransactions.add(index);
+                                      } else {
+                                        _selectedTransactions.remove(index);
+                                      }
+                                    }),
+                                  ),
                                 CircleAvatar(
                                   radius: 22,
                                   backgroundColor: theme.secondaryBackground,
