@@ -729,6 +729,14 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                         fontWeight: FontWeight.bold,
                       ),
                 ),
+                const SizedBox(height: 10),
+                Text(
+                  'If you don’t see the code in your messages, check your messaging app’s Spam folder. If it’s there, mark it as “Not spam” so future codes arrive in your main inbox.',
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).bodySmall.override(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
                 const SizedBox(height: 24),
                 if (_isVerifying)
                   const CircularProgressIndicator()

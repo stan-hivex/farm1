@@ -23,7 +23,6 @@ import 'services/auth/route_guard_service.dart';
 import 'pages/biometric_unlock_page/biometric_unlock_page_widget.dart';
 import 'pages/all_transactions/all_transactions_widget.dart';
 import 'pages/dashboard/dashboard_widget.dart';
-import 'flutter_flow/nav/nav.dart' show appNavigatorKey;
 import 'admin/pages/admin_password_reset_page.dart';
 
 Widget buildSafeErrorWidget(FlutterErrorDetails details) {

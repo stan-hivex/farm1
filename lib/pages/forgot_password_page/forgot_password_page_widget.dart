@@ -137,6 +137,14 @@ class _ForgotPasswordPageWidgetState extends State<ForgotPasswordPageWidget> {
                       textAlign: TextAlign.center,
                       style: FlutterFlowTheme.of(context).bodyMedium,
                     ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'If you don’t see the email in your inbox, check your Spam folder. If it’s there, mark it as “Not spam” so future emails arrive in your inbox.',
+                      textAlign: TextAlign.center,
+                      style: FlutterFlowTheme.of(context).bodyMedium.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
                     const SizedBox(height: 16),
                     TextButton(
                       onPressed: () =>
