@@ -11,6 +11,7 @@ import '/components/kyc_required_widget.dart';
 import '/services/app_session_manager.dart';
 import '/utils/transaction_peer_resolver.dart';
 import '/services/transaction_receipt_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -642,6 +643,11 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       setState(() => isRequesting = true);
       final amount = enteredAmount;
 
+      final expiresAt = DateTime.now()
+          .toUtc()
+          .add(const Duration(hours: 12))
+          .toIso8601String();
+
       await ApiService.request(
         method: 'POST',
         path: '/payment-requests/request',
@@ -649,6 +655,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
           'recipient_identifier': recipientController.text.trim(),
           'amount': amount,
           'description': descriptionController.text.trim(),
+          'expires_at': expiresAt,
         },
       );
 
@@ -1761,18 +1768,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              FlutterFlowIconButton(
-                                borderRadius: 8,
-                                buttonSize: 40,
-                                icon: Icon(
-                                  Icons.arrow_back_rounded,
-                                  color:
-                                      FlutterFlowTheme.of(context).primaryText,
-                                ),
-                                onPressed: () {
-                                  context.goNamed('Dashboard');
-                                },
-                              ),
+                              const BackChevron(),
                               Text(
                                 'Send & Receive',
                                 style: FlutterFlowTheme.of(context)

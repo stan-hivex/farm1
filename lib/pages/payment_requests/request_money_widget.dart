@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 // Removed unused import
 import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -38,6 +39,10 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
 
     try {
       setState(() => _submitting = true);
+      final expiresAt = DateTime.now()
+          .toUtc()
+          .add(const Duration(hours: 12))
+          .toIso8601String();
       await ApiService.request(
         method: 'POST',
         path: '/payment-requests/request',
@@ -45,6 +50,7 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
           'recipient_identifier': recipient,
           'amount': amount,
           'description': desc,
+          'expires_at': expiresAt,
         },
       );
       ScaffoldMessenger.of(context).showSnackBar(
@@ -63,7 +69,10 @@ class _RequestMoneyWidgetState extends State<RequestMoneyWidget> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('common.request_money'.tr())),
+      appBar: AppBar(
+        leading: const BackChevron(),
+        title: Text('common.request_money'.tr()),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
