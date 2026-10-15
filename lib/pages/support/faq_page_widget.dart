@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 
 import '/flutter_flow/flutter_flow_theme.dart';
 
@@ -35,6 +36,7 @@ class FaqPageWidget extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
         title: const Text('FAQs'),

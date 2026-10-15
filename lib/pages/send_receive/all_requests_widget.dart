@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/backend/services/api_service.dart';
+import '/widgets/common/back_chevron.dart';
 // Removed unused imports
 
 class AllRequestsWidget extends StatefulWidget {
@@ -50,6 +51,7 @@ class _AllRequestsWidgetState extends State<AllRequestsWidget> {
     final theme = FlutterFlowTheme.of(context);
     return Scaffold(
       appBar: AppBar(
+        leading: const BackChevron(),
         title: Text('common.requests'.tr()),
         backgroundColor: theme.primaryBackground,
       ),

@@ -3,6 +3,7 @@ import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/transaction_receipt_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 class MerchantSalesWidget extends StatefulWidget {
   const MerchantSalesWidget({super.key});
@@ -37,6 +38,13 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
         tx['type'],
         tx['sender_username'],
         tx['customer_name'],
+        tx['customer_email'],
+        tx['guest_email'],
+        if (tx['metadata'] is Map) ...[
+          (tx['metadata'] as Map)['guest_email'],
+          (tx['metadata'] as Map)['customer_email'],
+          (tx['metadata'] as Map)['payer_email'],
+        ],
         tx['merchant_business_name'],
         tx['status'],
         tx['amount'],
@@ -124,6 +132,7 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const BackChevron(),
         title: const Text('Sales History'),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
@@ -139,9 +148,20 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Merchant sales recorded by username',
-                    style: theme.titleMedium
-                        .copyWith(fontWeight: FontWeight.bold)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('Merchant sales recorded by customer',
+                          style: theme.titleMedium
+                              .copyWith(fontWeight: FontWeight.bold)),
+                    ),
+                    TextButton.icon(
+                      onPressed: () => context.pushNamed('ReceiptHistory'),
+                      icon: const Icon(Icons.receipt_long),
+                      label: const Text('Receipts'),
+                    ),
+                  ],
+                ),
                 if (_selectedSales.isNotEmpty)
                   Align(
                     alignment: Alignment.centerRight,
@@ -190,6 +210,20 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
                       final index = entry.key;
                       final tx = entry.value;
                       final amount = tx['amount']?.toString() ?? '0';
+                      final metadata = tx['metadata'] is Map
+                          ? Map<String, dynamic>.from(tx['metadata'] as Map)
+                          : const <String, dynamic>{};
+                      final payerEmail = [
+                        tx['customer_email'],
+                        tx['guest_email'],
+                        tx['payer_email'],
+                        metadata['guest_email'],
+                        metadata['customer_email'],
+                        metadata['payer_email'],
+                      ]
+                          .map((value) => value?.toString().trim() ?? '')
+                          .firstWhere((value) => value.isNotEmpty,
+                              orElse: () => '');
                       final payerUsername = tx['sender_username']
                                   ?.toString()
                                   .trim()
@@ -202,7 +236,9 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
                               : tx['username']?.toString().trim().isNotEmpty ==
                                       true
                                   ? '@${tx['username']}'
-                                  : 'Unknown';
+                                  : payerEmail.isNotEmpty
+                                      ? payerEmail
+                                      : 'Unknown';
                       final merchantName =
                           tx['merchant_business_name']?.toString().trim();
                       final title =

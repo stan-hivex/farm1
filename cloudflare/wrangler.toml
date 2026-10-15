@@ -1,0 +1,8 @@
+name = "farmapp-pay-pages"
+main = "worker.js"
+compatibility_date = "2026-11-05"
+
+routes = [
+  { pattern = "farmapp.africa/pay/*", zone_name = "farmapp.africa" },
+  { pattern = "www.farmapp.africa/pay/*", zone_name = "farmapp.africa" },
+]

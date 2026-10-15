@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
+import '/services/transaction_receipt_service.dart';
+import '/widgets/common/transaction_receipt_selection_bar.dart';
 
 class WithdrawalsManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -22,6 +24,15 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
   int _page = 1;
   String _search = '';
   final _searchController = TextEditingController();
+  final Set<int> _selectedTransactions = <int>{};
+
+  List<Map<String, dynamic>> get _visibleWithdrawals => _withdrawals
+      .whereType<Map>()
+      .map((withdrawal) => Map<String, dynamic>.from(withdrawal))
+      .where((withdrawal) =>
+          _search.isEmpty ||
+          withdrawal.toString().toLowerCase().contains(_search.toLowerCase()))
+      .toList();
 
   @override
   void dispose() {
@@ -36,26 +47,71 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final res = await AdminApiService.getWithdrawals(
           page: _page, status: _statusFilter == 'all' ? null : _statusFilter);
-      setState(() => _withdrawals = res['data'] ?? []);
+      setState(() {
+        _withdrawals = res['data'] ?? [];
+        _selectedTransactions.clear();
+      });
     } catch (_) {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-
   }
 
   @override
   Future<void> refreshAdminPage() => _load();
 
+  List<Map<String, dynamic>> get _selectedReceipts => _selectedTransactions
+      .where((index) => index >= 0 && index < _visibleWithdrawals.length)
+      .map((index) => _visibleWithdrawals[index])
+      .toList();
+
+  Future<void> _shareSelected() async {
+    try {
+      await TransactionReceiptService.shareReceipts(_selectedReceipts);
+      if (mounted) setState(() => _selectedTransactions.clear());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not share receipts: $error')),
+      );
+    }
+  }
+
+  Future<void> _downloadSelected() async {
+    try {
+      await TransactionReceiptService.downloadReceipts(_selectedReceipts);
+      if (!mounted) return;
+      setState(() => _selectedTransactions.clear());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected receipts saved to gallery')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save receipts: $error')),
+      );
+    }
+  }
+
+  void _toggleAll() => setState(() {
+        if (_selectedTransactions.length == _visibleWithdrawals.length) {
+          _selectedTransactions.clear();
+        } else {
+          _selectedTransactions
+            ..clear()
+            ..addAll(List<int>.generate(_visibleWithdrawals.length, (i) => i));
+        }
+      });
+
   Future<void> _process(String txId, String action) async {
     try {
       debugPrint('Processing withdrawal: txId=$txId, action=$action');
-      final response =
-          await AdminApiService.processWithdrawal(txId, action);
+      final response = await AdminApiService.processWithdrawal(txId, action);
       debugPrint('Withdrawal processed successfully');
       _snack(
           response['message']?.toString() ??
@@ -209,7 +265,9 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
         if (network.isNotEmpty) network,
         if (address.isNotEmpty) address,
       ].join(' · ');
-      return destination.isEmpty ? 'Crypto destination unavailable' : destination;
+      return destination.isEmpty
+          ? 'Crypto destination unavailable'
+          : destination;
     }
     return (record['destination'] ?? 'Destination unavailable').toString();
   }
@@ -226,6 +284,14 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
         child: Column(
           children: [
             _filterRow(accent),
+            if (_selectedTransactions.isNotEmpty)
+              TransactionReceiptSelectionBar(
+                selectedCount: _selectedTransactions.length,
+                totalCount: _visibleWithdrawals.length,
+                onSelectAll: _toggleAll,
+                onShare: _shareSelected,
+                onDownload: _downloadSelected,
+              ),
             if (_loading && _withdrawals.isEmpty)
               const Expanded(
                   child: Center(
@@ -244,28 +310,14 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                           context.onSurface.withOpacity(0.6))))
                           : ListView.builder(
                               padding: const EdgeInsets.all(20),
-                              itemCount: _withdrawals
-                                  .where((w) =>
-                                      _search.isEmpty ||
-                                      w
-                                          .toString()
-                                          .toLowerCase()
-                                          .contains(_search.toLowerCase()))
-                                  .length,
+                              itemCount: _visibleWithdrawals.length,
                               itemBuilder: (_, i) {
-                                final visible = _withdrawals
-                                    .where((w) =>
-                                        _search.isEmpty ||
-                                        w
-                                            .toString()
-                                            .toLowerCase()
-                                            .contains(_search.toLowerCase()))
-                                    .toList();
-                                final w = visible[i];
+                                final w = _visibleWithdrawals[i];
                                 final meta = w['metadata'] as Map? ?? {};
                                 final method = _paymentMethodLabel(meta, w);
-                                final status =
-                                    (w['status'] ?? '').toString().toLowerCase();
+                                final status = (w['status'] ?? '')
+                                    .toString()
+                                    .toLowerCase();
                                 final isPending = status == 'pending';
                                 final canRetry = status == 'failed';
                                 final color = _sc(status);
@@ -284,245 +336,287 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                         .toUpperCase();
                                 final dateLabel = (w['date'] ?? '-').toString();
                                 final timeLabel = (w['time'] ?? '-').toString();
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 14),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: cardColor,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                        color:
-                                            context.onSurface.withOpacity(0.1)),
-                                  ),
-                                  child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Expanded(
-                                                child: Row(children: [
-                                                  Container(
-                                                    width: 40,
-                                                    height: 40,
-                                                    decoration: BoxDecoration(
-                                                        color: context
-                                                            .errorColor
-                                                            .withAlpha(
-                                                                (0.14 * 255)
-                                                                    .round()),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(10)),
-                                                    child: Icon(
-                                                        Icons
-                                                            .north_east_rounded,
-                                                        color:
-                                                            context.errorColor,
-                                                        size: 20),
+                                return GestureDetector(
+                                  onLongPress: () => setState(
+                                      () => _selectedTransactions.add(i)),
+                                  onTap: () {
+                                    if (_selectedTransactions.isNotEmpty) {
+                                      setState(() {
+                                        if (!_selectedTransactions.add(i)) {
+                                          _selectedTransactions.remove(i);
+                                        }
+                                      });
+                                      return;
+                                    }
+                                    TransactionReceiptService.showDetails(
+                                      context,
+                                      w,
+                                    );
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 14),
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: cardColor,
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                          color: context.onSurface
+                                              .withOpacity(0.1)),
+                                    ),
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                if (_selectedTransactions
+                                                    .isNotEmpty)
+                                                  Checkbox(
+                                                    value: _selectedTransactions
+                                                        .contains(i),
+                                                    onChanged: (selected) =>
+                                                        setState(() {
+                                                      if (selected == true) {
+                                                        _selectedTransactions
+                                                            .add(i);
+                                                      } else {
+                                                        _selectedTransactions
+                                                            .remove(i);
+                                                      }
+                                                    }),
                                                   ),
-                                                  const SizedBox(width: 12),
-                                                  Expanded(
-                                                    child: Column(
-                                                        crossAxisAlignment:
-                                                            CrossAxisAlignment
-                                                                .start,
-                                                        children: [
-                                                          Text(
-                                                              'User: $userLabel',
-                                                              style: GoogleFonts
-                                                                  .plusJakartaSans(
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
-                                                                      fontSize:
-                                                                          14,
-                                                                      color: Colors
-                                                                          .red)),
-                                                          Text(
-                                                              'User ID: ${userId.isNotEmpty ? userId : '-'}',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize: 13,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w600)),
-                                                          Text('ID: $reference',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500)),
-                                                          Text(
-                                                              'Method: $method',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500)),
-                                                          Text(
-                                                              'Amount: $amountLabel',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize: 12,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .w500)),
-                                                          Text(
-                                                              'Status: $statusLabel',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize:
-                                                                      11)),
-                                                          Text(
-                                                              'Date: $dateLabel',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize:
-                                                                      11)),
-                                                          Text(
-                                                              'Time: $timeLabel',
-                                                              style: GoogleFonts.plusJakartaSans(
-                                                                  color: context
-                                                                      .onSurface
-                                                                      .withOpacity(
-                                                                          0.54),
-                                                                  fontSize:
-                                                                      11)),
-                                                        ]),
-                                                  ),
-                                                ]),
-                                              ),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                        horizontal: 10,
-                                                        vertical: 4),
-                                                decoration: BoxDecoration(
-                                                    color: color.withAlpha(
-                                                        (0.16 * 255).round()),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            8)),
-                                                child: Text(statusLabel,
-                                                    style: GoogleFonts
-                                                        .plusJakartaSans(
-                                                            color: color,
-                                                            fontSize: 10,
-                                                            fontWeight:
-                                                                FontWeight
-                                                                    .bold)),
-                                              ),
-                                            ]),
-                                        const SizedBox(height: 10),
-                                        Text(
-                                            'Destination: ${_destinationLabel(w)}',
-                                            style: GoogleFonts.plusJakartaSans(
-                                                color: context.onSurface
-                                                    .withOpacity(0.7),
-                                                fontSize: 12)),
-                                        if ((w['rejectionReason'] ?? '')
-                                            .toString()
-                                            .trim()
-                                            .isNotEmpty) ...[
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            'Last failure: ${w['rejectionReason']}',
-                                            style: GoogleFonts.plusJakartaSans(
-                                              color: context.errorColor,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                        if (isPending || canRetry) ...[
-                                          const SizedBox(height: 12),
-                                          Row(children: [
-                                            if (isPending)
-                                              Expanded(
-                                                child: OutlinedButton(
-                                                  style: OutlinedButton.styleFrom(
-                                                      side: BorderSide(
+                                                Expanded(
+                                                  child: Row(children: [
+                                                    Container(
+                                                      width: 40,
+                                                      height: 40,
+                                                      decoration: BoxDecoration(
                                                           color: context
-                                                              .errorColor),
+                                                              .errorColor
+                                                              .withAlpha(
+                                                                  (0.14 * 255)
+                                                                      .round()),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      10)),
+                                                      child: Icon(
+                                                          Icons
+                                                              .north_east_rounded,
+                                                          color: context
+                                                              .errorColor,
+                                                          size: 20),
+                                                    ),
+                                                    const SizedBox(width: 12),
+                                                    Expanded(
+                                                      child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                                'User: $userLabel',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    fontSize:
+                                                                        14,
+                                                                    color: Colors
+                                                                        .red)),
+                                                            Text(
+                                                                'User ID: ${userId.isNotEmpty ? userId : '-'}',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        13,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600)),
+                                                            Text(
+                                                                'ID: $reference',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        12,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500)),
+                                                            Text(
+                                                                'Method: $method',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        12,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500)),
+                                                            Text(
+                                                                'Amount: $amountLabel',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        12,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500)),
+                                                            Text(
+                                                                'Status: $statusLabel',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        11)),
+                                                            Text(
+                                                                'Date: $dateLabel',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        11)),
+                                                            Text(
+                                                                'Time: $timeLabel',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        11)),
+                                                          ]),
+                                                    ),
+                                                  ]),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 10,
+                                                      vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                      color: color.withAlpha(
+                                                          (0.16 * 255).round()),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8)),
+                                                  child: Text(statusLabel,
+                                                      style: GoogleFonts
+                                                          .plusJakartaSans(
+                                                              color: color,
+                                                              fontSize: 10,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold)),
+                                                ),
+                                              ]),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                              'Destination: ${_destinationLabel(w)}',
+                                              style:
+                                                  GoogleFonts.plusJakartaSans(
+                                                      color: context.onSurface
+                                                          .withOpacity(0.7),
+                                                      fontSize: 12)),
+                                          if ((w['rejectionReason'] ?? '')
+                                              .toString()
+                                              .trim()
+                                              .isNotEmpty) ...[
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Last failure: ${w['rejectionReason']}',
+                                              style:
+                                                  GoogleFonts.plusJakartaSans(
+                                                color: context.errorColor,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                          if (isPending || canRetry) ...[
+                                            const SizedBox(height: 12),
+                                            Row(children: [
+                                              if (isPending)
+                                                Expanded(
+                                                  child: OutlinedButton(
+                                                    style: OutlinedButton.styleFrom(
+                                                        side: BorderSide(
+                                                            color: context
+                                                                .errorColor),
+                                                        shape: RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        10))),
+                                                    onPressed: () =>
+                                                        _rejectWithdrawal(
+                                                            w['id'].toString()),
+                                                    child: Text('Reject',
+                                                        style: GoogleFonts
+                                                            .plusJakartaSans(
+                                                                color: context
+                                                                    .errorColor)),
+                                                  ),
+                                                ),
+                                              if (isPending)
+                                                const SizedBox(width: 10),
+                                              Expanded(
+                                                child: ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                      backgroundColor:
+                                                          context.successColor,
                                                       shape:
                                                           RoundedRectangleBorder(
                                                               borderRadius:
                                                                   BorderRadius
                                                                       .circular(
                                                                           10))),
-                                                  onPressed: () =>
-                                                      _rejectWithdrawal(
-                                                          w['id'].toString()),
-                                                  child: Text('Reject',
+                                                  onPressed: () => _process(
+                                                      w['id'].toString(),
+                                                      'approve'),
+                                                  child: Text(
+                                                      canRetry
+                                                          ? 'Retry withdrawal'
+                                                          : 'Approve',
                                                       style: GoogleFonts
                                                           .plusJakartaSans(
-                                                              color: context
-                                                                  .errorColor)),
+                                                              color: Colors
+                                                                  .black87)),
                                                 ),
                                               ),
-                                            if (isPending)
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        context.successColor,
-                                                    shape:
-                                                        RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        10))),
-                                                onPressed: () => _process(
-                                                    w['id'].toString(), 'approve'),
-                                                child: Text(
-                                                    canRetry
-                                                        ? 'Retry withdrawal'
-                                                        : 'Approve',
-                                                    style: GoogleFonts
-                                                        .plusJakartaSans(
-                                                            color: Colors
-                                                                .black87)),
+                                            ]),
+                                          ],
+                                          if (status == 'processing')
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                  top: 12),
+                                              child: Text(
+                                                'Payout submitted; waiting for provider confirmation. It cannot be resubmitted while processing.',
+                                                style:
+                                                    GoogleFonts.plusJakartaSans(
+                                                  color: context.warningColor,
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             ),
-                                          ]),
-                                        ],
-                                        if (status == 'processing')
-                                          Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 12),
-                                            child: Text(
-                                              'Payout submitted; waiting for provider confirmation. It cannot be resubmitted while processing.',
-                                              style:
-                                                  GoogleFonts.plusJakartaSans(
-                                                color: context.warningColor,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ),
-                                      ]),
+                                        ]),
+                                  ),
                                 );
                               }))),
           ],
@@ -540,7 +634,10 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                     hintText: 'Search username, user ID, withdrawal ID',
                     prefixIcon: Icon(Icons.search_rounded),
                     border: OutlineInputBorder()),
-                onChanged: (value) => setState(() => _search = value))),
+                onChanged: (value) => setState(() {
+                      _search = value;
+                      _selectedTransactions.clear();
+                    }))),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),

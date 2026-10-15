@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
@@ -53,7 +56,6 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-
   }
 
   @override
@@ -182,10 +184,25 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                                           context.onSurface.withOpacity(0.6))))
                           : ListView.builder(
                               padding: const EdgeInsets.all(20),
-                              itemCount: _escrows.where((e) => _search.isEmpty || e.toString().toLowerCase().contains(_search.toLowerCase())).length,
+                              itemCount: _escrows
+                                  .where((e) =>
+                                      _search.isEmpty ||
+                                      e
+                                          .toString()
+                                          .toLowerCase()
+                                          .contains(_search.toLowerCase()))
+                                  .length,
                               itemBuilder: (_, i) {
-                                final visible = _escrows.where((e) => _search.isEmpty || e.toString().toLowerCase().contains(_search.toLowerCase())).toList();
-                                return _escrowCard(visible[i], cardColor, accent);
+                                final visible = _escrows
+                                    .where((e) =>
+                                        _search.isEmpty ||
+                                        e
+                                            .toString()
+                                            .toLowerCase()
+                                            .contains(_search.toLowerCase()))
+                                    .toList();
+                                return _escrowCard(
+                                    visible[i], cardColor, accent);
                               },
                             ))),
           ],
@@ -195,86 +212,112 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
   }
 
   Widget _filterRow(Color accent) => Column(children: [
-    Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 4), child: TextField(controller: _searchController, decoration: const InputDecoration(hintText: 'Search username, escrow ID or reference', prefixIcon: Icon(Icons.search_rounded), border: OutlineInputBorder()), onChanged: (value) => setState(() => _search = value))),
-    SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-        child: Row(children: [
-          for (final f in [
-            'all',
-            'active',
-            'completed',
-            'disputed',
-            'refunded'
-          ])
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                label: Text(f.toUpperCase(),
-                    style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: _filter == f ? Colors.white : Colors.black)),
-                selected: _filter == f,
-                selectedColor: _filter == f ? Colors.black : Colors.white,
-                backgroundColor: _filter == f ? Colors.black : Colors.white,
-                side: BorderSide(
-                    color: _filter == f
-                        ? Colors.black
-                        : Colors.black54,
-                    width: 1),
-                onSelected: (_) {
-                  setState(() {
-                    _filter = f;
-                    _page = 1;
-                  });
-                  _load();
-                },
+        Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: TextField(
+                controller: _searchController,
+                decoration: const InputDecoration(
+                    hintText: 'Search username, escrow ID or reference',
+                    prefixIcon: Icon(Icons.search_rounded),
+                    border: OutlineInputBorder()),
+                onChanged: (value) => setState(() => _search = value))),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+          child: Row(children: [
+            for (final f in [
+              'all',
+              'active',
+              'completed',
+              'disputed',
+              'refunded'
+            ])
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(f.toUpperCase(),
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: _filter == f ? Colors.white : Colors.black)),
+                  selected: _filter == f,
+                  selectedColor: _filter == f ? Colors.black : Colors.white,
+                  backgroundColor: _filter == f ? Colors.black : Colors.white,
+                  side: BorderSide(
+                      color: _filter == f ? Colors.black : Colors.black54,
+                      width: 1),
+                  onSelected: (_) {
+                    setState(() {
+                      _filter = f;
+                      _page = 1;
+                    });
+                    _load();
+                  },
+                ),
               ),
-            ),
-        ]),
-      ),
-    ]);
+          ]),
+        ),
+      ]);
 
   Widget _escrowCard(Map<String, dynamic> e, Color cardColor, Color accent) {
     final buyer = e['users_escrow_contracts_buyer_idTousers'] as Map? ?? {};
     final seller = e['users_escrow_contracts_seller_idTousers'] as Map? ?? {};
     final color = _escrowColor(e['status']);
     final isDisputed = e['status'] == 'disputed';
-    final evidence = e['evidence'] is Map
-        ? Map<String, dynamic>.from(e['evidence'] as Map)
-        : <String, dynamic>{};
+    final evidence = _asStringMap(e['evidence']);
     final buyerUsername = (buyer['username']?.toString() ?? '').trim();
     final sellerUsername = (seller['username']?.toString() ?? '').trim();
     final buyerLabel = buyerUsername.isNotEmpty
         ? '@$buyerUsername (${buyer['id'] ?? '-'} )'
-        : '${buyer['first_name'] ?? ''} ${buyer['last_name'] ?? ''}'.trim().isNotEmpty
+        : '${buyer['first_name'] ?? ''} ${buyer['last_name'] ?? ''}'
+                .trim()
+                .isNotEmpty
             ? '${buyer['first_name']} ${buyer['last_name']}'
             : (buyer['id']?.toString() ?? '-');
     final sellerLabel = sellerUsername.isNotEmpty
         ? '@$sellerUsername (${seller['id'] ?? '-'} )'
-        : '${seller['first_name'] ?? ''} ${seller['last_name'] ?? ''}'.trim().isNotEmpty
+        : '${seller['first_name'] ?? ''} ${seller['last_name'] ?? ''}'
+                .trim()
+                .isNotEmpty
             ? '${seller['first_name']} ${seller['last_name']}'
             : (seller['id']?.toString() ?? '-');
     final createdAt = e['created_at'] != null
         ? _dateTimeString(e['created_at'].toString())
         : '-';
     final resolvedAt = e['resolved_at'] ?? e['released_at'] ?? e['updated_at'];
-    final resolvedAtLabel = resolvedAt != null
-        ? _dateTimeString(resolvedAt.toString())
-        : null;
+    final resolvedAtLabel =
+        resolvedAt != null ? _dateTimeString(resolvedAt.toString()) : null;
     final description = e['description']?.toString().trim().isNotEmpty == true
         ? e['description'].toString()
         : e['title']?.toString() ?? '-';
     final disputeReason = evidence['reason']?.toString().trim() ?? '';
     final disputedById = evidence['disputed_by']?.toString();
-    final disputedBy = disputedById != null &&
-            disputedById == buyer['id']?.toString()
-        ? 'Buyer'
-        : disputedById != null &&
-                disputedById == seller['id']?.toString()
-            ? 'Seller'
-            : 'A party';
+    final disputedBy =
+        disputedById != null && disputedById == buyer['id']?.toString()
+            ? 'Buyer'
+            : disputedById != null && disputedById == seller['id']?.toString()
+                ? 'Seller'
+                : 'A party';
+    final disputeMessages = e['escrow_messages'] is List
+        ? (e['escrow_messages'] as List)
+            .map(_asStringMap)
+            .toList(growable: false)
+        : const <Map<String, dynamic>>[];
+    final messageAttachment = disputeMessages
+        .cast<Map<String, dynamic>?>()
+        .firstWhere(
+          (message) =>
+              message?['attachment_url']?.toString().trim().isNotEmpty == true,
+          orElse: () => null,
+        );
+    final attachmentUrl =
+        (evidence['attachment_url'] ?? messageAttachment?['attachment_url'])
+            ?.toString()
+            .trim();
+    final attachmentMimeType =
+        evidence['attachment_mime_type']?.toString() ?? '';
+    final hasDisputeEvidence =
+        disputeReason.isNotEmpty || (attachmentUrl?.isNotEmpty ?? false);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -324,7 +367,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                       ? 'Refunded'
                       : 'Updated',
               resolvedAtLabel),
-        if (isDisputed) ...[
+        if (isDisputed || hasDisputeEvidence) ...[
           const SizedBox(height: 10),
           Container(
             width: double.infinity,
@@ -333,8 +376,9 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
               color: context.errorColor.withAlpha((0.08 * 255).round()),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Dispute open',
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(isDisputed ? 'Dispute open' : 'Dispute evidence',
                   style: GoogleFonts.plusJakartaSans(
                       fontWeight: FontWeight.bold,
                       color: context.errorColor,
@@ -345,40 +389,210 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                       ? 'Reported by $disputedBy: $disputeReason'
                       : 'This escrow is in dispute and requires admin resolution.',
                   style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withOpacity(0.8),
-                      fontSize: 12)),
+                      color: context.onSurface.withOpacity(0.8), fontSize: 12)),
+              if (attachmentUrl != null && attachmentUrl.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _disputeAttachment(attachmentUrl, attachmentMimeType),
+              ],
             ]),
           ),
-          const SizedBox(height: 12),
-          Row(children: [
-            Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                    side: BorderSide(color: Colors.blue),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10))),
-                onPressed: () => _resolve(e['id'], 'buyer'),
-                child: Text('Refund Buyer',
-                    style: GoogleFonts.plusJakartaSans(color: Colors.blue)),
+          if (isDisputed) ...[
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.blue),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10))),
+                  onPressed: () => _resolve(e['id'], 'buyer'),
+                  child: Text('Refund Buyer',
+                      style: GoogleFonts.plusJakartaSans(color: Colors.blue)),
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: context.successColor,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10))),
-                onPressed: () => _resolve(e['id'], 'seller'),
-                child: Text('Release to Seller',
-                    style: GoogleFonts.plusJakartaSans(
-                        color: context.onBackground.withOpacity(0.87))),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: context.successColor,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10))),
+                  onPressed: () => _resolve(e['id'], 'seller'),
+                  child: Text('Release to Seller',
+                      style: GoogleFonts.plusJakartaSans(
+                          color: context.onBackground.withOpacity(0.87))),
+                ),
               ),
-            ),
-          ]),
+            ]),
+          ],
         ],
       ]),
     );
+  }
+
+  Widget _disputeAttachment(String url, String mimeType) {
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'res.cloudinary.com') {
+      return _attachmentPlaceholder(
+        icon: Icons.broken_image_outlined,
+        title: 'User attachment unavailable',
+        subtitle: 'The dispute attachment link is invalid.',
+      );
+    }
+
+    final isVideo = mimeType.toLowerCase().startsWith('video/') ||
+        uri.path.toLowerCase().contains('/video/upload/');
+    if (isVideo) {
+      return Card(
+        child: ListTile(
+          leading: const CircleAvatar(
+            child: Icon(Icons.play_circle_outline),
+          ),
+          title: const Text('User attached a video'),
+          subtitle: const Text('Tap to view dispute evidence'),
+          trailing: const Icon(Icons.open_in_new),
+          onTap: () => _openDisputeAttachment(uri),
+        ),
+      );
+    }
+
+    final previewUri = uri.replace(
+      path: uri.path.replaceFirst('/upload/', '/upload/f_jpg,q_auto/'),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('User attached a photo'),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => showDialog<void>(
+            context: context,
+            builder: (_) => Dialog(
+              child: InteractiveViewer(
+                child: Image.network(
+                  previewUri.toString(),
+                  loadingBuilder: (context, child, progress) {
+                    if (progress == null) return child;
+                    return SizedBox(
+                      height: 260,
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          value: progress.expectedTotalBytes == null
+                              ? null
+                              : progress.cumulativeBytesLoaded /
+                                  progress.expectedTotalBytes!,
+                        ),
+                      ),
+                    );
+                  },
+                  errorBuilder: (_, __, ___) => _attachmentPlaceholder(
+                    icon: Icons.broken_image_outlined,
+                    title: 'Could not load the user photo',
+                    subtitle: 'Tap “Open photo” to view it directly.',
+                  ),
+                ),
+              ),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              previewUri.toString(),
+              width: 260,
+              height: 190,
+              fit: BoxFit.cover,
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) return child;
+                return Container(
+                  width: 260,
+                  height: 190,
+                  color: context.onSurface.withOpacity(0.06),
+                  alignment: Alignment.center,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 8),
+                      Text('Loading user photo...'),
+                    ],
+                  ),
+                );
+              },
+              errorBuilder: (_, __, ___) => _attachmentPlaceholder(
+                icon: Icons.broken_image_outlined,
+                title: 'Could not load the user photo',
+                subtitle: 'Tap “Open photo” to view it directly.',
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextButton.icon(
+          onPressed: () => _openDisputeAttachment(uri),
+          icon: const Icon(Icons.open_in_new),
+          label: const Text('Open photo'),
+        ),
+      ],
+    );
+  }
+
+  Widget _attachmentPlaceholder({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) =>
+      Container(
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 150),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.onSurface.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.onSurface.withOpacity(0.12)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 36),
+            const SizedBox(height: 8),
+            Text(title, textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.onSurface.withOpacity(0.65)),
+            ),
+          ],
+        ),
+      );
+
+  Map<String, dynamic> _asStringMap(dynamic value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } on FormatException {
+        return <String, dynamic>{};
+      }
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<void> _openDisputeAttachment(Uri uri) async {
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        _snack('Could not open the dispute attachment.', context.errorColor);
+      }
+    } catch (error) {
+      if (mounted) {
+        _snack('Could not open the dispute attachment: $error',
+            context.errorColor);
+      }
+    }
   }
 
   String _dateTimeString(String raw) {

@@ -8,7 +8,8 @@ class SuperadminsManagementPage extends StatefulWidget {
   final VoidCallback onGoBack;
 
   @override
-  State<SuperadminsManagementPage> createState() => _SuperadminsManagementPageState();
+  State<SuperadminsManagementPage> createState() =>
+      _SuperadminsManagementPageState();
 }
 
 class _SuperadminsManagementPageState extends State<SuperadminsManagementPage> {
@@ -29,12 +30,13 @@ class _SuperadminsManagementPageState extends State<SuperadminsManagementPage> {
     });
 
     try {
-      final response = await AdminApiService.getUsers(role: 'super_admin');
+      final response = await AdminApiService.getSuperadmins();
       final data = response['data'];
       if (data is List) {
         _superadmins = data;
       } else if (data is Map<String, dynamic>) {
-        _superadmins = data['items'] is List ? data['items'] as List : <dynamic>[];
+        _superadmins =
+            data['items'] is List ? data['items'] as List : <dynamic>[];
       }
     } catch (e) {
       _error = e.toString();
@@ -67,11 +69,16 @@ class _SuperadminsManagementPageState extends State<SuperadminsManagementPage> {
                       itemCount: _superadmins.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
-                        final user = _superadmins[index] as Map<String, dynamic>;
+                        final user =
+                            _superadmins[index] as Map<String, dynamic>;
                         return Card(
                           child: ListTile(
-                            title: Text(user['name'] ?? user['first_name'] ?? 'Superadmin'),
-                            subtitle: Text(user['email'] ?? user['phone'] ?? 'No contact info'),
+                            title: Text(user['name'] ??
+                                user['first_name'] ??
+                                'Superadmin'),
+                            subtitle: Text(user['email'] ??
+                                user['phone'] ??
+                                'No contact info'),
                             trailing: const Chip(label: Text('SUPERADMIN')),
                           ),
                         );

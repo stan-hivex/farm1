@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '/app_state.dart';
 import '/services/auth/session_store_service.dart';
 import '../core/admin_config.dart';
@@ -15,64 +14,6 @@ class AdminApiService {
   static DateTime? _nextAllowedRefreshTime;
   static const int _initialBackoffSeconds = 1;
   static const int _maxBackoffSeconds = 30;
-
-  static Future<void> requestPasswordReset(String email) async {
-    final response = await http.post(
-      Uri.parse('${AdminConfig.api}/auth/password-reset/prepare'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email}),
-    );
-    final decoded = response.body.isEmpty
-        ? <String, dynamic>{}
-        : jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode != 200) {
-      final message = decoded['message'];
-      throw Exception(
-        message is List
-            ? message.join('\n')
-            : message ?? 'Could not send the password reset email',
-      );
-    }
-
-    try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: email.trim(),
-        actionCodeSettings: ActionCodeSettings(
-          url: 'https://farmapp-e2145.firebaseapp.com/admin-reset-password',
-          handleCodeInApp: true,
-          androidPackageName: 'farmapp.africa',
-          androidInstallApp: true,
-          iOSBundleId: 'com.mycompany.farm',
-        ),
-      );
-    } on FirebaseAuthException catch (error) {
-      if (error.code == 'user-not-found') {
-        return;
-      }
-      rethrow;
-    }
-  }
-
-  static Future<void> completePasswordReset({
-    required String firebaseIdToken,
-    required String password,
-    required String confirmPassword,
-  }) async {
-    final response = await http.post(
-      Uri.parse('${AdminConfig.api}/auth/password-reset/complete'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'firebase_id_token': firebaseIdToken,
-        'password': password,
-        'confirm_password': confirmPassword,
-      }),
-    );
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    if (response.statusCode != 200) {
-      final message = decoded['message'];
-      throw Exception(message is List ? message.join('\n') : message);
-    }
-  }
 
   static Future<AuthSession?> _getActiveSession() async {
     final activeRole =
@@ -404,35 +345,101 @@ class AdminApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> _publicReq({
+    required String path,
+    required Map<String, dynamic> body,
+  }) async {
+    final response = await http
+        .post(
+          Uri.parse('${AdminConfig.api}$path'),
+          headers: const {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 20));
+    final decoded = response.body.isNotEmpty
+        ? jsonDecode(response.body) as Map<String, dynamic>
+        : <String, dynamic>{};
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        decoded['message'] ?? 'Request failed (${response.statusCode})',
+      );
+    }
+    return decoded;
+  }
+
   // ── Dashboard ─────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getDashboardStats() =>
       _req(method: 'GET', path: '/admin/dashboard');
 
-  static Future<Map<String, dynamic>> getSuperadminDashboard() =>
-      _req(method: 'GET', path: '/superadmin/dashboard');
+  static Future<Map<String, dynamic>> getAdmins() =>
+      _req(method: 'GET', path: '/admin/admins');
 
-  static Future<Map<String, dynamic>> getSuperadminWallet() =>
-      _req(method: 'GET', path: '/admin/wallet');
+  static Future<Map<String, dynamic>> setAdminStatus(
+    String adminId,
+    String action,
+  ) {
+    if (action != 'suspend' && action != 'approve') {
+      throw ArgumentError.value(action, 'action', 'Expected suspend or approve');
+    }
+    return _req(
+      method: 'PATCH',
+      path: '/admin/admins/${Uri.encodeComponent(adminId)}/$action',
+    );
+  }
 
-  static Future<Map<String, dynamic>> getExchangeRates() =>
-      _req(method: 'GET', path: '/admin/exchange-rates');
-
-  static Future<Map<String, dynamic>> updateExchangeRates(
-          List<Map<String, dynamic>> rates) =>
+  static Future<Map<String, dynamic>> deleteAdmin(String adminId) =>
       _req(
-        method: 'PUT',
-        path: '/admin/exchange-rates',
-        body: {'rates': rates},
+        method: 'DELETE',
+        path: '/admin/admins/${Uri.encodeComponent(adminId)}',
       );
 
-  static Future<Map<String, dynamic>> getCurrencyRates() =>
-      _req(method: 'GET', path: '/admin/currency-rates');
+  static Future<Map<String, dynamic>> getSuperadmins() =>
+      _req(method: 'GET', path: '/admin/superadmin/list');
 
-  static Future<Map<String, dynamic>> updateCurrencyRate(double usdKesRate) =>
+  static Future<Map<String, dynamic>> createAdmin({
+    required String firstName,
+    required String lastName,
+    required String username,
+    required String phone,
+    required String email,
+    required String country,
+    required String password,
+  }) =>
       _req(
-        method: 'PUT',
-        path: '/admin/currency-rates',
-        body: {'usd_kes_rate': usdKesRate},
+        method: 'POST',
+        path: '/auth/admin/create',
+        body: {
+          'first_name': firstName,
+          'last_name': lastName,
+          'username': username,
+          'phone': phone,
+          'email': email,
+          'country': country,
+          'password': password,
+        },
+      );
+
+  static Future<Map<String, dynamic>> requestPasswordReset(String email) =>
+      _publicReq(
+        path: '/auth/request-password-reset',
+        body: {'email': email},
+      );
+
+  static Future<Map<String, dynamic>> completePasswordReset({
+    required String firebaseIdToken,
+    required String password,
+    required String confirmPassword,
+  }) =>
+      _publicReq(
+        path: '/auth/password-reset/complete',
+        body: {
+          'firebase_id_token': firebaseIdToken,
+          'password': password,
+          'confirm_password': confirmPassword,
+        },
       );
 
   static Future<Map<String, dynamic>> getSupportTickets() =>
@@ -444,7 +451,7 @@ class AdminApiService {
   ) =>
       _req(
         method: 'POST',
-        path: '/admin/support/tickets/$ticketId/reply',
+        path: '/admin/support/tickets/${Uri.encodeComponent(ticketId)}/reply',
         body: {'message': message},
       );
 
@@ -471,12 +478,8 @@ class AdminApiService {
       _req(method: 'PATCH', path: '/admin/users/$userId/status', body: data);
 
   // ── KYC ───────────────────────────────────────────────────────────────────
-  static Future<
-      Map<String,
-          dynamic>> getKycQueue({int page = 1, String? status}) => _req(
-      method: 'GET',
-      path:
-          '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
+    static Future<Map<String, dynamic>> getKycQueue({int page = 1, String? status}) =>
+      _req(method: 'GET', path: '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
 
   static Future<Map<String, dynamic>> reviewKyc(String docId, String status,
           {String? rejectionReason}) =>
@@ -540,31 +543,25 @@ class AdminApiService {
       );
 
   static Future<Map<String, dynamic>> processWithdrawal(
-    String withdrawalId,
+    String txId,
     String action, {
     String? reason,
   }) =>
       _req(
         method: 'POST',
-        path: action == 'failed'
-            ? '/admin/withdrawals/$withdrawalId/reject'
-            : '/admin/withdrawals/$withdrawalId/approve',
-        body: action == 'failed' ? {'reason': reason} : null,
+        path: '/admin/withdrawals/${Uri.encodeComponent(txId)}/process',
+        body: {
+          'status': action,
+          if (reason != null && reason.trim().isNotEmpty)
+            'reason': reason.trim(),
+        },
       );
 
-  static Future<
-      Map<String,
-          dynamic>> getPayouts({int page = 1, String? status}) => _req(
-      method: 'GET',
-      path:
-          '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
+      static Future<Map<String, dynamic>> getPayouts({int page = 1, String? status}) =>
+        _req(method: 'GET', path: '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
 
-  static Future<Map<String, dynamic>> processPayout(
-          String payoutId, String status) =>
-      _req(
-          method: 'POST',
-          path: '/admin/payouts/$payoutId/process',
-          body: {'status': status});
+      static Future<Map<String, dynamic>> processPayout(String payoutId, String status) =>
+        _req(method: 'POST', path: '/admin/payouts/$payoutId/process', body: {'status': status});
 
   // ── Merchants ─────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getMerchants(
@@ -618,6 +615,6 @@ class AdminApiService {
       _req(method: 'GET', path: '/admin/audit-logs?page=$page');
 
   // ── Analytics ─────────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
+    static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
       _req(method: 'GET', path: '/admin/analytics?period=$period');
 }

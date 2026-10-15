@@ -1,7 +1,10 @@
+// ignore_for_file: depend_on_referenced_packages
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '/backend/services/turnstile_payload.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '/core/app_config.dart';
 import '/app_state.dart';
 import '/services/auth/refresh_manager.dart';
@@ -32,13 +35,114 @@ class ApiService {
     required String path,
     Map<String, dynamic>? body,
     bool requiresAuth = true,
+    int timeoutSeconds = 20,
   }) =>
       _request(
         method: method,
         path: path,
         body: body,
         requiresAuth: requiresAuth,
+        timeoutSeconds: timeoutSeconds,
       );
+
+  static Future<List<String>> uploadImages({
+    required List<Uint8List> files,
+    required List<String> filenames,
+    required List<String> mimeTypes,
+  }) =>
+      _uploadImages(
+        files: files,
+        filenames: filenames,
+        mimeTypes: mimeTypes,
+      );
+
+  static Future<List<String>> _uploadImages({
+    required List<Uint8List> files,
+    required List<String> filenames,
+    required List<String> mimeTypes,
+    bool isRetry = false,
+  }) async {
+    if (files.isEmpty ||
+        files.length > 5 ||
+        files.length != filenames.length ||
+        files.length != mimeTypes.length) {
+      throw ArgumentError('Upload between 1 and 5 valid images.');
+    }
+    for (var index = 0; index < files.length; index++) {
+      if (files[index].isEmpty || files[index].length > 5 * 1024 * 1024) {
+        throw ArgumentError('Each image must be no larger than 5 MB.');
+      }
+    }
+
+    final token = await FFAppState().getActiveAccessToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.api}/uploads/multiple'),
+    )..headers.addAll({
+        'Accept': 'application/json',
+        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      });
+    for (var index = 0; index < files.length; index++) {
+      final mimeParts = mimeTypes[index].split('/');
+      if (mimeParts.length != 2 || mimeParts.first != 'image') {
+        throw ArgumentError('Only image uploads are supported.');
+      }
+      request.files.add(http.MultipartFile.fromBytes(
+        'images',
+        files[index],
+        filename: filenames[index],
+        contentType: MediaType(mimeParts[0], mimeParts[1]),
+      ));
+    }
+
+    final response = await http.Response.fromStream(
+      await _client.send(request).timeout(const Duration(seconds: 90)),
+    );
+    Map<String, dynamic> decoded = {};
+    if (response.body.isNotEmpty) {
+      try {
+        decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        decoded = {};
+      }
+    }
+
+    if (response.statusCode == 401 &&
+        !isRetry &&
+        FFAppState().refreshToken.isNotEmpty) {
+      final refreshed = await RefreshManager().refreshIfNeeded(force: true);
+      if (refreshed) {
+        return _uploadImages(
+          files: files,
+          filenames: filenames,
+          mimeTypes: mimeTypes,
+          isRetry: true,
+        );
+      }
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded['message'] is String
+          ? decoded['message'] as String
+          : 'Image upload failed (${response.statusCode})';
+      if (response.statusCode >= 500) {
+        throw ApiServiceException(
+          statusCode: response.statusCode,
+          message: message,
+        );
+      }
+      throw Exception(message);
+    }
+
+    final rawUrls = decoded['urls'];
+    if (rawUrls is! List || rawUrls.length != files.length) {
+      throw const FormatException('The server returned invalid image URLs.');
+    }
+    final urls = rawUrls.map((url) => url.toString()).toList(growable: false);
+    if (urls.any((url) => Uri.tryParse(url)?.scheme != 'https')) {
+      throw const FormatException('The server returned an invalid image URL.');
+    }
+    return urls;
+  }
 
   // Central method — all requests go through here
   static final Map<String, Map<String, dynamic>> _cache = {};
@@ -362,6 +466,23 @@ class ApiService {
         },
       );
 
+  static Future<Map<String, dynamic>> resetForgottenPin({
+    required String phone,
+    required String password,
+    required String newPin,
+    required String confirmPin,
+  }) =>
+      _request(
+        method: 'POST',
+        path: '/auth/forgot-pin',
+        body: {
+          'phone': phone,
+          'password': password,
+          'new_pin': newPin,
+          'confirm_pin': confirmPin,
+        },
+      );
+
   static Future<void> logout() =>
       _request(method: 'POST', path: '/auth/logout');
 
@@ -488,19 +609,41 @@ class ApiService {
     int timeoutSeconds = 20,
   }) async {
     final response = await _request(
-        method: 'GET',
-        path: '/transactions?page=$page&limit=$limit'
-            '${type != null ? "&type=$type" : ""}'
-            '${status != null ? "&status=$status" : ""}',
-        timeoutSeconds: timeoutSeconds,
-      );
+      method: 'GET',
+      path: '/transactions?page=$page&limit=$limit'
+          '${type != null ? "&type=$type" : ""}'
+          '${status != null ? "&status=$status" : ""}',
+      timeoutSeconds: timeoutSeconds,
+    );
     final items = response['data'];
     if (items is List) {
-      response['data'] =
-          items.where(isVisibleTransactionHistoryItem).toList();
+      response['data'] = items.where(isVisibleTransactionHistoryItem).toList();
     }
     return response;
   }
+
+  static Future<Map<String, dynamic>> getReceipts({
+    int page = 1,
+    int limit = 50,
+  }) =>
+      _request(
+        method: 'GET',
+        path: '/receipts?page=$page&limit=$limit',
+      );
+
+  static Future<Map<String, dynamic>> getReceipt(String receiptId) =>
+      _request(
+        method: 'GET',
+        path: '/receipts/${Uri.encodeComponent(receiptId)}',
+      );
+
+  static Future<Map<String, dynamic>> getReceiptDownloadUrl(
+    String receiptId,
+  ) =>
+      _request(
+        method: 'GET',
+        path: '/receipts/${Uri.encodeComponent(receiptId)}/download',
+      );
 
   static Future<Map<String, dynamic>> getTransactionDetails(String id) =>
       _request(
@@ -546,8 +689,7 @@ class ApiService {
     final response = await _request(method: 'GET', path: '/payments/deposits');
     final items = response['data'];
     if (items is List) {
-      response['data'] =
-          items.where(isVisibleTransactionHistoryItem).toList();
+      response['data'] = items.where(isVisibleTransactionHistoryItem).toList();
     }
     return response;
   }
@@ -612,11 +754,22 @@ class ApiService {
       _request(method: 'POST', path: '/escrow/$escrowId/release');
 
   static Future<Map<String, dynamic>> disputeEscrow(
-          String escrowId, String reason) =>
+    String escrowId,
+    String reason, {
+    String? attachmentBase64,
+    String? attachmentMimeType,
+    String? attachmentUrl,
+  }) =>
       _request(
         method: 'POST',
         path: '/escrow/$escrowId/dispute',
-        body: {'reason': reason},
+        body: {
+          'reason': reason,
+          if (attachmentBase64 != null) 'attachmentBase64': attachmentBase64,
+          if (attachmentMimeType != null)
+            'attachmentMimeType': attachmentMimeType,
+          if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+        },
       );
 
   static Future<Map<String, dynamic>> cancelEscrow(String escrowId) =>
@@ -682,6 +835,7 @@ class ApiService {
     required String frontImageUrl,
     String? backImageUrl,
     required String selfieImageUrl,
+    String? addressDocumentUrl,
     String? documentNumber,
     String? firstName,
     String? lastName,
@@ -704,6 +858,8 @@ class ApiService {
           'front_image_url': frontImageUrl,
           if (backImageUrl != null) 'back_image_url': backImageUrl,
           'selfie_image_url': selfieImageUrl,
+          if (addressDocumentUrl != null)
+            'address_document_url': addressDocumentUrl,
           if (documentNumber != null && documentNumber.isNotEmpty)
             'document_number': documentNumber,
           if (firstName != null && firstName.isNotEmpty)

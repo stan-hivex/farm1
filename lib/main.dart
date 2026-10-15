@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,11 +20,11 @@ import 'services/biometric_lock_service.dart';
 import 'services/notification_service.dart';
 import 'services/socket_service.dart';
 import 'services/auth/startup_authenticator.dart';
-import 'services/auth/route_guard_service.dart';
 import 'pages/biometric_unlock_page/biometric_unlock_page_widget.dart';
 import 'pages/all_transactions/all_transactions_widget.dart';
 import 'pages/dashboard/dashboard_widget.dart';
 import 'admin/pages/admin_password_reset_page.dart';
+import 'utils/merchant_qr_parser.dart';
 
 Widget buildSafeErrorWidget(FlutterErrorDetails details) {
   debugPrint('Suppressing app error overlay: ${details.exception}');
@@ -250,6 +251,42 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _handleIncomingAppLink(Uri uri) {
+    if (uri.scheme == 'farm' && uri.host == 'farm.com' && uri.path == '/pay') {
+      final encodedPayload = uri.queryParameters['qr'];
+      try {
+        final payload = encodedPayload != null && encodedPayload.isNotEmpty
+            ? utf8.decode(
+                base64Url.decode(base64Url.normalize(encodedPayload)),
+              )
+            : uri.queryParameters['qrPayload']?.trim();
+        final merchantId = uri.queryParameters['merchantId']?.trim();
+        final businessName = uri.queryParameters['businessName']?.trim();
+        final merchant = payload == null || payload.isEmpty
+            ? null
+            : parseMerchantQrPayload(payload);
+        final resolvedMerchantId = merchant?.merchantId ?? merchantId ?? '';
+        final resolvedBusinessName =
+            merchant?.businessName ?? businessName ?? 'Merchant';
+        if (resolvedMerchantId.isEmpty || payload == null || payload.isEmpty) {
+          debugPrint(
+            '[APP LINKS] Merchant payment link is missing its payload or merchant ID',
+          );
+          return;
+        }
+        _router.go(Uri(
+          path: '/merchantPayment',
+          queryParameters: {
+            'merchantId': resolvedMerchantId,
+            'businessName': resolvedBusinessName,
+            'qrPayload': payload,
+          },
+        ).toString());
+      } catch (error) {
+        debugPrint('[APP LINKS] Invalid merchant payment link: $error');
+      }
+      return;
+    }
+
     final continueUrl = uri.queryParameters['continueUrl'];
     final continueUri = continueUrl == null ? null : Uri.tryParse(continueUrl);
     final isPasswordResetContinuation =
@@ -307,22 +344,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       debugPrint('[APP] Backgrounded - session preserved');
-      unawaited(_persistCurrentAuthenticatedRoute());
       _refreshTimer?.cancel();
     }
-  }
-
-  Future<void> _persistCurrentAuthenticatedRoute() async {
-    if (!FFAppState().isLoggedIn) return;
-    final location = getRoute();
-    if (location.isEmpty ||
-        RouteGuardService().isPublicRoute(location) ||
-        location == BiometricUnlockPageWidget.routePath) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('lastAuthenticatedRoute', location);
-    debugPrint('[AUTH ROUTE] Saved last authenticated route');
   }
 
   Future<void> _handleResumeLock() async {

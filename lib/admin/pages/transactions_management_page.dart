@@ -4,6 +4,7 @@ import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
 import '/services/transaction_receipt_service.dart';
+import '/widgets/common/transaction_receipt_selection_bar.dart';
 
 class TransactionsManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -15,8 +16,7 @@ class TransactionsManagementPage extends StatefulWidget {
       _TransactionsManagementPageState();
 }
 
-class _TransactionsManagementPageState
-    extends State<TransactionsManagementPage>
+class _TransactionsManagementPageState extends State<TransactionsManagementPage>
     with AdminPageRefreshMixin<TransactionsManagementPage> {
   List<dynamic> _txns = [];
   bool _loading = true;
@@ -26,6 +26,15 @@ class _TransactionsManagementPageState
   int _total = 0;
   String _search = '';
   final _searchController = TextEditingController();
+  final Set<int> _selectedTransactions = <int>{};
+
+  List<Map<String, dynamic>> get _visibleTransactions => _txns
+      .whereType<Map>()
+      .map((transaction) => Map<String, dynamic>.from(transaction))
+      .where((transaction) =>
+          _search.trim().isEmpty ||
+          transaction.toString().toLowerCase().contains(_search.toLowerCase()))
+      .toList();
 
   @override
   void dispose() {
@@ -40,6 +49,7 @@ class _TransactionsManagementPageState
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final res = await AdminApiService.getTransactions(
@@ -50,16 +60,54 @@ class _TransactionsManagementPageState
       setState(() {
         _txns = res['data'] ?? [];
         _total = res['meta']?['total'] ?? 0;
+        _selectedTransactions.clear();
       });
     } catch (_) {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-
   }
 
   @override
   Future<void> refreshAdminPage() => _load();
+
+  Future<void> _shareSelected() async {
+    try {
+      await TransactionReceiptService.shareReceipts(
+        _selectedTransactions
+            .where((index) => index >= 0 && index < _visibleTransactions.length)
+            .map((index) => _visibleTransactions[index])
+            .toList(),
+      );
+      if (mounted) setState(() => _selectedTransactions.clear());
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not share receipts: $error')),
+      );
+    }
+  }
+
+  Future<void> _downloadSelected() async {
+    try {
+      await TransactionReceiptService.downloadReceipts(
+        _selectedTransactions
+            .where((index) => index >= 0 && index < _visibleTransactions.length)
+            .map((index) => _visibleTransactions[index])
+            .toList(),
+      );
+      if (!mounted) return;
+      setState(() => _selectedTransactions.clear());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Selected receipts saved to gallery')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save receipts: $error')),
+      );
+    }
+  }
 
   Color _statusColor(String? s) {
     switch (s) {
@@ -116,6 +164,26 @@ class _TransactionsManagementPageState
               ]),
             ),
             _filters(accent),
+            if (_selectedTransactions.isNotEmpty)
+              TransactionReceiptSelectionBar(
+                selectedCount: _selectedTransactions.length,
+                totalCount: _visibleTransactions.length,
+                onSelectAll: () => setState(() {
+                  if (_selectedTransactions.length ==
+                      _visibleTransactions.length) {
+                    _selectedTransactions.clear();
+                  } else {
+                    _selectedTransactions
+                      ..clear()
+                      ..addAll(
+                        List<int>.generate(
+                            _visibleTransactions.length, (index) => index),
+                      );
+                  }
+                }),
+                onShare: _shareSelected,
+                onDownload: _downloadSelected,
+              ),
             if (_loading && _txns.isEmpty)
               const Expanded(
                   child: Center(
@@ -140,7 +208,10 @@ class _TransactionsManagementPageState
                                     TextButton(
                                         onPressed: _page > 1
                                             ? () {
-                                                setState(() => _page--);
+                                                setState(() {
+                                                  _page--;
+                                                  _selectedTransactions.clear();
+                                                });
                                                 _load();
                                               }
                                             : null,
@@ -154,7 +225,10 @@ class _TransactionsManagementPageState
                                     TextButton(
                                         onPressed: _page < last
                                             ? () {
-                                                setState(() => _page++);
+                                                setState(() {
+                                                  _page++;
+                                                  _selectedTransactions.clear();
+                                                });
                                                 _load();
                                               }
                                             : null,
@@ -164,14 +238,7 @@ class _TransactionsManagementPageState
                                   ]),
                             );
                           }
-                          final visible = _txns.where((item) {
-                            if (_search.trim().isEmpty) return true;
-                            final query = _search.toLowerCase();
-                            return item
-                                .toString()
-                                .toLowerCase()
-                                .contains(query);
-                          }).toList();
+                          final visible = _visibleTransactions;
                           if (i >= visible.length)
                             return const SizedBox.shrink();
                           final t = visible[i];
@@ -201,8 +268,20 @@ class _TransactionsManagementPageState
                           final dateLabel = (t['date'] ?? '-').toString();
                           final timeLabel = (t['time'] ?? '-').toString();
                           return InkWell(
-                            onTap: () => _showTransactionDetails(
-                                Map<String, dynamic>.from(t as Map)),
+                            onLongPress: () => setState(() {
+                              _selectedTransactions.add(i);
+                            }),
+                            onTap: () {
+                              if (_selectedTransactions.isNotEmpty) {
+                                setState(() {
+                                  if (!_selectedTransactions.add(i)) {
+                                    _selectedTransactions.remove(i);
+                                  }
+                                });
+                                return;
+                              }
+                              _showTransactionDetails(t);
+                            },
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -214,6 +293,17 @@ class _TransactionsManagementPageState
                                     color: context.onSurface.withOpacity(0.1)),
                               ),
                               child: Row(children: [
+                                if (_selectedTransactions.isNotEmpty)
+                                  Checkbox(
+                                    value: _selectedTransactions.contains(i),
+                                    onChanged: (selected) => setState(() {
+                                      if (selected == true) {
+                                        _selectedTransactions.add(i);
+                                      } else {
+                                        _selectedTransactions.remove(i);
+                                      }
+                                    }),
+                                  ),
                                 Container(
                                   width: 40,
                                   height: 40,
@@ -331,7 +421,10 @@ class _TransactionsManagementPageState
                 prefixIcon: Icon(Icons.search_rounded),
                 border: OutlineInputBorder(),
               ),
-              onChanged: (value) => setState(() => _search = value),
+              onChanged: (value) => setState(() {
+                _search = value;
+                _selectedTransactions.clear();
+              }),
             ),
           ),
           SingleChildScrollView(
@@ -369,6 +462,7 @@ class _TransactionsManagementPageState
                       setState(() {
                         _typeFilter = f;
                         _page = 1;
+                        _selectedTransactions.clear();
                       });
                       _load();
                     },
@@ -410,6 +504,7 @@ class _TransactionsManagementPageState
                       setState(() {
                         _statusFilter = s;
                         _page = 1;
+                        _selectedTransactions.clear();
                       });
                       _load();
                     },
@@ -421,6 +516,9 @@ class _TransactionsManagementPageState
       );
 
   void _showTransactionDetails(Map<String, dynamic> transaction) {
-    TransactionReceiptService.showDetails(context, transaction);
+    TransactionReceiptService.showDetails(
+      context,
+      transaction,
+    );
   }
 }

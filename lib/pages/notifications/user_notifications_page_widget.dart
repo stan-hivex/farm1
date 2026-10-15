@@ -3,6 +3,7 @@ import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/services/notification_feedback_service.dart';
 import '/services/notification_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 class UserNotificationsPageWidget extends StatefulWidget {
   const UserNotificationsPageWidget({super.key});
@@ -11,10 +12,12 @@ class UserNotificationsPageWidget extends StatefulWidget {
   static String routePath = '/user-notifications';
 
   @override
-  State<UserNotificationsPageWidget> createState() => _UserNotificationsPageWidgetState();
+  State<UserNotificationsPageWidget> createState() =>
+      _UserNotificationsPageWidgetState();
 }
 
-class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidget> {
+class _UserNotificationsPageWidgetState
+    extends State<UserNotificationsPageWidget> {
   bool isLoading = true;
   String? errorMessage;
   List<Map<String, dynamic>> notifications = [];
@@ -28,11 +31,13 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
   void initState() {
     super.initState();
     loadNotifications();
-    NotificationService.notificationReceived.addListener(_onNotificationReceived);
+    NotificationService.notificationReceived
+        .addListener(_onNotificationReceived);
   }
 
   Future<void> loadNotifications() async {
-    final shouldShowInitialLoader = notifications.isEmpty && !_hasLoadedNotificationsBefore;
+    final shouldShowInitialLoader =
+        notifications.isEmpty && !_hasLoadedNotificationsBefore;
     if (shouldShowInitialLoader) {
       setState(() {
         isLoading = true;
@@ -64,11 +69,11 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
         page++;
       }
       final parsed = items.cast<Map<String, dynamic>>();
-        final visibleItems = parsed.where((item) {
+      final visibleItems = parsed.where((item) {
         final id = item['id']?.toString() ?? '';
         return id.isEmpty || !hiddenNotificationIds.contains(id);
-        }).toList();
-        final unread = visibleItems.where((item) {
+      }).toList();
+      final unread = visibleItems.where((item) {
         final read = item['read'] is bool
             ? item['read'] as bool
             : item['is_read'] is bool
@@ -125,24 +130,39 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
         return event;
       }
     }
-    return item['type']?.toString().toLowerCase() ?? item['source']?.toString().toLowerCase() ?? '';
+    return item['type']?.toString().toLowerCase() ??
+        item['source']?.toString().toLowerCase() ??
+        '';
   }
 
   String _notificationGroupKey(Map<String, dynamic> item) {
     final title = item['title']?.toString().toLowerCase() ?? '';
-    final body = item['body']?.toString().toLowerCase() ?? item['message']?.toString().toLowerCase() ?? '';
+    final body = item['body']?.toString().toLowerCase() ??
+        item['message']?.toString().toLowerCase() ??
+        '';
     final type = _notificationType(item);
 
-    if (title.contains('login') || body.contains('login') || type.contains('login')) {
+    if (title.contains('login') ||
+        body.contains('login') ||
+        type.contains('login')) {
       return 'login';
     }
-    if (title.contains('transfer') || body.contains('transfer') || body.contains('received') || body.contains('sent') || type.contains('transfer') || type.contains('payment')) {
+    if (title.contains('transfer') ||
+        body.contains('transfer') ||
+        body.contains('received') ||
+        body.contains('sent') ||
+        type.contains('transfer') ||
+        type.contains('payment')) {
       return 'transfer';
     }
-    if (title.contains('deposit') || body.contains('deposit') || type.contains('deposit')) {
+    if (title.contains('deposit') ||
+        body.contains('deposit') ||
+        type.contains('deposit')) {
       return 'deposit';
     }
-    if (title.contains('withdraw') || body.contains('withdraw') || type.contains('withdraw')) {
+    if (title.contains('withdraw') ||
+        body.contains('withdraw') ||
+        type.contains('withdraw')) {
       return 'withdrawal';
     }
     if (title.contains('kyc') || body.contains('kyc') || type.contains('kyc')) {
@@ -170,7 +190,8 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
 
   String _groupPreview(List<Map<String, dynamic>> items, String key) {
     final latest = items.first;
-    final body = latest['body']?.toString() ?? latest['message']?.toString() ?? '';
+    final body =
+        latest['body']?.toString() ?? latest['message']?.toString() ?? '';
     if (key == 'transfer') {
       if (body.isNotEmpty) {
         return '$body Balance is just like normal money.';
@@ -193,10 +214,13 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
     if (key == 'kyc') {
       return 'KYC status updated. Tap to view the latest verification result.';
     }
-    return body.isNotEmpty ? body : latest['title']?.toString() ?? 'Notification';
+    return body.isNotEmpty
+        ? body
+        : latest['title']?.toString() ?? 'Notification';
   }
 
-  String _notificationId(Map<String, dynamic> item) => item['id']?.toString() ?? '';
+  String _notificationId(Map<String, dynamic> item) =>
+      item['id']?.toString() ?? '';
 
   void _onNotificationReceived() {
     if (!mounted) return;
@@ -205,7 +229,8 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
 
   @override
   void dispose() {
-    NotificationService.notificationReceived.removeListener(_onNotificationReceived);
+    NotificationService.notificationReceived
+        .removeListener(_onNotificationReceived);
     super.dispose();
   }
 
@@ -335,12 +360,14 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline_rounded),
-                title: Text(isGroup ? 'Delete this group' : 'Delete notification'),
+                title:
+                    Text(isGroup ? 'Delete this group' : 'Delete notification'),
                 onTap: () async {
                   Navigator.of(sheetContext).pop();
                   await _confirmDeleteNotifications(
                     items,
-                    title: isGroup ? 'Delete this group?' : 'Delete notification?',
+                    title:
+                        isGroup ? 'Delete this group?' : 'Delete notification?',
                     message: isGroup
                         ? 'All notifications in this group will be permanently deleted.'
                         : 'This notification will be permanently deleted.',
@@ -441,18 +468,16 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                   ),
                   TextButton(
                     onPressed: () async {
-                      final unreadItems = items
-                          .where((item) {
-                            final read = item['read'] is bool
-                                ? item['read'] as bool
-                                : item['is_read'] is bool
-                                    ? item['is_read'] as bool
-                                    : item['isRead'] is bool
-                                        ? item['isRead'] as bool
-                                        : false;
-                            return !read;
-                          })
-                          .toList();
+                      final unreadItems = items.where((item) {
+                        final read = item['read'] is bool
+                            ? item['read'] as bool
+                            : item['is_read'] is bool
+                                ? item['is_read'] as bool
+                                : item['isRead'] is bool
+                                    ? item['isRead'] as bool
+                                    : false;
+                        return !read;
+                      }).toList();
                       if (unreadItems.isNotEmpty) {
                         await Future.wait(
                           unreadItems.map((item) async {
@@ -492,7 +517,9 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                   itemBuilder: (context, index) {
                     final item = items[index];
                     final title = item['title']?.toString() ?? 'Notification';
-                    final body = item['body']?.toString() ?? item['message']?.toString() ?? '';
+                    final body = item['body']?.toString() ??
+                        item['message']?.toString() ??
+                        '';
                     final timestamp = _displayDateTime(item);
                     final isRead = item['read'] is bool
                         ? item['read'] as bool
@@ -502,7 +529,8 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                                 ? item['isRead'] as bool
                                 : false;
                     return Card(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
                       elevation: 0,
                       color: FlutterFlowTheme.of(context).secondaryBackground,
                       child: InkWell(
@@ -522,14 +550,16 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
                                     child: Text(
                                       title,
                                       style: FlutterFlowTheme.of(context)
                                           .titleSmall
-                                          .override(fontWeight: FontWeight.bold),
+                                          .override(
+                                              fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   if (!isRead)
@@ -539,15 +569,20 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context).brightness == Brightness.dark
+                                        color: Theme.of(context).brightness ==
+                                                Brightness.dark
                                             ? Colors.white
                                             : Colors.black,
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
                                         'Unread',
-                                        style: FlutterFlowTheme.of(context).bodySmall.override(
-                                              color: Theme.of(context).brightness == Brightness.dark
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodySmall
+                                            .override(
+                                              color: Theme.of(context)
+                                                          .brightness ==
+                                                      Brightness.dark
                                                   ? Colors.black
                                                   : Colors.white,
                                             ),
@@ -564,8 +599,11 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                                 const SizedBox(height: 8),
                                 Text(
                                   timestamp,
-                                  style: FlutterFlowTheme.of(context).bodySmall.override(
-                                        color: FlutterFlowTheme.of(context).secondaryText,
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodySmall
+                                      .override(
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText,
                                       ),
                                 ),
                               ],
@@ -609,6 +647,7 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
     return Scaffold(
       backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         title: Text('Notifications'),
         actions: [
           if (unreadCount > 0)
@@ -628,7 +667,7 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
         padding: const EdgeInsets.all(12.0),
         child: isLoading && notifications.isEmpty
             ? Center(child: CircularProgressIndicator())
-          : errorMessage != null && notifications.isEmpty
+            : errorMessage != null && notifications.isEmpty
                 ? Center(
                     child: Text(
                       errorMessage!,
@@ -645,43 +684,53 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                     : RefreshIndicator(
                         onRefresh: loadNotifications,
                         child: ListView.separated(
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 12),
                           itemCount: groupedNotifications.length,
                           itemBuilder: (context, index) {
                             final group = groupedNotifications[index];
-                            final items = (group['items'] as List).cast<Map<String, dynamic>>();
+                            final items = (group['items'] as List)
+                                .cast<Map<String, dynamic>>();
                             final groupKey = group['key'] as String;
                             final groupLabel = group['label'] as String;
                             final groupCount = items.length;
                             final preview = _groupPreview(items, groupKey);
-                            final latestTimestamp = _displayDateTime(items.first);
+                            final latestTimestamp =
+                                _displayDateTime(items.first);
                             return Card(
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16)),
                               elevation: 0,
-                              color: FlutterFlowTheme.of(context).secondaryBackground,
+                              color: FlutterFlowTheme.of(context)
+                                  .secondaryBackground,
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(16),
                                 onLongPress: () => _showNotificationActions(
                                   items,
                                   isGroup: true,
                                 ),
-                                onTap: () => _showGroupDetails(items, groupLabel),
+                                onTap: () =>
+                                    _showGroupDetails(items, groupLabel),
                                 child: Padding(
                                   padding: const EdgeInsets.all(16.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Expanded(
                                             child: Text(
                                               '$groupLabel ($groupCount)',
-                                              style: FlutterFlowTheme.of(context)
-                                                  .titleSmall
-                                                  .override(
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
+                                              style:
+                                                  FlutterFlowTheme.of(context)
+                                                      .titleSmall
+                                                      .override(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                      ),
                                             ),
                                           ),
                                         ],
@@ -691,31 +740,42 @@ class _UserNotificationsPageWidgetState extends State<UserNotificationsPageWidge
                                         preview,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: FlutterFlowTheme.of(context).bodyMedium,
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodyMedium,
                                       ),
                                       if (latestTimestamp.isNotEmpty) ...[
                                         const SizedBox(height: 6),
                                         Text(
                                           latestTimestamp,
-                                          style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                color: FlutterFlowTheme.of(context).secondaryText,
+                                          style: FlutterFlowTheme.of(context)
+                                              .bodySmall
+                                              .override(
+                                                color:
+                                                    FlutterFlowTheme.of(context)
+                                                        .secondaryText,
                                               ),
                                         ),
                                       ],
                                       const SizedBox(height: 8),
                                       Text(
                                         'Tap to read more',
-                                        style: FlutterFlowTheme.of(context).bodySmall.override(
-                                              color: FlutterFlowTheme.of(context).secondaryText,
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodySmall
+                                            .override(
+                                              color:
+                                                  FlutterFlowTheme.of(context)
+                                                      .secondaryText,
                                             ),
                                       ),
                                       const SizedBox(height: 12),
                                       Row(
-                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
                                         children: [
                                           Text(
                                             groupLabel,
-                                            style: FlutterFlowTheme.of(context).bodySmall,
+                                            style: FlutterFlowTheme.of(context)
+                                                .bodySmall,
                                           ),
                                         ],
                                       ),

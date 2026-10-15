@@ -19,6 +19,24 @@ MerchantQrPayload? parseMerchantQrPayload(String? qrPayload) {
 
   final trimmed = qrPayload.trim();
 
+  final uri = Uri.tryParse(trimmed);
+  if (uri != null &&
+      (uri.scheme == 'https' || uri.scheme == 'http') &&
+      uri.queryParameters.containsKey('qr')) {
+    final encoded = uri.queryParameters['qr']!;
+    try {
+      final normalized = base64Url.normalize(encoded);
+      final decoded = utf8.decode(base64Url.decode(normalized));
+      return parseMerchantQrPayload(decoded);
+    } catch (_) {
+      try {
+        return parseMerchantQrPayload(Uri.decodeComponent(encoded));
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
   if (trimmed.startsWith('{')) {
     try {
       final decoded = jsonDecode(trimmed);
@@ -50,7 +68,8 @@ MerchantQrPayload? _parseDecodedPayload(Object? decoded, String rawPayload) {
 
     final nested = map['data'];
     if (nested is Map) {
-      final nestedMap = nested.map((key, value) => MapEntry(key.toString(), value));
+      final nestedMap =
+          nested.map((key, value) => MapEntry(key.toString(), value));
       final merchantId = _readString(nestedMap['merchant_id']) ??
           _readString(nestedMap['merchantId']);
       final businessName = _readString(nestedMap['business_name']) ??
@@ -65,7 +84,8 @@ MerchantQrPayload? _parseDecodedPayload(Object? decoded, String rawPayload) {
       }
     }
 
-    final merchantId = _readString(map['merchant_id']) ?? _readString(map['merchantId']);
+    final merchantId =
+        _readString(map['merchant_id']) ?? _readString(map['merchantId']);
     final businessName = _readString(map['business_name']) ??
         _readString(map['businessName']) ??
         _readString(map['name']);

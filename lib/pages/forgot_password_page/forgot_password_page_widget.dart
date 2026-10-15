@@ -70,7 +70,7 @@ class _ForgotPasswordPageWidgetState extends State<ForgotPasswordPageWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'If an active account uses this email, a secure reset link has been sent.',
+            'If an account exists, we have sent a reset link.',
           ),
           backgroundColor: Colors.green,
         ),

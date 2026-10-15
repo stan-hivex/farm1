@@ -4,10 +4,10 @@ import '/core/theme_extensions.dart';
 import '../core/admin_guard.dart';
 import '../core/admin_navigation.dart';
 import '../services/admin_api_service.dart';
-import '../services/admin_page_refresh_coordinator.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/pages/loginpage/loginpage_widget.dart';
+import 'add_superadmin_page.dart';
 import 'deposits_management_page.dart';
 import 'escrow_management_page.dart';
 import 'notifications_management_page.dart';
@@ -25,8 +25,7 @@ class AdminDashboardPage extends StatefulWidget {
   State<AdminDashboardPage> createState() => _AdminDashboardPageState();
 }
 
-class _AdminDashboardPageState extends State<AdminDashboardPage>
-    with AdminPageRefreshMixin<AdminDashboardPage> {
+class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Map<String, dynamic> _stats = <String, dynamic>{};
   bool _loading = true;
   String? _error;
@@ -61,8 +60,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
     debugPrint('Loading dashboard statistics...');
     try {
-      final response = await AdminApiService.getDashboardStats();
-      final normalized = _normalizeDashboardPayload(response);
+      final result = await AdminApiService.getDashboardStats();
+      final normalized = _normalizeDashboardPayload(result);
       if (normalized.isEmpty) {
         throw Exception('Dashboard payload was empty or malformed.');
       }
@@ -83,9 +82,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
       }
     }
   }
-
-  @override
-  Future<void> refreshAdminPage() => _load();
 
   Map<String, dynamic> _normalizeDashboardPayload(dynamic payload) {
     if (payload is! Map<String, dynamic> && payload is! Map) {
@@ -127,7 +123,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 'Loading dashboard data...',
                 style: GoogleFonts.plusJakartaSans(
                   color: context.onSurface.withOpacity(0.7),
-                  fontSize: 14,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -192,28 +189,32 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 child: Text('FARM',
                     style: GoogleFonts.plusJakartaSans(
                         color: accent,
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w900)),
               ),
               const SizedBox(height: 14),
               Text('Admin Dashboard',
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800)),
+                      fontSize: 32,
+                      fontWeight: FontWeight.w900)),
               const SizedBox(height: 6),
               Text(
                 'Signed in as $_adminName ($_adminRole)',
                 style: GoogleFonts.plusJakartaSans(
                   color: muted,
-                  fontSize: 12,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 'A unified admin control panel for users, deposits, withdrawals, and compliance.',
                 style: GoogleFonts.plusJakartaSans(
-                    color: muted, fontSize: 13, height: 1.5),
+                    color: muted,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    height: 1.5),
               ),
             ],
           ),
@@ -257,8 +258,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                       'Logout',
                       style: GoogleFonts.plusJakartaSans(
                         color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -272,7 +273,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
               child: Text('AD',
                   style: GoogleFonts.plusJakartaSans(
                       color: context.background,
-                      fontSize: 14,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold)),
             ),
           ],
@@ -283,42 +284,33 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
 
   Widget _buildOverviewRow(
       Map<String, dynamic> s, Color cardColor, Color accent) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const spacing = 16.0;
-        final cardWidth = (constraints.maxWidth - spacing) / 2;
-        final cardHeight = cardWidth < 160 ? 142.0 : 132.0;
-        return GridView.count(
-          crossAxisCount: 2,
-          crossAxisSpacing: spacing,
-          mainAxisSpacing: spacing,
-          childAspectRatio: cardWidth / cardHeight,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _metricCard('Total Users', '${s['total_users'] ?? 0}',
-                'Active people', cardColor, accent,
-                () => _navigateTo(const UserManagementPage())),
-            _metricCard(
-                'Active Escrows',
-                '${s['active_escrows'] ?? 0}',
-                'Escrow flows',
-                cardColor,
-                accent,
-                () => _navigateTo(const EscrowManagementPage())),
-            _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}',
-                'Review queue', cardColor, accent,
-                () => _navigateTo(const KycManagementPage())),
-            _metricCard(
-                'Pending Payouts',
-                '${s['pending_payouts'] ?? 0}',
-                'Awaiting settlement',
-                cardColor,
-                accent,
-                () => _navigateTo(const PayoutsPage())),
-          ],
-        );
-      },
+    return GridView.count(
+      crossAxisCount: 2,
+      crossAxisSpacing: 16,
+      mainAxisSpacing: 16,
+      childAspectRatio: 1.55,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _metricCard('Total Users', '${s['total_users'] ?? 0}', 'Active people',
+            cardColor, accent, () => _navigateTo(const UserManagementPage())),
+        _metricCard(
+            'Active Escrows',
+            '${s['active_escrows'] ?? 0}',
+            'Escrow flows',
+            cardColor,
+            accent,
+            () => _navigateTo(const EscrowManagementPage())),
+        _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}', 'Review queue',
+            cardColor, accent, () => _navigateTo(const KycManagementPage())),
+        _metricCard(
+            'Pending Payouts',
+            '${s['pending_payouts'] ?? 0}',
+            'Awaiting settlement',
+            cardColor,
+            accent,
+            () => _navigateTo(const PayoutsPage())),
+      ],
     );
   }
 
@@ -349,16 +341,11 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.plusJakartaSans(
-                            color: context.onSurface.withOpacity(0.7),
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                  const SizedBox(width: 6),
+                  Text(title,
+                      style: GoogleFonts.plusJakartaSans(
+                          color: context.onSurface.withOpacity(0.7),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700)),
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -366,24 +353,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(Icons.trending_up_rounded,
-                        size: 20, color: const Color(0xFF0D47A1)),
+                        size: 18, color: accent),
                   ),
                 ],
               ),
               Text(value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface,
-                    fontSize: 28,
+                      fontSize: 30,
                       fontWeight: FontWeight.w900)),
               Text(caption,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface.withOpacity(0.54),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500)),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -401,13 +384,13 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             Text('Quick Actions',
                 style: GoogleFonts.plusJakartaSans(
                     color: context.onSurface,
-                    fontSize: 20,
+                    fontSize: 21,
                     fontWeight: FontWeight.w800)),
             Text('Manage the platform',
                 style: GoogleFonts.plusJakartaSans(
-                    color: context.onSurface.withOpacity(0.68),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500)),
+                    color: context.onSurface.withOpacity(0.54),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
           ],
         ),
         const SizedBox(height: 12),
@@ -415,6 +398,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
           spacing: 14,
           runSpacing: 14,
           children: [
+            _actionChip(
+                'Add Superadmin',
+                Icons.admin_panel_settings_rounded,
+                accent,
+                cardColor,
+                () => _navigateTo(const AddSuperadminPage())),
             _actionChip('Manage Users', Icons.manage_accounts_rounded, accent,
                 cardColor, () => _navigateTo(const UserManagementPage())),
             _actionChip(
@@ -427,13 +416,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                 () => _navigateTo(const WithdrawalsManagementPage())),
             _actionChip('Escrows', Icons.verified_user_rounded, accent,
                 cardColor, () => _navigateTo(const EscrowManagementPage())),
-            _actionChip(
-                'Pending Disputes (${_stats['pending_disputes'] ?? 0})',
-                Icons.gavel_rounded,
-                accent,
-                cardColor,
-                () => _navigateTo(
-                    const EscrowManagementPage(initialFilter: 'disputed'))),
             _actionChip(
                 'Notifications',
                 Icons.campaign_rounded,
@@ -453,8 +435,8 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
         Text('Recent Activity',
             style: GoogleFonts.plusJakartaSans(
                 color: context.onSurface,
-                fontSize: 18,
-                fontWeight: FontWeight.bold)),
+                fontSize: 21,
+                fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
@@ -489,25 +471,15 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 46,
-                height: 46,
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF0D47A1),
+                  color: accent.withAlpha((0.16 * 255).round()),
                   borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0D47A1).withValues(alpha: 0.22),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
-                child: Icon(icon, color: Colors.white, size: 25),
+                child: Icon(icon, color: accent, size: 18),
               ),
               const SizedBox(width: 12),
               Text(label,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface,
                       fontSize: 15,
@@ -573,21 +545,22 @@ class _AdminDashboardPageState extends State<AdminDashboardPage>
                               .toUpperCase(),
                           style: GoogleFonts.plusJakartaSans(
                               color: context.onSurface,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 15),
                         ),
                         subtitle: Text(t['transaction_reference'] ?? '',
                             style: GoogleFonts.plusJakartaSans(
                                 color: context.onSurface.withOpacity(0.7),
-                                fontSize: 11)),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500)),
                         trailing: Text(
                           '${isCredit ? '+' : '-'}${_fmt(t['amount'] ?? 0)} FARM',
                           style: GoogleFonts.plusJakartaSans(
                             color: isCredit
                                 ? context.successColor
                                 : context.errorColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
                           ),
                         ),
                       ),

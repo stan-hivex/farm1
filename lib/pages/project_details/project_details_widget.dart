@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import '/core/theme_extensions.dart';
+import '/widgets/common/back_chevron.dart';
 
 class ProjectDetailsWidget extends StatefulWidget {
   final String projectId;
@@ -178,13 +179,7 @@ class _ProjectDetailsWidgetState extends State<ProjectDetailsWidget> {
                           mainAxisAlignment:
                               MainAxisAlignment.spaceBetween,
                           children: [
-                            CircleAvatar(
-                              backgroundColor: context.onSurface,
-                              child: IconButton(
-                                icon: Icon(Icons.arrow_back),
-                                onPressed: () => Navigator.pop(context),
-                              ),
-                            ),
+                            const BackChevron(),
 
                             CircleAvatar(
                               backgroundColor: context.onSurface,

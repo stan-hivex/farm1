@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Validate payment request expiry change",
+			"type": "shell",
+			"command": "flutter analyze lib/backend/api_requests/payment_request_api_service.dart lib/pages/payment_requests/request_money_widget.dart lib/pages/send_receive/send_receive_widget.dart",
+			"args": [],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

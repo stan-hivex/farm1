@@ -60,7 +60,6 @@ class _UserManagementPageState extends State<UserManagementPage>
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-
   }
 
   @override
@@ -483,82 +482,101 @@ class _UserManagementPageState extends State<UserManagementPage>
     );
   }
 
-  Widget _userCard(Map<String, dynamic> u, Color cardColor, Color accent) =>
-      Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: context.onSurface.withValues(alpha: 0.1)),
-        ),
-        child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          leading: CircleAvatar(
-            radius: 26,
-            backgroundColor: accent,
-            child: Text((u['first_name'] ?? 'U')[0].toUpperCase(),
-                style: GoogleFonts.plusJakartaSans(
-                    color: context.background,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold)),
-          ),
-          title: Text('${u['first_name']} ${u['last_name']}',
+  Widget _userCard(Map<String, dynamic> u, Color cardColor, Color accent) {
+    final firstName = u['first_name']?.toString().trim() ?? '';
+    final lastName = u['last_name']?.toString().trim() ?? '';
+    final username = u['username']?.toString().trim() ?? '';
+    final displayName =
+        [firstName, lastName].where((part) => part.isNotEmpty).join(' ');
+    final visibleName = displayName.isNotEmpty
+        ? displayName
+        : username.isNotEmpty
+            ? '@$username'
+            : 'Unknown user';
+    final initial = firstName.isNotEmpty
+        ? firstName[0]
+        : username.isNotEmpty
+            ? username[0]
+            : 'U';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: context.onSurface.withValues(alpha: 0.1)),
+      ),
+      child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        leading: CircleAvatar(
+          radius: 26,
+          backgroundColor: accent,
+          child: Text(initial.toUpperCase(),
               style: GoogleFonts.plusJakartaSans(
-                  color: context.onSurface,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15)),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 6),
-              Text(u['email'] ?? '-',
-                  style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withValues(alpha: 0.7),
-                      fontSize: 12)),
-              const SizedBox(height: 6),
-              Wrap(
-                runSpacing: 6,
-                spacing: 6,
-                children: [
-                  _tag(u['kyc_status'] ?? 'none', _kycColor(u['kyc_status'])),
-                  if (u['is_suspended'] == true)
-                    _tag('SUSPENDED', context.errorColor),
-                ],
-              ),
-            ],
-          ),
-          trailing: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                  'FARM ${double.tryParse(u['balance']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0'}',
-                  style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12)),
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => _viewUser(u),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: accent.withAlpha((0.18 * 255).round()),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text('View',
-                      style: GoogleFonts.plusJakartaSans(
-                          color: accent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ),
-            ],
-          ),
+                  color: context.background,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold)),
         ),
-      );
+        title: Text(visibleName,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: GoogleFonts.plusJakartaSans(
+                color: context.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                height: 1.25)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 6),
+            Text(u['email'] ?? '-',
+                style: GoogleFonts.plusJakartaSans(
+                    color: context.textSecondary, fontSize: 12)),
+            const SizedBox(height: 6),
+            Wrap(
+              runSpacing: 6,
+              spacing: 6,
+              children: [
+                _tag(u['kyc_status'] ?? 'none', _kycColor(u['kyc_status'])),
+                if (u['is_suspended'] == true)
+                  _tag('SUSPENDED', context.errorColor),
+              ],
+            ),
+          ],
+        ),
+        trailing: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+                'FARM ${double.tryParse(u['balance']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0'}',
+                style: GoogleFonts.plusJakartaSans(
+                    color: context.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12)),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => _viewUser(u),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: accent.withAlpha((0.18 * 255).round()),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Text('View',
+                    style: GoogleFonts.plusJakartaSans(
+                        color: accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _paginationBar(Color cardColor) {
     final lastPage = (_total / 20).ceil();

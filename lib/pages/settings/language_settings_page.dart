@@ -1,5 +1,6 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/localization/app_locale_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -97,6 +98,7 @@ class _LanguageSettingsPageWidgetState
     return Scaffold(
       backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         title: Text(
           'language'.tr(),
         ),

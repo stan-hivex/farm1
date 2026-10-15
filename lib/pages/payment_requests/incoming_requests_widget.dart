@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 // Removed unused imports
 import '/backend/services/api_service.dart';
 import '/services/app_session_manager.dart';
@@ -124,7 +125,10 @@ class _IncomingRequestsWidgetState extends State<IncomingRequestsWidget> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('common.incoming_requests'.tr())),
+      appBar: AppBar(
+        leading: const BackChevron(),
+        title: Text('common.incoming_requests'.tr()),
+      ),
       body: FutureBuilder<List<dynamic>>(
         future: _future,
         builder: (context, snap) {

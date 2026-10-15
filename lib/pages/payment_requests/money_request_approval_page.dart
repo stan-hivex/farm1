@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 // Removed unused imports
@@ -537,7 +538,10 @@ class _MoneyRequestApprovalPageState extends State<MoneyRequestApprovalPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('common.money_request_approval'.tr())),
+      appBar: AppBar(
+        leading: const BackChevron(),
+        title: Text('common.money_request_approval'.tr()),
+      ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16),

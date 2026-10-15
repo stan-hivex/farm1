@@ -16,6 +16,7 @@ import '/core/theme_extensions.dart';
 import 'package:flutter/material.dart';
 import '/pages/change_pin_page/change_pin_page_widget.dart';
 import '/pages/forgot_pin_page/forgot_pin_page_widget.dart';
+import '/widgets/common/back_chevron.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_settings_model.dart';
 export 'profile_settings_model.dart';
@@ -216,6 +217,10 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
         child: SingleChildScrollView(
           child: Column(
             children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: BackChevron(),
+              ),
               Container(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
@@ -711,7 +716,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           color: context.background),
                                       const SizedBox(width: 12),
                                       Text(
-                                        'Forgot PIN',
+                                        'Forgot PIN / Reset Blocked PIN',
                                         style: TextStyle(
                                             color: context.background),
                                       ),

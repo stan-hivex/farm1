@@ -21,6 +21,20 @@ class FFAppState extends ChangeNotifier {
   bool get isAuthInitializing =>
       _authStartupState == AuthStartupState.initializing;
 
+  bool _loginPreferencesPending = false;
+  bool get loginPreferencesPending => _loginPreferencesPending;
+  set loginPreferencesPending(bool value) {
+    if (_loginPreferencesPending == value) return;
+    _loginPreferencesPending = value;
+    notifyListeners();
+  }
+
+  String _pendingMerchantPaymentRoute = '';
+  String get pendingMerchantPaymentRoute => _pendingMerchantPaymentRoute;
+  set pendingMerchantPaymentRoute(String value) {
+    _pendingMerchantPaymentRoute = value;
+  }
+
   void setAuthStartupState(AuthStartupState value) {
     if (_authStartupState == value) return;
     _authStartupState = value;
@@ -103,7 +117,6 @@ class FFAppState extends ChangeNotifier {
     _kesEquivalent = prefs.getDouble('kesEquivalent') ?? 0.0;
     _profileImageUrl = prefs.getString('profileImageUrl') ?? '';
     _unreadNotificationCount = prefs.getInt('unreadNotificationCount') ?? 0;
-    _lastAuthenticatedRoute = prefs.getString('lastAuthenticatedRoute') ?? '';
     if (prefs.containsKey('biometricLockTimeoutSeconds')) {
       _biometricLockTimeoutSeconds =
           prefs.getInt('biometricLockTimeoutSeconds') ?? 600;
@@ -285,18 +298,6 @@ class FFAppState extends ChangeNotifier {
     SharedPreferences.getInstance().then(
       (prefs) => prefs.setBool('isLoggedIn', value),
     );
-  }
-
-  String _lastAuthenticatedRoute = '';
-  String get lastAuthenticatedRoute => _lastAuthenticatedRoute;
-  set lastAuthenticatedRoute(String value) {
-    if (_lastAuthenticatedRoute == value) return;
-    _lastAuthenticatedRoute = value;
-    notifyListeners();
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('lastAuthenticatedRoute', value),
-    );
-    SecureStorageService.writeLastAuthenticatedRoute(value);
   }
 
   bool _biometricsEnabled = false;
@@ -501,8 +502,7 @@ class FFAppState extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.light;
   ThemeMode get themeMode => _themeMode;
   set themeMode(ThemeMode value) {
-    final selectedMode =
-        value == ThemeMode.system ? ThemeMode.light : value;
+    final selectedMode = value == ThemeMode.system ? ThemeMode.light : value;
     if (_themeMode == selectedMode) return;
     _themeMode = selectedMode;
     notifyListeners();
@@ -529,11 +529,11 @@ class FFAppState extends ChangeNotifier {
     phone = '';
     kycStatus = '';
     isLoggedIn = false;
+    loginPreferencesPending = false;
     setAuthStartupState(AuthStartupState.unauthenticated);
     biometricsEnabled = false;
     hasPin = false;
     role = '';
-    lastAuthenticatedRoute = '';
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('accessToken');
     await prefs.remove('refreshToken');

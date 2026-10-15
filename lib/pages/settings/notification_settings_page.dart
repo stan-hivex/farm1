@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 // Removed unused import
 
 import '/backend/services/api_service.dart';
@@ -238,6 +239,7 @@ class _NotificationSettingsPageWidgetState
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         title: Text('common.notifications_title'.tr()),
         actions: [
           IconButton(

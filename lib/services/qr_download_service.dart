@@ -7,12 +7,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'qr_web_stub.dart'
+    if (dart.library.html) 'qr_web_impl.dart' as qr_web;
+
 const _kQrDownloadChannel = 'farm.qr_download_service';
 
 enum QrDownloadDestination {
   androidDownloads,
   androidPictures,
   iosPhotos,
+  webDownloads,
   temp,
   unknown,
 }
@@ -57,6 +61,8 @@ class QrDownloadService {
         return QrDownloadDestination.androidPictures;
       case 'photos':
         return QrDownloadDestination.iosPhotos;
+      case 'webDownloads':
+        return QrDownloadDestination.webDownloads;
       case 'temp':
         return QrDownloadDestination.temp;
       default:
@@ -70,10 +76,18 @@ class QrDownloadService {
   }) async {
     final name = fileName ?? _createFileName();
     if (kIsWeb) {
+      final success = await qr_web.saveFileWeb(bytes, name);
+      if (success) {
+        _lastSavedBytes = bytes;
+        _lastSavedFileName = name;
+      }
       return QrDownloadResult(
-        success: false,
-        message: 'Saving QR code is not supported in this build.',
-        destination: QrDownloadDestination.unknown,
+        success: success,
+        message: success
+            ? 'QR code downloaded successfully.'
+            : 'Unable to download the QR code.',
+        destination:
+            success ? QrDownloadDestination.webDownloads : QrDownloadDestination.unknown,
       );
     }
 
@@ -120,10 +134,14 @@ class QrDownloadService {
 
   Future<void> shareQr(
     Uint8List bytes, {
+    String? fileName,
     String subject = 'Farm QR Code',
     String text = 'Scan this Farm QR code.',
   }) async {
-    final file = await _writeTemporaryFile(bytes, _lastSavedFileName ?? _createFileName());
+    final file = await _writeTemporaryFile(
+      bytes,
+      fileName ?? _lastSavedFileName ?? _createFileName(),
+    );
     final xfile = XFile(file.path);
     await SharePlus.instance.share(
       ShareParams(

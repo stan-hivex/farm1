@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../core/admin_config.dart';
 import '../services/admin_api_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 class AddSuperadminPage extends StatefulWidget {
   const AddSuperadminPage({super.key});
@@ -133,6 +134,7 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B1320),
         foregroundColor: Colors.white,
+        leading: const BackChevron(),
         title: Text(
           'Create Superadmin',
           style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700),

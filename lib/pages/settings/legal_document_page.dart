@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:easy_localization/easy_localization.dart';
 
@@ -26,6 +27,7 @@ class LegalDocumentPageWidget extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         title: Text(title),
         backgroundColor: theme.primaryBackground,
         elevation: 0,

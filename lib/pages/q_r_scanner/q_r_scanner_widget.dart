@@ -1,22 +1,19 @@
 import '/backend/services/api_service.dart';
- 
-
 import '/components/action_circle/action_circle_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 // replaced direct wallet API calls with centralized ApiService
 import '/services/app_session_manager.dart';
- 
+import '/services/branded_qr_card_service.dart';
+import '/services/qr_download_service.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
 import '/utils/merchant_qr_parser.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lottie/lottie.dart';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:image_picker/image_picker.dart';
 
 import 'q_r_scanner_model.dart';
@@ -32,47 +29,74 @@ class QRScannerWidget extends StatefulWidget {
   State<QRScannerWidget> createState() => _QRScannerWidgetState();
 }
 
-class _HolePainter extends CustomPainter {
-  final Rect holeRect;
-  final double borderRadius;
-  final Color overlayColor;
+class _ScannerOverlayPainter extends CustomPainter {
+  const _ScannerOverlayPainter(this.scanRect);
 
-  _HolePainter(
-      {required this.holeRect,
-      this.borderRadius = 24.0,
-      this.overlayColor = const Color(0x80000000)});
+  final Rect scanRect;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = overlayColor;
+    if (scanRect.isEmpty) return;
 
-    // draw full overlay
-    final layerRect = Offset.zero & size;
-    canvas.saveLayer(layerRect, Paint());
-    canvas.drawRect(layerRect, paint);
-
-    // clear the hole (rounded rect)
-    final clearPaint = Paint()..blendMode = BlendMode.clear;
-    final rrect =
-        RRect.fromRectAndRadius(holeRect, Radius.circular(borderRadius));
-    canvas.drawRRect(rrect, clearPaint);
-
-    canvas.restore();
+    final cornerLength = (scanRect.width * 0.16).clamp(28.0, 52.0);
+    final cornerGuide = Paint()
+      ..color = const Color(0xFFFFC857)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final corners = Path()
+      ..moveTo(scanRect.left + cornerLength, scanRect.top)
+      ..lineTo(scanRect.left + 24, scanRect.top)
+      ..quadraticBezierTo(
+        scanRect.left,
+        scanRect.top,
+        scanRect.left,
+        scanRect.top + 24,
+      )
+      ..lineTo(scanRect.left, scanRect.top + cornerLength)
+      ..moveTo(scanRect.right - cornerLength, scanRect.top)
+      ..lineTo(scanRect.right - 24, scanRect.top)
+      ..quadraticBezierTo(
+        scanRect.right,
+        scanRect.top,
+        scanRect.right,
+        scanRect.top + 24,
+      )
+      ..lineTo(scanRect.right, scanRect.top + cornerLength)
+      ..moveTo(scanRect.left + cornerLength, scanRect.bottom)
+      ..lineTo(scanRect.left + 24, scanRect.bottom)
+      ..quadraticBezierTo(
+        scanRect.left,
+        scanRect.bottom,
+        scanRect.left,
+        scanRect.bottom - 24,
+      )
+      ..lineTo(scanRect.left, scanRect.bottom - cornerLength)
+      ..moveTo(scanRect.right - cornerLength, scanRect.bottom)
+      ..lineTo(scanRect.right - 24, scanRect.bottom)
+      ..quadraticBezierTo(
+        scanRect.right,
+        scanRect.bottom,
+        scanRect.right,
+        scanRect.bottom - 24,
+      )
+      ..lineTo(scanRect.right, scanRect.bottom - cornerLength);
+    canvas.drawPath(corners, cornerGuide);
   }
 
   @override
-  bool shouldRepaint(covariant _HolePainter oldDelegate) {
-    return oldDelegate.holeRect != holeRect ||
-        oldDelegate.overlayColor != overlayColor ||
-        oldDelegate.borderRadius != borderRadius;
-  }
+  bool shouldRepaint(covariant _ScannerOverlayPainter oldDelegate) =>
+      oldDelegate.scanRect != scanRect;
 }
 
-class _QRScannerWidgetState extends State<QRScannerWidget> {
+class _QRScannerWidgetState extends State<QRScannerWidget>
+    with SingleTickerProviderStateMixin {
   late QRScannerModel _model;
 
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final MobileScannerController cameraController = MobileScannerController();
+  late final AnimationController _scanLineController;
 
   bool isProcessing = false;
   bool isSubmittingTransfer = false;
@@ -85,6 +109,10 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
     super.initState();
 
     _model = createModel(context, () => QRScannerModel());
+    _scanLineController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1900),
+    )..repeat(reverse: true);
     _fetchWalletBalance();
   }
 
@@ -94,7 +122,10 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
 
       final resp = await ApiService.getWallet();
       setState(() {
-        walletBalance = double.tryParse((resp['data']?['balance'] ?? resp['balance'] ?? 0).toString()) ?? 0.0;
+        walletBalance = double.tryParse(
+                (resp['data']?['balance'] ?? resp['balance'] ?? 0)
+                    .toString()) ??
+            0.0;
         balanceLoading = false;
       });
     } catch (e) {
@@ -108,6 +139,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
 
   @override
   void dispose() {
+    _scanLineController.dispose();
     cameraController.dispose();
     _model.dispose();
     super.dispose();
@@ -157,7 +189,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                          'common.send'.tr(),
+                        'common.send'.tr(),
                         style: Theme.of(sheetContext).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 8),
@@ -209,18 +241,24 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                                   final amount = double.tryParse(
                                           amountController.text.trim()) ??
                                       0;
-                                      await ApiService.request(
-                                        method: 'POST',
-                                        path: '/wallet/send',
-                                        body: {
-                                          'recipient_identifier': recipientIdentifier,
-                                          'amount': amount,
-                                          'pin': null,
-                                          'description': descriptionController.text.trim().isNotEmpty ? descriptionController.text.trim() : 'QR payment',
-                                          'biometric_auth': true,
-                                          'device_fingerprint': authResult?.deviceFingerprint,
-                                        },
-                                      );
+                                  await ApiService.request(
+                                    method: 'POST',
+                                    path: '/wallet/send',
+                                    body: {
+                                      'recipient_identifier':
+                                          recipientIdentifier,
+                                      'amount': amount,
+                                      'pin': null,
+                                      'description': descriptionController.text
+                                              .trim()
+                                              .isNotEmpty
+                                          ? descriptionController.text.trim()
+                                          : 'QR payment',
+                                      'biometric_auth': true,
+                                      'device_fingerprint':
+                                          authResult?.deviceFingerprint,
+                                    },
+                                  );
 
                                   if (!mounted) return;
                                   await AppSessionManager().syncNow(
@@ -238,7 +276,8 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                                   Navigator.of(sheetContext).pop();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('common.transaction_success'.tr())),
+                                        content: Text(
+                                            'common.transaction_success'.tr())),
                                   );
                                 } catch (e) {
                                   if (!mounted) return;
@@ -319,12 +358,20 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                                         method: 'POST',
                                         path: '/wallet/send',
                                         body: {
-                                          'recipient_identifier': recipientIdentifier,
+                                          'recipient_identifier':
+                                              recipientIdentifier,
                                           'amount': amount,
                                           'pin': null,
-                                          'description': descriptionController.text.trim().isNotEmpty ? descriptionController.text.trim() : 'QR payment',
+                                          'description': descriptionController
+                                                  .text
+                                                  .trim()
+                                                  .isNotEmpty
+                                              ? descriptionController.text
+                                                  .trim()
+                                              : 'QR payment',
                                           'biometric_auth': true,
-                                          'device_fingerprint': authResult?.deviceFingerprint,
+                                          'device_fingerprint':
+                                              authResult?.deviceFingerprint,
                                         },
                                       );
                                     } else {
@@ -342,10 +389,17 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                                         method: 'POST',
                                         path: '/wallet/send',
                                         body: {
-                                          'recipient_identifier': recipientIdentifier,
+                                          'recipient_identifier':
+                                              recipientIdentifier,
                                           'amount': amount,
                                           'pin': pin,
-                                          'description': descriptionController.text.trim().isNotEmpty ? descriptionController.text.trim() : 'QR payment',
+                                          'description': descriptionController
+                                                  .text
+                                                  .trim()
+                                                  .isNotEmpty
+                                              ? descriptionController.text
+                                                  .trim()
+                                              : 'QR payment',
                                         },
                                       );
                                     }
@@ -426,13 +480,15 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
         return;
       }
 
-      final data = await ApiService.request(method: 'POST', path: '/qr/validate', body: {'qr_payload': qrPayload});
+      final data = await ApiService.request(
+          method: 'POST',
+          path: '/qr/validate',
+          body: {'qr_payload': qrPayload});
       final qrData = data['data'] ?? data;
 
       debugPrint(qrData.toString());
 
       if (qrData != null) {
-
         if (qrData['type'] == 'peer') {
           final recipientIdentifier = qrData['wallet_address']?.toString() ??
               qrData['recipient_identifier']?.toString() ??
@@ -616,15 +672,23 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
                                         : '?',
                                   ),
                                 ),
-                                title: Text(
-                                    (user['username'] ?? '').toString().trim().isNotEmpty
-                                        ? '@${(user['username'] ?? '').toString().trim()}${((user['phone'] ?? '').toString().trim().isNotEmpty) ? ' • ${(user['phone'] ?? '').toString().trim()}' : ''}'
-                                        : (user['phone'] ?? '').toString().trim()),
+                                title: Text((user['username'] ?? '')
+                                        .toString()
+                                        .trim()
+                                        .isNotEmpty
+                                    ? '@${(user['username'] ?? '').toString().trim()}${((user['phone'] ?? '').toString().trim().isNotEmpty) ? ' • ${(user['phone'] ?? '').toString().trim()}' : ''}'
+                                    : (user['phone'] ?? '').toString().trim()),
                                 onTap: () {
-                                  controller.text =
-                                      ((user['username'] ?? '').toString().trim().isNotEmpty
-                                          ? (user['username'] ?? '').toString().trim()
-                                          : (user['phone'] ?? '').toString().trim());
+                                  controller.text = ((user['username'] ?? '')
+                                          .toString()
+                                          .trim()
+                                          .isNotEmpty
+                                      ? (user['username'] ?? '')
+                                          .toString()
+                                          .trim()
+                                      : (user['phone'] ?? '')
+                                          .toString()
+                                          .trim());
                                   setState(() => suggestionUsers = []);
                                 },
                               );
@@ -665,31 +729,134 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
     );
   }
 
-  void showMyQrCode() {
-    showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: Text("My QR Code"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Image.network(
-                "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${FFAppState().userName}",
-              ),
-              const SizedBox(height: 12),
-              Text("@${FFAppState().userName}"),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("Close"),
+  Future<void> showMyQrCode() async {
+    final username = FFAppState().userName.trim();
+    if (username.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your username is not available yet.')),
+      );
+      return;
+    }
+
+    try {
+      final qrCard = await BrandedQrCardService.createPersonalCard(username);
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (_) {
+          return Dialog(
+            backgroundColor: Colors.black,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+              side: const BorderSide(color: Color(0xFFD6B36A), width: 1.5),
             ),
-          ],
-        );
-      },
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.qr_code_2_rounded,
+                        color: Color(0xFFD6B36A),
+                      ),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          'Your FARM Code',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.memory(
+                      qrCard,
+                      width: 290,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _downloadMyQr(qrCard),
+                          icon: const Icon(Icons.download_rounded),
+                          label: const Text('Save'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFFFAF8F1),
+                            side: const BorderSide(color: Color(0xFFD6B36A)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => _shareMyQr(qrCard),
+                          icon: const Icon(Icons.share_rounded),
+                          label: const Text('Share'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFD6B36A),
+                            foregroundColor: const Color(0xFF0B211C),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not create your QR code: $error')),
+      );
+    }
+  }
+
+  Future<void> _downloadMyQr(Uint8List bytes) async {
+    final result = await QrDownloadService.instance.downloadQr(
+      bytes,
+      fileName: 'farm_personal_qr_${DateTime.now().millisecondsSinceEpoch}.png',
     );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
+  }
+
+  Future<void> _shareMyQr(Uint8List bytes) async {
+    try {
+      await QrDownloadService.instance.shareQr(
+        bytes,
+        fileName:
+            'farm_personal_qr_${DateTime.now().millisecondsSinceEpoch}.png',
+        subject: 'Your FARM Africa QR code',
+        text: 'Scan my FARM Africa QR code to pay me.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not share your QR code: $error')),
+      );
+    }
   }
 
   @override
@@ -701,287 +868,284 @@ class _QRScannerWidgetState extends State<QRScannerWidget> {
       },
       child: Scaffold(
         key: scaffoldKey,
-        backgroundColor: FlutterFlowTheme.of(context).primary,
-        body: SafeArea(
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: FlutterFlowTheme.of(context).primary,
-            child: Column(
-              children: [
-                /// TOP BAR
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(
+              child: MobileScanner(
+                fit: BoxFit.cover,
+                controller: cameraController,
+                onDetect: (capture) async {
+                  for (final barcode in capture.barcodes) {
+                    final code = barcode.rawValue;
+                    if (code != null) {
+                      await validateQr(code);
+                      break;
+                    }
+                  }
+                },
+              ),
+            ),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final frameWidth =
+                    (constraints.maxWidth - 24).clamp(0.0, 440.0).toDouble();
+                final frameHeight =
+                    (constraints.maxHeight * 0.48).clamp(0.0, 440.0).toDouble();
+                final frameLeft = (constraints.maxWidth - frameWidth) / 2;
+                final frameTop = (constraints.maxHeight - frameHeight) / 2;
+                final scanRect = Rect.fromLTWH(
+                  frameLeft,
+                  frameTop,
+                  frameWidth,
+                  frameHeight,
+                );
+
+                return IgnorePointer(
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      FlutterFlowIconButton(
-                        borderRadius: 9999,
-                        buttonSize: 44,
-                        fillColor: FlutterFlowTheme.of(context).onPrimary13,
-                        icon: Icon(
-                          Icons.close_rounded,
-                          color: FlutterFlowTheme.of(context).onPrimary,
-                          size: 24,
-                        ),
-                        onPressed: () {
-                          context.goNamed('Dashboard');
-                        },
+                      CustomPaint(
+                        painter: _ScannerOverlayPainter(scanRect),
                       ),
-                      Text(
-                        'Scan QR Code',
-                        style:
-                            FlutterFlowTheme.of(context).titleMedium.override(
-                                  font: GoogleFonts.plusJakartaSans(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                ),
-                      ),
-                      FlutterFlowIconButton(
-                        borderRadius: 9999,
-                        buttonSize: 44,
-                        fillColor: FlutterFlowTheme.of(context).onPrimary13,
-                        icon: Icon(
-                          Icons.flash_on_rounded,
-                          color: FlutterFlowTheme.of(context).onPrimary,
-                          size: 24,
-                        ),
-                        onPressed: () async {
-                          await cameraController.toggleTorch();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
-                Expanded(
-                  flex: 5,
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final previewW = constraints.maxWidth;
-                      final previewH = constraints.maxHeight;
-                      final minDim = math.min(previewW, previewH);
-                      final holeSize =
-                          minDim * 0.98; // ~98% of the smaller side
-
-                      return Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          // Camera preview with rounded corners
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(24),
-                            child: SizedBox(
-                              width: previewW,
-                              height: previewH,
-                              child: MobileScanner(
-                                fit: BoxFit.cover,
-                                controller: cameraController,
-                                scanWindow: Rect.fromCenter(
-                                  center: Offset(previewW / 2, previewH / 2),
-                                  width: holeSize,
-                                  height: holeSize,
-                                ),
-                                onDetect: (capture) async {
-                                  final List<Barcode> barcodes =
-                                      capture.barcodes;
-                                  for (final barcode in barcodes) {
-                                    final String? code = barcode.rawValue;
-                                    if (code != null) {
-                                      await validateQr(code);
-                                      break;
-                                    }
-                                  }
-                                },
-                              ),
-                            ),
-                          ),
-
-                          // Semi-transparent overlay with transparent center (hole)
-                          Positioned.fill(
-                            child: IgnorePointer(
-                              child: CustomPaint(
-                                painter: _HolePainter(
-                                  holeRect: Rect.fromCenter(
-                                    center: Offset(previewW / 2, previewH / 2),
-                                    width: holeSize,
-                                    height: holeSize,
-                                  ),
-                                  borderRadius: 24.0,
-                                  overlayColor: Colors.black54,
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          // Scanning line centered inside the hole
-                          SizedBox(
-                            width: holeSize,
-                            height: holeSize,
-                            child: IgnorePointer(
-                              child: Center(
-                                child: Lottie.network(
-                                  'https://dimg.dreamflow.cloud/v1/lottie/horizontal+scanning+line',
-                                  width: holeSize,
-                                  height: holeSize,
-                                  fit: BoxFit.contain,
-                                  animate: true,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 24),
-
-                Opacity(
-                  opacity: 0.9,
-                  child: Text(
-                    'Align QR code within the frame',
-                    style: FlutterFlowTheme.of(context).bodyMedium.override(
-                          font: GoogleFonts.inter(),
-                          color: FlutterFlowTheme.of(context).onPrimary,
-                        ),
-                  ),
-                ),
-
-                /// ACTION BUTTONS
-                Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 24,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      wrapWithModel(
-                        model: _model.actionCircleModel1,
-                        updateCallback: () => safeSetState(() {}),
-                        child: GestureDetector(
-                          onTap: scanFromGallery,
-                          child: ActionCircleWidget(
-                            icon: Icon(
-                              Icons.image_rounded,
-                              color: FlutterFlowTheme.of(context).onPrimary,
-                              size: 24,
-                            ),
-                            label: 'Gallery',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 32),
-                      wrapWithModel(
-                        model: _model.actionCircleModel2,
-                        updateCallback: () => safeSetState(() {}),
-                        child: GestureDetector(
-                          onTap: scanByUsername,
-                          child: ActionCircleWidget(
-                            icon: Icon(
-                              Icons.person_search_rounded,
-                              color: FlutterFlowTheme.of(context).onPrimary,
-                              size: 24,
-                            ),
-                            label: 'Username / Phone',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 32),
-                      wrapWithModel(
-                        model: _model.actionCircleModel3,
-                        updateCallback: () => safeSetState(() {}),
-                        child: GestureDetector(
-                          onTap: showMyQrCode,
-                          child: ActionCircleWidget(
-                            icon: Icon(
-                              Icons.qr_code_2_rounded,
-                              color: FlutterFlowTheme.of(context).onPrimary,
-                              size: 24,
-                            ),
-                            label: 'My Code',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                /// USER CARD
-                Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: 32,
-                  ),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: FlutterFlowTheme.of(context).onPrimary,
-                      borderRadius: BorderRadius.circular(9999),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: FlutterFlowTheme.of(context).primary,
-                              shape: BoxShape.circle,
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              FFAppState().userName.isNotEmpty
-                                  ? FFAppState()
-                                      .userName
-                                      .substring(0, 2)
-                                      .toUpperCase()
-                                  : 'US',
-                              style: FlutterFlowTheme.of(context)
-                                  .labelMedium
-                                  .override(
-                                    font: GoogleFonts.plusJakartaSans(
-                                      fontWeight: FontWeight.bold,
+                      if (frameWidth > 0 && frameHeight > 0)
+                        AnimatedBuilder(
+                          animation: _scanLineController,
+                          builder: (context, _) {
+                            final lineTravel = frameHeight - 36;
+                            return Positioned(
+                              left: frameLeft + 16,
+                              right: constraints.maxWidth -
+                                  frameLeft -
+                                  frameWidth +
+                                  16,
+                              top: frameTop +
+                                  18 +
+                                  lineTravel * _scanLineController.value,
+                              child: Container(
+                                height: 3,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFC857),
+                                  borderRadius: BorderRadius.circular(8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFFFFC857)
+                                          .withValues(alpha: 0.8),
+                                      blurRadius: 12,
+                                      spreadRadius: 1,
                                     ),
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                  ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            SafeArea(
+              child: Column(
+                children: [
+                  /// TOP BAR
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        FlutterFlowIconButton(
+                          borderRadius: 9999,
+                          buttonSize: 44,
+                          fillColor: FlutterFlowTheme.of(context).onPrimary13,
+                          icon: Icon(
+                            Icons.close_rounded,
+                            color: FlutterFlowTheme.of(context).onPrimary,
+                            size: 24,
+                          ),
+                          onPressed: () {
+                            context.goNamed('Dashboard');
+                          },
+                        ),
+                        Text(
+                          'Scan QR Code',
+                          style: FlutterFlowTheme.of(context)
+                              .titleMedium
+                              .override(
+                                font: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                color: FlutterFlowTheme.of(context).onPrimary,
+                              ),
+                        ),
+                        FlutterFlowIconButton(
+                          borderRadius: 9999,
+                          buttonSize: 44,
+                          fillColor: FlutterFlowTheme.of(context).onPrimary13,
+                          icon: Icon(
+                            Icons.flash_on_rounded,
+                            color: FlutterFlowTheme.of(context).onPrimary,
+                            size: 24,
+                          ),
+                          onPressed: () async {
+                            await cameraController.toggleTorch();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const Expanded(child: SizedBox.shrink()),
+
+                  const SizedBox(height: 24),
+
+                  Opacity(
+                    opacity: 0.9,
+                    child: Text(
+                      'Align QR code within the frame',
+                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                            font: GoogleFonts.inter(),
+                            color: FlutterFlowTheme.of(context).onPrimary,
+                          ),
+                    ),
+                  ),
+
+                  /// ACTION BUTTONS
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 24,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        wrapWithModel(
+                          model: _model.actionCircleModel1,
+                          updateCallback: () => safeSetState(() {}),
+                          child: GestureDetector(
+                            onTap: scanFromGallery,
+                            child: ActionCircleWidget(
+                              icon: Icon(
+                                Icons.image_rounded,
+                                color: FlutterFlowTheme.of(context).onPrimary,
+                                size: 24,
+                              ),
+                              label: 'Gallery',
                             ),
                           ),
-                          const SizedBox(width: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Sending from @${FFAppState().userName}',
-                                style: FlutterFlowTheme.of(context).labelSmall,
+                        ),
+                        const SizedBox(width: 32),
+                        wrapWithModel(
+                          model: _model.actionCircleModel2,
+                          updateCallback: () => safeSetState(() {}),
+                          child: GestureDetector(
+                            onTap: scanByUsername,
+                            child: ActionCircleWidget(
+                              icon: Icon(
+                                Icons.person_search_rounded,
+                                color: FlutterFlowTheme.of(context).onPrimary,
+                                size: 24,
                               ),
-                              Text(
-                                balanceLoading
-                                    ? 'Balance: Loading...'
-                                    : 'Balance: ${walletBalance.toStringAsFixed(2)} FARM',
+                              label: 'Username / Phone',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 32),
+                        wrapWithModel(
+                          model: _model.actionCircleModel3,
+                          updateCallback: () => safeSetState(() {}),
+                          child: GestureDetector(
+                            onTap: showMyQrCode,
+                            child: ActionCircleWidget(
+                              icon: Icon(
+                                Icons.qr_code_2_rounded,
+                                color: FlutterFlowTheme.of(context).onPrimary,
+                                size: 24,
+                              ),
+                              label: 'My Code',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  /// USER CARD
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 32,
+                    ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: FlutterFlowTheme.of(context).onPrimary,
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: FlutterFlowTheme.of(context).primary,
+                                shape: BoxShape.circle,
+                              ),
+                              alignment: Alignment.center,
+                              child: Text(
+                                FFAppState().userName.isNotEmpty
+                                    ? FFAppState()
+                                        .userName
+                                        .substring(0, 2)
+                                        .toUpperCase()
+                                    : 'US',
                                 style: FlutterFlowTheme.of(context)
                                     .labelMedium
                                     .override(
                                       font: GoogleFonts.plusJakartaSans(
                                         fontWeight: FontWeight.bold,
                                       ),
+                                      color: FlutterFlowTheme.of(context)
+                                          .onPrimary,
                                     ),
                               ),
-                            ],
-                          ),
-                        ],
+                            ),
+                            const SizedBox(width: 16),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Sending from @${FFAppState().userName}',
+                                  style:
+                                      FlutterFlowTheme.of(context).labelSmall,
+                                ),
+                                Text(
+                                  balanceLoading
+                                      ? 'Balance: Loading...'
+                                      : 'Balance: ${walletBalance.toStringAsFixed(2)} FARM',
+                                  style: FlutterFlowTheme.of(context)
+                                      .labelMedium
+                                      .override(
+                                        font: GoogleFonts.plusJakartaSans(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

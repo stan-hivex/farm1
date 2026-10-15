@@ -1,11 +1,8 @@
-import 'dart:convert' as convert;
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '/app_state.dart';
-import '/backend/api_requests/api_manager.dart';
-import '/core/app_config.dart';
+import '/admin/services/admin_api_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 class AddAdminPage extends StatefulWidget {
   const AddAdminPage({super.key});
@@ -49,38 +46,18 @@ class _AddAdminPageState extends State<AddAdminPage> {
 
     setState(() => _isSubmitting = true);
     try {
-      final token = await FFAppState().getActiveAccessToken();
-      if (token.isEmpty) {
-        throw Exception('Not authenticated');
-      }
-
-      final response = await ApiManager.instance.makeApiCall(
-        callName: 'createAdmin',
-        apiUrl: '${AppConfig.api}/auth/admin/create',
-        callType: ApiCallType.POST,
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        params: {},
-        body: convert.jsonEncode({
-          'first_name': _firstNameCtrl.text.trim(),
-          'last_name': _lastNameCtrl.text.trim(),
-          'username': _usernameCtrl.text.trim(),
-          'phone': _phoneCtrl.text.trim(),
-          'email': _emailCtrl.text.trim(),
-          'country': _countryCtrl.text.trim(),
-          'password': _passwordCtrl.text,
-        }),
-        bodyType: BodyType.JSON,
-        returnBody: true,
+      final response = await AdminApiService.createAdmin(
+        firstName: _firstNameCtrl.text.trim(),
+        lastName: _lastNameCtrl.text.trim(),
+        username: _usernameCtrl.text.trim().toLowerCase(),
+        phone: _phoneCtrl.text.trim(),
+        email: _emailCtrl.text.trim().toLowerCase(),
+        country: _countryCtrl.text.trim(),
+        password: _passwordCtrl.text,
       );
 
-      final decoded = response.jsonBody as Map<String, dynamic>?;
-      final message = decoded?['message'] ?? 'Admin created successfully';
-      if (!response.succeeded) {
-        throw Exception(message);
-      }
+      final message =
+          response['message']?.toString() ?? 'Admin account created successfully';
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -139,6 +116,7 @@ class _AddAdminPageState extends State<AddAdminPage> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF0B1320),
         foregroundColor: Colors.white,
+        leading: const BackChevron(),
         title: Text('Create Admin',
             style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
         elevation: 0,
@@ -152,9 +130,14 @@ class _AddAdminPageState extends State<AddAdminPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Create a new admin account with restricted access.',
+                  'Create an account with the Admin role. The account can sign in after receiving its phone verification code.',
                   style: GoogleFonts.plusJakartaSans(
                       color: Colors.white70, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                const Chip(
+                  avatar: Icon(Icons.admin_panel_settings_outlined, size: 18),
+                  label: Text('Role: Admin'),
                 ),
                 const SizedBox(height: 20),
                 Row(
@@ -210,6 +193,10 @@ class _AddAdminPageState extends State<AddAdminPage> {
                       return 'Username is required';
                     if ((value?.trim().length ?? 0) < 3)
                       return 'Username must be at least 3 characters';
+                    if (!RegExp(r'^[a-zA-Z0-9_]+$')
+                        .hasMatch(value!.trim())) {
+                      return 'Use only letters, numbers, and underscores';
+                    }
                     return null;
                   },
                 ),
@@ -250,10 +237,15 @@ class _AddAdminPageState extends State<AddAdminPage> {
                             style: const TextStyle(color: Colors.white),
                             keyboardType: TextInputType.phone,
                             decoration: _inputDecoration('Phone'),
-                            validator: (value) =>
-                                (value?.trim().isEmpty ?? true)
-                                    ? 'Phone is required'
-                                    : null,
+                            validator: (value) {
+                              final phone = value?.trim() ?? '';
+                              if (phone.isEmpty) return 'Phone is required';
+                              if (!RegExp(r'^\+?[1-9]\d{7,14}$')
+                                  .hasMatch(phone)) {
+                                return 'Enter a valid international phone number';
+                              }
+                              return null;
+                            },
                           ),
                         ],
                       ),
@@ -288,8 +280,11 @@ class _AddAdminPageState extends State<AddAdminPage> {
                             validator: (value) {
                               if ((value?.isEmpty ?? true))
                                 return 'Password is required';
-                              if ((value?.length ?? 0) < 8)
-                                return 'Password must be at least 8 characters';
+                              if (!RegExp(
+                                      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\da-zA-Z]).{12,}$')
+                                  .hasMatch(value!)) {
+                                return 'Use 12+ characters with uppercase, lowercase, a number, and a symbol';
+                              }
                               return null;
                             },
                           ),

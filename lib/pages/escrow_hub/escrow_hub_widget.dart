@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '/backend/services/api_service.dart';
 import '/backend/models/escrow_model.dart';
 import '/components/escrow_item/escrow_item_widget.dart';
@@ -12,9 +14,11 @@ import '/services/transaction_authorization_service.dart';
 import '/services/transaction_receipt_service.dart';
 import '/backend/api_requests/escrow_api_service.dart';
 import '/backend/api_requests/user_api_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 class EscrowHubWidget extends StatefulWidget {
@@ -46,6 +50,10 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
       'transaction_type': 'Escrow',
       'id': escrow.id,
       'amount': escrow.amount,
+      'fee': escrow.fee,
+      'creation_fee': escrow.fee,
+      'net_amount': escrow.amount,
+      'currency': 'FARM',
       'status': escrow.status,
       'created_at': escrow.createdAt.toIso8601String(),
       'role': escrow.getRoleForUser(currentUserId),
@@ -53,6 +61,30 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
       'buyer_username': escrow.buyerUsername,
       'seller_username': escrow.sellerUsername,
     };
+  }
+
+  Future<void> _showEscrowDetails(EscrowModel escrow) async {
+    try {
+      final response = await EscrowApiService.getEscrowDetails(escrow.id);
+      final remote = response['data'];
+      final details = _escrowReceiptData(escrow);
+      if (remote is Map) {
+        details.addAll(
+          Map<String, dynamic>.from(remote)
+            ..removeWhere((_, value) => value == null),
+        );
+        details['creation_fee'] = details['fee'];
+        details['net_amount'] = escrow.amount;
+        details['currency'] = 'FARM';
+      }
+      if (!mounted) return;
+      await TransactionReceiptService.showDetails(context, details);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not load escrow details: $error')),
+      );
+    }
   }
 
   Future<void> _downloadSelectedEscrows() async {
@@ -301,44 +333,267 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
 
   Future<void> disputeEscrow(String escrowId) async {
     final controller = TextEditingController();
-
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Raise Dispute'),
-          content: TextField(
-            controller: controller,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'Enter dispute reason',
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context, controller.text);
-              },
-              child: Text('Submit'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (reason == null || reason.trim().isEmpty) {
-      return;
-    }
-
     try {
-      await ApiService.disputeEscrow(escrowId, reason);
+      final dispute = await showDialog<Map<String, Object?>>(
+        context: context,
+        builder: (dialogContext) {
+          Uint8List? attachmentBytes;
+          String? attachmentMimeType;
+          String? attachmentName;
+          bool submitting = false;
 
+          Future<void> pickAttachment(
+            StateSetter setDialogState,
+            String source,
+          ) async {
+            final picker = ImagePicker();
+            final XFile? file;
+            if (source == 'camera_photo') {
+              file = await picker.pickImage(source: ImageSource.camera);
+            } else if (source == 'camera_video') {
+              file = await picker.pickVideo(source: ImageSource.camera);
+            } else {
+              file = await picker.pickMedia();
+            }
+            final selectedFile = file;
+            if (selectedFile == null) return;
+
+            final mimeType = _disputeMimeType(selectedFile.name);
+            if (mimeType == null) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Choose a supported photo or video file.'),
+                ),
+              );
+              return;
+            }
+
+            final bytes = await selectedFile.readAsBytes();
+            if (bytes.isEmpty || bytes.length > 20 * 1024 * 1024) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Attachments must be smaller than 20 MB.'),
+                ),
+              );
+              return;
+            }
+
+            setDialogState(() {
+              attachmentBytes = bytes;
+              attachmentMimeType = mimeType;
+              attachmentName = selectedFile.name;
+            });
+          }
+
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) => AlertDialog(
+              title: const Text('Raise Dispute'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: controller,
+                      maxLines: 4,
+                      maxLength: 2000,
+                      decoration: const InputDecoration(
+                        hintText: 'Describe the dispute',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: submitting
+                          ? null
+                          : () async {
+                              final source = await showModalBottomSheet<String>(
+                                context: dialogContext,
+                                builder: (sheetContext) => SafeArea(
+                                  child: Wrap(
+                                    children: [
+                                      ListTile(
+                                        leading: const Icon(Icons.photo_camera),
+                                        title: const Text('Take a photo'),
+                                        onTap: () => Navigator.pop(
+                                          sheetContext,
+                                          'camera_photo',
+                                        ),
+                                      ),
+                                      ListTile(
+                                        leading:
+                                            const Icon(Icons.videocam_outlined),
+                                        title: const Text('Record a video'),
+                                        onTap: () => Navigator.pop(
+                                          sheetContext,
+                                          'camera_video',
+                                        ),
+                                      ),
+                                      ListTile(
+                                        leading:
+                                            const Icon(Icons.photo_library),
+                                        title:
+                                            const Text('Choose photo or video'),
+                                        onTap: () => Navigator.pop(
+                                          sheetContext,
+                                          'gallery',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                              if (source != null) {
+                                await pickAttachment(setDialogState, source);
+                              }
+                            },
+                      icon: const Icon(Icons.attach_file),
+                      label: Text(attachmentName == null
+                          ? 'Attach photo or video'
+                          : 'Change attachment'),
+                    ),
+                    if (attachmentBytes != null) ...[
+                      const SizedBox(height: 8),
+                      if (attachmentMimeType?.startsWith('image/') == true)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.memory(
+                            attachmentBytes!,
+                            height: 140,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        )
+                      else
+                        Row(
+                          children: [
+                            const Icon(Icons.video_file_outlined),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                attachmentName ?? 'Video attached',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: submitting
+                              ? null
+                              : () => setDialogState(() {
+                                    attachmentBytes = null;
+                                    attachmentMimeType = null;
+                                    attachmentName = null;
+                                  }),
+                          icon: const Icon(Icons.close),
+                          label: const Text('Remove'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      submitting ? null : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final reason = controller.text.trim();
+                          if (reason.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text('Please describe the dispute first.'),
+                              ),
+                            );
+                            return;
+                          }
+                          setDialogState(() => submitting = true);
+                          try {
+                            String? attachmentUrl;
+                            String? attachmentBase64;
+                            if (attachmentBytes != null &&
+                                attachmentMimeType != null) {
+                              if (const {
+                                'image/jpeg',
+                                'image/png',
+                                'image/webp',
+                              }.contains(attachmentMimeType)) {
+                                if (attachmentBytes!.length > 5 * 1024 * 1024) {
+                                  throw Exception(
+                                      'Images must be no larger than 5 MB.');
+                                }
+                                final extension = switch (attachmentMimeType) {
+                                  'image/png' => 'png',
+                                  'image/webp' => 'webp',
+                                  _ => 'jpg',
+                                };
+                                attachmentUrl = (await ApiService.uploadImages(
+                                  files: [attachmentBytes!],
+                                  filenames: ['escrow-evidence.$extension'],
+                                  mimeTypes: [attachmentMimeType!],
+                                ))
+                                    .single;
+                              } else {
+                                attachmentBase64 =
+                                    base64Encode(attachmentBytes!);
+                              }
+                            }
+                            if (!dialogContext.mounted) return;
+                            Navigator.pop(dialogContext, {
+                              'reason': reason,
+                              if (attachmentUrl != null)
+                                'attachmentUrl': attachmentUrl,
+                              if (attachmentBase64 != null)
+                                'attachmentBase64': attachmentBase64,
+                              if (attachmentMimeType != null)
+                                'attachmentMimeType': attachmentMimeType!,
+                            });
+                          } catch (error) {
+                            if (dialogContext.mounted) {
+                              setDialogState(() => submitting = false);
+                            }
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'Could not upload attachment: $error'),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Submit'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      if (dispute == null) return;
+
+      await ApiService.disputeEscrow(
+        escrowId,
+        dispute['reason']! as String,
+        attachmentBase64: dispute['attachmentBase64'] as String?,
+        attachmentMimeType: dispute['attachmentMimeType'] as String?,
+        attachmentUrl: dispute['attachmentUrl'] as String?,
+      );
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Dispute raised'),
@@ -347,12 +602,32 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
 
       fetchEscrows();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Dispute failed: $e'),
         ),
       );
+    } finally {
+      controller.dispose();
     }
+  }
+
+  String? _disputeMimeType(String fileName) {
+    final extension = fileName.toLowerCase().split('.').last;
+    return switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'gif' => 'image/gif',
+      'heic' => 'image/heic',
+      'heif' => 'image/heif',
+      'mp4' => 'video/mp4',
+      'mov' || 'qt' => 'video/quicktime',
+      'webm' => 'video/webm',
+      'm4v' => 'video/x-m4v',
+      _ => null,
+    };
   }
 
   Future<void> showCreateEscrowDialog() async {
@@ -854,11 +1129,9 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     final role = escrow.getRoleForUser(currentUserId);
     final counterpartyName = escrow.getCounterpartyDisplayName(currentUserId);
 
-    final details = _escrowReceiptData(escrow);
-
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => TransactionReceiptService.showDetails(context, details),
+      onTap: () => _showEscrowDetails(escrow),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         child: Column(
@@ -947,17 +1220,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    FlutterFlowIconButton(
-                      borderRadius: 8,
-                      buttonSize: 40,
-                      icon: Icon(
-                        Icons.arrow_back_rounded,
-                        color: FlutterFlowTheme.of(context).primaryText,
-                      ),
-                      onPressed: () {
-                        context.goNamed('Dashboard');
-                      },
-                    ),
+                    const BackChevron(),
                     Text(
                       'Escrow Hub',
                       style: FlutterFlowTheme.of(context).titleLarge.override(

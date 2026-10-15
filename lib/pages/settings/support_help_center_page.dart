@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '/app_state.dart';
@@ -43,6 +44,7 @@ class _SupportHelpCenterPageWidgetState
     return Scaffold(
       backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         title: Text('common.support_title'.tr()),
         elevation: 0,

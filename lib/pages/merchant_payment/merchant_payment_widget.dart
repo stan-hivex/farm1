@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '/backend/services/api_service.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/services/app_session_manager.dart';
+import '/widgets/common/back_chevron.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 
 class MerchantPaymentWidget extends StatefulWidget {
@@ -34,6 +36,157 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
   bool _isBiometricChecking = false;
   String error = '';
   TransactionAuthenticationResult? _lastPinAuthResult;
+
+  Future<void> _startExternalPayment(String paymentMethod) async {
+    final kesController = TextEditingController();
+    final emailController = TextEditingController();
+    final phoneController = TextEditingController();
+    var crypto = 'USDT';
+    var chain = 'BSC';
+    Map<String, String>? details;
+
+    try {
+      details = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text('Pay ${widget.businessName}'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: kesController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Amount (KES)',
+                    ),
+                  ),
+                  TextField(
+                    controller: emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Email (optional)',
+                    ),
+                  ),
+                  if (paymentMethod == 'MOBILE_MONEY')
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'Phone number with country code',
+                      ),
+                    ),
+                  if (paymentMethod == 'CRYPTO') ...[
+                    DropdownButtonFormField<String>(
+                      initialValue: crypto,
+                      decoration: const InputDecoration(labelText: 'Token'),
+                      items: const ['USDT', 'USDC']
+                          .map((token) => DropdownMenuItem(
+                                value: token,
+                                child: Text(token),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => crypto = value);
+                        }
+                      },
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: chain,
+                      decoration: const InputDecoration(labelText: 'Network'),
+                      items: const [
+                        'BSC',
+                        'POLYGON',
+                        'SOL',
+                        'BASE',
+                        'STARKNET',
+                        'ALGORAND',
+                      ]
+                          .map((network) => DropdownMenuItem(
+                                value: network,
+                                child: Text(network),
+                              ))
+                          .toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => chain = value);
+                        }
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, {
+                  'amount': kesController.text.trim(),
+                  'email': emailController.text.trim(),
+                  'phone': phoneController.text.trim(),
+                  'crypto': crypto,
+                  'chain': chain,
+                }),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } finally {
+      kesController.dispose();
+      emailController.dispose();
+      phoneController.dispose();
+    }
+
+    if (details == null) return;
+    final amountKes = double.tryParse(details['amount'] ?? '') ?? 0;
+    if (!amountKes.isFinite || amountKes <= 0) {
+      _showSnack('Enter an amount greater than 0');
+      return;
+    }
+    if (paymentMethod == 'CRYPTO' && (details['email'] ?? '').trim().isEmpty) {
+      _showSnack('Enter an email address for crypto payment');
+      return;
+    }
+
+    setState(() => isLoading = true);
+    try {
+      final response = await ApiService.request(
+        method: 'POST',
+        path: '/qr/checkout/payment',
+        requiresAuth: false,
+        body: {
+          'qr_payload': widget.qrPayload,
+          'amount_kes': amountKes,
+          'payment_method': paymentMethod,
+          if ((details['email'] ?? '').isNotEmpty) 'email': details['email'],
+          if ((details['phone'] ?? '').isNotEmpty) 'phone': details['phone'],
+          if (paymentMethod == 'CRYPTO') ...{
+            'crypto': details['crypto'],
+            'chain': details['chain'],
+          },
+        },
+      );
+      final data = response['data'];
+      final paymentUrl = data is Map ? data['payment_url']?.toString() : null;
+      final uri = paymentUrl == null ? null : Uri.tryParse(paymentUrl);
+      if (uri == null ||
+          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('Could not open the payment provider checkout');
+      }
+    } catch (e) {
+      if (mounted) _showSnack('Could not start payment: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -187,6 +340,7 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const BackChevron(),
         title: const Text('Merchant Payment'),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
@@ -213,6 +367,11 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
             const SizedBox(height: 4),
             Text('Merchant ID: ${widget.merchantId}', style: theme.bodyMedium),
             const SizedBox(height: 24),
+            Text(
+              'Pay with FARM wallet',
+              style: theme.titleMedium.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
             Text('Amount',
                 style: theme.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
@@ -261,6 +420,31 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
                       ),
                       counterText: '',
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Or pay in KES',
+                    style:
+                        theme.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final option in const <Map<String, String>>[
+                        {'label': 'Card', 'method': 'CARD'},
+                        {'label': 'Mobile money', 'method': 'MOBILE_MONEY'},
+                        {'label': 'Bank transfer', 'method': 'BANK_TRANSFER'},
+                        {'label': 'Crypto', 'method': 'CRYPTO'},
+                      ])
+                        OutlinedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () => _startExternalPayment(option['method']!),
+                          child: Text(option['label']!),
+                        ),
+                    ],
                   ),
                 ],
               )

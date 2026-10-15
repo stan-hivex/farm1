@@ -9,6 +9,7 @@ import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import '/widgets/common/back_chevron.dart';
 
 import 'kycpage_model.dart';
 export 'kycpage_model.dart';
@@ -165,9 +166,12 @@ class _KycpageWidgetState extends State<KycpageWidget> {
   String? _frontImageName;
   String? _backImageName;
   String? _selfieImageName;
+  String? _addressImageName;
   String? _frontImageBase64;
   String? _backImageBase64;
   String? _selfieImageBase64;
+  String? _addressImageBase64;
+  final Map<String, String> _imageMimeTypes = {};
 
   final ImagePicker _picker = ImagePicker();
 
@@ -547,27 +551,9 @@ class _KycpageWidgetState extends State<KycpageWidget> {
     if (picked != null && picked != _selectedDob) {
       setState(() {
         _selectedDob = picked;
-        _dobController.text = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+        _dobController.text =
+            '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       });
-    }
-  }
-
-  Future<void> _captureSelfie() async {
-    try {
-      final picked = await _picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
-      );
-      if (picked == null) return;
-
-      final bytes = await picked.readAsBytes();
-      final base64Image = base64Encode(bytes);
-      setState(() {
-        _selfieImageName = picked.name;
-        _selfieImageBase64 = base64Image;
-      });
-    } catch (e) {
-      _snack('Unable to capture selfie.');
     }
   }
 
@@ -585,11 +571,14 @@ class _KycpageWidgetState extends State<KycpageWidget> {
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: Text(
-                'Choose Photo Source',
+                key == 'selfie'
+                    ? 'Choose Selfie Source'
+                    : 'Choose Photo Source',
                 style: FlutterFlowTheme.of(context).titleSmall.override(
-                  font: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-                  fontWeight: FontWeight.bold,
-                ),
+                      font: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold),
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
             ),
             ListTile(
@@ -624,25 +613,15 @@ class _KycpageWidgetState extends State<KycpageWidget> {
 
   Future<void> _captureDocumentPhoto(String key) async {
     try {
-      final picked = await _picker.pickImage(source: ImageSource.camera);
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice:
+            key == 'selfie' ? CameraDevice.front : CameraDevice.rear,
+      );
       if (picked == null) return;
-
-      final bytes = await picked.readAsBytes();
-      final base64Image = base64Encode(bytes);
-      setState(() {
-        switch (key) {
-          case 'front':
-            _frontImageName = picked.name;
-            _frontImageBase64 = base64Image;
-            break;
-          case 'back':
-            _backImageName = picked.name;
-            _backImageBase64 = base64Image;
-            break;
-        }
-      });
+      await _storeKycImage(key, picked);
     } catch (e) {
-      _snack('Unable to capture photo.');
+      _snack('Unable to capture photo: $e');
     }
   }
 
@@ -650,29 +629,63 @@ class _KycpageWidgetState extends State<KycpageWidget> {
     try {
       final picked = await _picker.pickImage(source: ImageSource.gallery);
       if (picked == null) return;
-
-      final bytes = await picked.readAsBytes();
-      final base64Image = base64Encode(bytes);
-      setState(() {
-        switch (key) {
-          case 'front':
-            _frontImageName = picked.name;
-            _frontImageBase64 = base64Image;
-            break;
-          case 'back':
-            _backImageName = picked.name;
-            _backImageBase64 = base64Image;
-            break;
-        }
-      });
+      await _storeKycImage(key, picked);
     } catch (e) {
-      _snack('Unable to pick image.');
+      _snack('Unable to pick image: $e');
     }
   }
 
-  // Delegates Cloudinary uploads to the KycApiService adapter
-  Future<String> uploadToCloudinary(String base64) =>
-      KycApiService.uploadToCloudinary(base64);
+  Future<void> _storeKycImage(String key, XFile picked) async {
+    final bytes = await picked.readAsBytes();
+    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+      _snack('Each image must be no larger than 5 MB.');
+      return;
+    }
+    final mimeType = picked.mimeType ?? _mimeTypeFromName(picked.name);
+    if (!const {'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType)) {
+      _snack('Choose a JPG, PNG, or WebP image.');
+      return;
+    }
+    final base64Image = base64Encode(bytes);
+    setState(() {
+      _imageMimeTypes[key] = mimeType;
+      switch (key) {
+        case 'front':
+          _frontImageName = picked.name;
+          _frontImageBase64 = base64Image;
+          break;
+        case 'back':
+          _backImageName = picked.name;
+          _backImageBase64 = base64Image;
+          break;
+        case 'selfie':
+          _selfieImageName = picked.name;
+          _selfieImageBase64 = base64Image;
+          break;
+        case 'address':
+          _addressImageName = picked.name;
+          _addressImageBase64 = base64Image;
+          break;
+      }
+    });
+  }
+
+  String _mimeTypeFromName(String fileName) {
+    switch (fileName.split('.').last.toLowerCase()) {
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'gif':
+        return 'image/gif';
+      case 'heic':
+        return 'image/heic';
+      case 'heif':
+        return 'image/heif';
+      default:
+        return 'image/jpeg';
+    }
+  }
 
   Future<void> _submitKyc() async {
     if (!_formKey.currentState!.validate()) {
@@ -695,26 +708,45 @@ class _KycpageWidgetState extends State<KycpageWidget> {
 
     setState(() => _isSubmitting = true);
     try {
-      // Upload all images to Cloudinary
-      final frontUrl = await uploadToCloudinary(_frontImageBase64!);
-      final backUrl = _backImageBase64 != null
-          ? await uploadToCloudinary(_backImageBase64!)
-          : null;
-      final selfieUrl = await uploadToCloudinary(_selfieImageBase64!);
+      final imageKeys = <String>[
+        'front',
+        if (_backImageBase64 != null) 'back',
+        'selfie',
+        if (_addressImageBase64 != null) 'address',
+      ];
+      final imageData = <String>[
+        _frontImageBase64!,
+        if (_backImageBase64 != null) _backImageBase64!,
+        _selfieImageBase64!,
+        if (_addressImageBase64 != null) _addressImageBase64!,
+      ];
+      final imageUrls = await KycApiService.uploadImages(
+        base64Images: imageData,
+        filenames: imageKeys.map(_imageNameFor).toList(),
+        mimeTypes: imageKeys
+            .map((key) => _imageMimeTypes[key] ?? 'image/jpeg')
+            .toList(),
+      );
+      var imageIndex = 0;
+      final frontUrl = imageUrls[imageIndex++];
+      final backUrl = _backImageBase64 == null ? null : imageUrls[imageIndex++];
+      final selfieUrl = imageUrls[imageIndex++];
+      final addressDocumentUrl =
+          _addressImageBase64 == null ? null : imageUrls[imageIndex];
 
       await ApiService.submitKyc(
         documentType: _documentType,
         frontImageUrl: frontUrl,
         backImageUrl: backUrl,
         selfieImageUrl: selfieUrl,
+        addressDocumentUrl: addressDocumentUrl,
         documentNumber: _idNumberController.text.trim(),
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         dateOfBirth: _selectedDob != null
             ? '${_selectedDob!.year}-${_selectedDob!.month.toString().padLeft(2, '0')}-${_selectedDob!.day.toString().padLeft(2, '0')}'
             : null,
-        phoneNumber:
-            '${_selectedCountryCode}${_phoneController.text.trim()}',
+        phoneNumber: '${_selectedCountryCode}${_phoneController.text.trim()}',
         email: _emailController.text.trim(),
         country: _selectedCountry?.trim(),
         state: _stateController.text.trim(),
@@ -726,15 +758,37 @@ class _KycpageWidgetState extends State<KycpageWidget> {
       );
 
       FFAppState().kycStatus = 'pending';
-      _snack('KYC submitted. Your documents will be reviewed by admin shortly.');
+      _snack(
+          'KYC submitted. Your documents will be reviewed by admin shortly.');
       context.pushNamed('Dashboard');
     } catch (e) {
       print('KYC submit error: $e');
       final message = e.toString().replaceFirst('Exception: ', '');
-      _snack(message.isNotEmpty ? message : 'Submission failed. Please try again later.');
+      _snack(message.isNotEmpty
+          ? message
+          : 'Submission failed. Please try again later.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  String _imageNameFor(String key) {
+    final originalName = switch (key) {
+      'front' => _frontImageName,
+      'back' => _backImageName,
+      'selfie' => _selfieImageName,
+      'address' => _addressImageName,
+      _ => null,
+    };
+    if (originalName != null && originalName.trim().isNotEmpty) {
+      return originalName;
+    }
+    final extension = switch (_imageMimeTypes[key]) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      _ => 'jpg',
+    };
+    return '$key.$extension';
   }
 
   void _snack(String message) {
@@ -790,7 +844,8 @@ class _KycpageWidgetState extends State<KycpageWidget> {
     );
   }
 
-  Widget _uploadCard(String title, String subtitle, String? fileName, VoidCallback onTap) {
+  Widget _uploadCard(
+      String title, String subtitle, String? fileName, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -872,6 +927,10 @@ class _KycpageWidgetState extends State<KycpageWidget> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: BackChevron(),
+                ),
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -889,14 +948,13 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                       const SizedBox(height: 20),
                       Text(
                         'Verify Your Identity',
-                        style: FlutterFlowTheme.of(context)
-                            .headlineSmall
-                            .override(
-                              font: GoogleFonts.plusJakartaSans(
-                                fontWeight: FontWeight.w800,
-                              ),
-                              fontWeight: FontWeight.w800,
-                            ),
+                        style:
+                            FlutterFlowTheme.of(context).headlineSmall.override(
+                                  font: GoogleFonts.plusJakartaSans(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  fontWeight: FontWeight.w800,
+                                ),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -936,9 +994,11 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                         child: Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: FlutterFlowTheme.of(context).secondaryBackground,
+                            color: FlutterFlowTheme.of(context)
+                                .secondaryBackground,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: FlutterFlowTheme.of(context).alternate),
+                            border: Border.all(
+                                color: FlutterFlowTheme.of(context).alternate),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -951,23 +1011,31 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                                     ? FlutterFlowTheme.of(context).bodyMedium
                                     : FlutterFlowTheme.of(context).bodySmall,
                               ),
-                              Icon(Icons.calendar_today, size: 18, color: FlutterFlowTheme.of(context).secondaryText),
+                              Icon(Icons.calendar_today,
+                                  size: 18,
+                                  color: FlutterFlowTheme.of(context)
+                                      .secondaryText),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).secondaryBackground,
+                          color:
+                              FlutterFlowTheme.of(context).secondaryBackground,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: FlutterFlowTheme.of(context).alternate),
+                          border: Border.all(
+                              color: FlutterFlowTheme.of(context).alternate),
                         ),
                         child: DropdownButtonFormField<String>(
                           initialValue: _selectedGender,
-                          hint: Text('Gender', style: FlutterFlowTheme.of(context).bodySmall),
-                          decoration: const InputDecoration.collapsed(hintText: ''),
+                          hint: Text('Gender',
+                              style: FlutterFlowTheme.of(context).bodySmall),
+                          decoration:
+                              const InputDecoration.collapsed(hintText: ''),
                           isExpanded: false,
                           items: _genderOptions
                               .map((gender) => DropdownMenuItem(
@@ -980,45 +1048,50 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                               setState(() => _selectedGender = value);
                             }
                           },
-                          validator: (value) => value == null ? 'Required' : null,
+                          validator: (value) =>
+                              value == null ? 'Required' : null,
                         ),
                       ),
                       const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).secondaryBackground,
+                          color:
+                              FlutterFlowTheme.of(context).secondaryBackground,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: FlutterFlowTheme.of(context).alternate),
+                          border: Border.all(
+                              color: FlutterFlowTheme.of(context).alternate),
                         ),
                         child: DropdownButtonFormField<String>(
                           initialValue: _selectedNationality,
-                          hint: Text('Nationality', style: FlutterFlowTheme.of(context).bodySmall),
-                          decoration: const InputDecoration.collapsed(hintText: ''),
+                          hint: Text('Nationality',
+                              style: FlutterFlowTheme.of(context).bodySmall),
+                          decoration:
+                              const InputDecoration.collapsed(hintText: ''),
                           isExpanded: true,
-                          items: _countries
-                              .map((country) {
-                                final flag = _flagForCountry(country);
-                                return DropdownMenuItem(
-                                  value: country,
-                                  child: Row(
-                                    children: [
-                                      if (flag.isNotEmpty) ...[
-                                        Text(flag),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      Expanded(child: Text(country)),
-                                    ],
-                                  ),
-                                );
-                              })
-                              .toList(),
+                          items: _countries.map((country) {
+                            final flag = _flagForCountry(country);
+                            return DropdownMenuItem(
+                              value: country,
+                              child: Row(
+                                children: [
+                                  if (flag.isNotEmpty) ...[
+                                    Text(flag),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Expanded(child: Text(country)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                           onChanged: (value) {
                             if (value != null) {
                               setState(() => _selectedNationality = value);
                             }
                           },
-                          validator: (value) => value == null ? 'Required' : null,
+                          validator: (value) =>
+                              value == null ? 'Required' : null,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1032,38 +1105,41 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
-                              color: FlutterFlowTheme.of(context).secondaryBackground,
+                              color: FlutterFlowTheme.of(context)
+                                  .secondaryBackground,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: FlutterFlowTheme.of(context).alternate),
+                              border: Border.all(
+                                  color:
+                                      FlutterFlowTheme.of(context).alternate),
                             ),
                             child: DropdownButton<String>(
                               value: _selectedCountryCode,
                               underline: const SizedBox(),
-                              items: _countryCodeMap.entries
-                                  .map((entry) {
-                                    final flag = _flagForCountry(entry.value);
-                                    return DropdownMenuItem(
-                                      value: entry.key,
-                                      child: Row(
-                                        children: [
-                                          if (flag.isNotEmpty) ...[
-                                            Text(flag),
-                                            const SizedBox(width: 8),
-                                          ],
-                                          Expanded(
-                                            child: Text(
-                                              '${entry.key} ${entry.value}',
-                                              style: FlutterFlowTheme.of(context).bodyMedium,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
+                              items: _countryCodeMap.entries.map((entry) {
+                                final flag = _flagForCountry(entry.value);
+                                return DropdownMenuItem(
+                                  value: entry.key,
+                                  child: Row(
+                                    children: [
+                                      if (flag.isNotEmpty) ...[
+                                        Text(flag),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Expanded(
+                                        child: Text(
+                                          '${entry.key} ${entry.value}',
+                                          style: FlutterFlowTheme.of(context)
+                                              .bodyMedium,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                    );
-                                  })
-                                  .toList(),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
                               onChanged: (value) {
                                 if (value != null) {
                                   setState(() => _selectedCountryCode = value);
@@ -1077,12 +1153,16 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                               controller: _phoneController,
                               keyboardType: TextInputType.phone,
                               validator: (value) =>
-                                  value == null || value.isEmpty ? 'Required' : null,
+                                  value == null || value.isEmpty
+                                      ? 'Required'
+                                      : null,
                               decoration: InputDecoration(
                                 labelText: 'Phone Number',
-                                labelStyle: FlutterFlowTheme.of(context).bodySmall,
+                                labelStyle:
+                                    FlutterFlowTheme.of(context).bodySmall,
                                 filled: true,
-                                fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+                                fillColor: FlutterFlowTheme.of(context)
+                                    .secondaryBackground,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(14),
                                   borderSide: BorderSide.none,
@@ -1117,15 +1197,16 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 14),
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          color:
+                              FlutterFlowTheme.of(context).secondaryBackground,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                               color: FlutterFlowTheme.of(context).alternate),
                         ),
                         child: DropdownButtonFormField<String>(
                           initialValue: _documentType,
-                          decoration: const InputDecoration.collapsed(hintText: ''),
+                          decoration:
+                              const InputDecoration.collapsed(hintText: ''),
                           items: [
                             'National ID',
                             'Passport',
@@ -1160,9 +1241,9 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                       const SizedBox(height: 12),
                       _uploadCard(
                         'Selfie',
-                        'Take a selfie with front camera',
+                        'Take or choose a selfie photo',
                         _selfieImageName,
-                        () => _captureSelfie(),
+                        () => _pickOrCaptureDocument('selfie'),
                       ),
                       const SizedBox(height: 24),
                       _sectionHeader(
@@ -1170,35 +1251,45 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                         'Provide a recent proof of address and your location details.',
                       ),
                       const SizedBox(height: 16),
+                      _uploadCard(
+                        'Proof of Address (optional)',
+                        'Utility bill, bank statement, or government letter',
+                        _addressImageName,
+                        () => _pickOrCaptureDocument('address'),
+                      ),
+                      const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).secondaryBackground,
+                          color:
+                              FlutterFlowTheme.of(context).secondaryBackground,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: FlutterFlowTheme.of(context).alternate),
+                          border: Border.all(
+                              color: FlutterFlowTheme.of(context).alternate),
                         ),
                         child: DropdownButtonFormField<String>(
                           initialValue: _selectedCountry,
-                          hint: Text('Country', style: FlutterFlowTheme.of(context).bodySmall),
-                          decoration: const InputDecoration.collapsed(hintText: ''),
+                          hint: Text('Country',
+                              style: FlutterFlowTheme.of(context).bodySmall),
+                          decoration:
+                              const InputDecoration.collapsed(hintText: ''),
                           isExpanded: true,
-                          items: _countries
-                              .map((country) {
-                                final flag = _flagForCountry(country);
-                                return DropdownMenuItem(
-                                  value: country,
-                                  child: Row(
-                                    children: [
-                                      if (flag.isNotEmpty) ...[
-                                        Text(flag),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      Expanded(child: Text(country)),
-                                    ],
-                                  ),
-                                );
-                              })
-                              .toList(),
+                          items: _countries.map((country) {
+                            final flag = _flagForCountry(country);
+                            return DropdownMenuItem(
+                              value: country,
+                              child: Row(
+                                children: [
+                                  if (flag.isNotEmpty) ...[
+                                    Text(flag),
+                                    const SizedBox(width: 8),
+                                  ],
+                                  Expanded(child: Text(country)),
+                                ],
+                              ),
+                            );
+                          }).toList(),
                           onChanged: (value) {
                             if (value != null) {
                               setState(() => _selectedCountry = value);
@@ -1236,8 +1327,8 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context)
-                              .secondaryBackground,
+                          color:
+                              FlutterFlowTheme.of(context).secondaryBackground,
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
                               color: FlutterFlowTheme.of(context).alternate),
@@ -1289,7 +1380,9 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                                 options: FFButtonOptions(
                                   width: double.infinity,
                                   height: 52,
-                                  color: isDark ? const Color(0xFF1F1F1F) : Colors.black,
+                                  color: isDark
+                                      ? const Color(0xFF1F1F1F)
+                                      : Colors.black,
                                   textStyle: FlutterFlowTheme.of(context)
                                       .titleSmall
                                       .override(
@@ -1319,10 +1412,14 @@ class _KycpageWidgetState extends State<KycpageWidget> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         children: [
-                          _quickAction('Send', Icons.send_rounded, 'SendReceive'),
-                          _quickAction('QR Scan', Icons.qr_code_rounded, 'QRScanner'),
-                          _quickAction('Escrow', Icons.security_rounded, 'EscrowHub'),
-                          _quickAction('Invest', Icons.show_chart_rounded, 'InvestmentMarketplace'),
+                          _quickAction(
+                              'Send', Icons.send_rounded, 'SendReceive'),
+                          _quickAction(
+                              'QR Scan', Icons.qr_code_rounded, 'QRScanner'),
+                          _quickAction(
+                              'Escrow', Icons.security_rounded, 'EscrowHub'),
+                          _quickAction('Invest', Icons.show_chart_rounded,
+                              'InvestmentMarketplace'),
                         ],
                       ),
                     ],

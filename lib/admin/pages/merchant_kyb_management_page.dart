@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
-import '../services/admin_page_refresh_coordinator.dart';
 
 class MerchantKybManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -14,8 +13,7 @@ class MerchantKybManagementPage extends StatefulWidget {
       _MerchantKybManagementPageState();
 }
 
-class _MerchantKybManagementPageState extends State<MerchantKybManagementPage>
-    with AdminPageRefreshMixin<MerchantKybManagementPage> {
+class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
   final _bgColor = Colors.white;
   final _cardColor = Colors.white;
   final _accent = const Color(0xFFEAF2FF);
@@ -44,16 +42,11 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage>
       );
       setState(() => _merchants = res['data'] as List? ?? []);
     } catch (e) {
-      if (mounted && _merchants.isEmpty) {
-        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
-      }
+      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
-
-  @override
-  Future<void> refreshAdminPage() => _load();
 
   Future<void> _reviewMerchant(String merchantId, String status,
       {String? rejectionReason}) async {
@@ -279,19 +272,11 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage>
                   Center(child: CircularProgressIndicator())
                 ])
               : ListView(padding: const EdgeInsets.all(20), children: [
-                  Row(children: [
-                    IconButton(
-                      tooltip: 'Go back',
-                      icon: const Icon(Icons.arrow_back_rounded),
-                      onPressed: widget.onGoBack ??
-                          () => Navigator.of(context).maybePop(),
-                    ),
-                    Text('Merchant KYB',
-                        style: GoogleFonts.plusJakartaSans(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: context.onSurface)),
-                  ]),
+                  Text('Merchant KYB',
+                      style: GoogleFonts.plusJakartaSans(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: context.onSurface)),
                   const SizedBox(height: 6),
                   Text(
                       'Review merchant KYB applications and decide onboarding status.',

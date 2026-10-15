@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '/backend/services/api_service.dart';
 import '/core/theme_extensions.dart';
+import '/widgets/common/back_chevron.dart';
 
 // Removed unused imports flagged by analyzer
 
@@ -274,6 +275,7 @@ class _ChangePinPageWidgetState
         centerTitle: true,
         backgroundColor: context.background,
         foregroundColor: context.onSurface,
+        leading: const BackChevron(),
         title: Text(
           "Change PIN",
         ),

@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#123b2a" />
+    <title>Pay a FARM merchant</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, sans-serif;
+        color: #17231d;
+        background: #f4f7f5;
+      }
+      body {
+        margin: 0;
+        padding: 24px 16px;
+      }
+      main {
+        max-width: 520px;
+        margin: 5vh auto;
+        padding: 28px;
+        background: white;
+        border-radius: 18px;
+        box-shadow: 0 8px 32px #123b2a18;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.55rem;
+      }
+      p {
+        line-height: 1.5;
+        color: #56635b;
+      }
+      label {
+        display: block;
+        margin: 18px 0 6px;
+        font-weight: 700;
+      }
+      input,
+      select,
+      button {
+        width: 100%;
+        min-height: 48px;
+        box-sizing: border-box;
+        border-radius: 10px;
+        font: inherit;
+      }
+      input,
+      select {
+        padding: 10px 12px;
+        border: 1px solid #ccd6cf;
+        background: white;
+      }
+      button {
+        margin-top: 12px;
+        padding: 10px 14px;
+        border: 0;
+        background: #146c43;
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.secondary {
+        background: #e7f1eb;
+        color: #145333;
+      }
+      a.store-link {
+        display: block;
+        margin-top: 12px;
+        padding: 14px;
+        border-radius: 10px;
+        background: #146c43;
+        color: white;
+        font-weight: 700;
+        text-align: center;
+        text-decoration: none;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: wait;
+      }
+      .hidden {
+        display: none;
+      }
+      #message {
+        min-height: 24px;
+        margin-top: 14px;
+        font-weight: 700;
+      }
+      .fine-print {
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Merchant payment</h1>
+      <img
+        id="avatar"
+        class="hidden"
+        alt=""
+        width="64"
+        height="64"
+        style="border-radius: 50%; object-fit: cover"
+      />
+      <p id="merchant">Loading merchant details…</p>
+      <button id="app-pay" class="secondary" type="button">
+        Open FARM app to pay with your FARM wallet
+      </button>
+      <p class="fine-print">
+        Choose this option if you have FARM in your app wallet. Otherwise,
+        select a payment method below.
+      </p>
+      <p class="fine-print">
+        You can also pay here without the app. Choose a payment method below.
+      </p>
+
+      <form id="checkout">
+        <label for="amount">Amount in KES</label>
+        <input
+          id="amount"
+          name="amount"
+          type="number"
+          step="0.01"
+          required
+          placeholder="Enter amount in KES"
+        />
+
+        <label for="method">Payment method</label>
+        <select id="method" name="method" required>
+          <option value="MOBILE_MONEY">Mobile money</option>
+          <option value="CARD">Card</option>
+          <option value="BANK_TRANSFER">Bank transfer</option>
+          <option value="CRYPTO">Cryptocurrency</option>
+        </select>
+
+        <label for="email">Email for payment receipt</label>
+        <input
+          id="email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          required
+          placeholder="you@example.com"
+        />
+        <button id="submit" type="submit">Continue to payment</button>
+      </form>
+      <section id="success" class="hidden" aria-live="polite">
+        <h2>Payment confirmed</h2>
+        <p id="success-message"></p>
+        <p>
+          Thank you for paying this FARM merchant. The merchant's FARM wallet
+          has been credited.
+        </p>
+        <p class="fine-print">
+          Don't have the FARM app? You can download it after completing your
+          payment.
+        </p>
+        <a
+          class="store-link"
+          href="https://play.google.com/store/apps/details?id=farmapp.africa"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Download FARM from Google Play</a
+        >
+      </section>
+      <div id="message" role="status" aria-live="polite"></div>
+      <p class="fine-print">
+        The merchant wallet is credited after the payment provider confirms your
+        payment.
+      </p>
+    </main>
+    <script>
+      (() => {
+        const api = "https://farm-backend-r64g.onrender.com/api/v1";
+        const params = new URLSearchParams(location.search);
+        const encoded = params.get("qr");
+        const reference =
+          params.get("farm_reference") ||
+          params.get("reference") ||
+          params.get("trxref");
+        const path = location.pathname.split("/").filter(Boolean);
+        const isPublicPayRoute = path[0] === "pay";
+        const isPaymentSuccessRoute = isPublicPayRoute && path[1] === "success";
+        const merchantId =
+          isPublicPayRoute && !isPaymentSuccessRoute
+            ? path[1].replace(/[{}]/g, "").trim()
+            : null;
+        console.log("merchantId from params:", merchantId);
+        const decodePayload = (value) => {
+          const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+          return decodeURIComponent(
+            escape(
+              atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4)),
+            ),
+          );
+        };
+        const message = document.getElementById("message");
+        let qrPayload;
+
+        if (
+          isPublicPayRoute &&
+          !isPaymentSuccessRoute &&
+          (!merchantId || merchantId === "ANYID" || merchantId.length < 10)
+        ) {
+          document.getElementById("merchant").textContent =
+            "Invalid QR Code. Please ask merchant to regenerate.";
+          document.getElementById("checkout").classList.add("hidden");
+          document.getElementById("app-pay").classList.add("hidden");
+          return;
+        }
+
+        const showConfirmedPayment = (data) => {
+          document.getElementById("checkout").classList.add("hidden");
+          document.getElementById("app-pay").classList.add("hidden");
+          document.getElementById("success").classList.remove("hidden");
+          document.getElementById("merchant").textContent =
+            `Payment received by ${data.business_name}.`;
+          document.getElementById("success-message").textContent =
+            `${Number(data.amount).toLocaleString()} ${data.currency} payment confirmed.`;
+          message.textContent = "";
+        };
+
+        const checkPaymentStatus = async (paymentReference) => {
+          const endpoint = isPublicPayRoute
+            ? `${api}/qr-payments/verify/${encodeURIComponent(paymentReference)}`
+            : `${api}/qr/checkout/payment-status?reference=${encodeURIComponent(paymentReference)}`;
+          const response = await fetch(endpoint);
+          const result = await response.json();
+          if (!response.ok)
+            throw new Error(
+              result.message || "Could not check payment status.",
+            );
+          return result.data;
+        };
+
+        const waitForPaymentConfirmation = async (paymentReference) => {
+          document.getElementById("checkout").classList.add("hidden");
+          document.getElementById("app-pay").classList.add("hidden");
+          document.getElementById("merchant").textContent =
+            "Checking your payment…";
+          for (let attempt = 0; attempt < 100; attempt += 1) {
+            try {
+              const status = await checkPaymentStatus(paymentReference);
+              if (status.status === "completed") {
+                showConfirmedPayment(status);
+                return;
+              }
+              if (status.status === "failed") {
+                document.getElementById("merchant").textContent =
+                  "This payment was not completed. You can return to the merchant QR and try again.";
+                return;
+              }
+            } catch (error) {
+              message.textContent = error.message;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+          document.getElementById("merchant").textContent =
+            "Your payment is still being confirmed. Please check again in a moment.";
+          const retry = document.createElement("button");
+          retry.type = "button";
+          retry.textContent = "Check payment status";
+          retry.addEventListener("click", () =>
+            waitForPaymentConfirmation(paymentReference),
+          );
+          document.querySelector("main").insertBefore(retry, message);
+        };
+
+        if (reference) {
+          waitForPaymentConfirmation(reference);
+          return;
+        }
+
+        const configureMerchant = (merchant) => {
+          qrPayload = merchant.qrPayload || merchant.qr_payload || qrPayload;
+          document.getElementById("merchant").textContent =
+            `Pay ${merchant.farmName || merchant.business_name} securely.` +
+            (merchant.ownerName ? ` Owned by ${merchant.ownerName}.` : "");
+          const avatar = document.getElementById("avatar");
+          if (merchant.avatar && /^https:\/\//i.test(merchant.avatar)) {
+            avatar.src = merchant.avatar;
+            avatar.classList.remove("hidden");
+          }
+        };
+
+        document.getElementById("app-pay").addEventListener("click", () => {
+          const appPayload =
+            qrPayload ||
+            `${location.origin}/pay/${encodeURIComponent(merchantId)}`;
+          const encodedPayload = btoa(unescape(encodeURIComponent(appPayload)))
+            .replace(/\+/g, "-")
+            .replace(/\//g, "_")
+            .replace(/=+$/, "");
+          // Android intent filters and iOS universal-link association for /pay/* can open this directly in a future release.
+          location.href = `farm://farm.com/pay?qr=${encodeURIComponent(encodedPayload)}`;
+        });
+
+        const method = document.getElementById("method");
+
+        const loadMerchant = async () => {
+          if (merchantId) {
+            const response = await fetch(
+              `${api}/merchants/public/${encodeURIComponent(merchantId)}`,
+            );
+            const result = await response.json();
+            if (!response.ok)
+              throw new Error(
+                result.message || "Could not find this merchant.",
+              );
+            configureMerchant(result.data || result);
+            return;
+          }
+
+          if (!encoded) throw new Error("Merchant QR information is missing.");
+          qrPayload = decodePayload(encoded);
+          const response = await fetch(
+            `${api}/qr/checkout/merchant?qr_payload=${encodeURIComponent(qrPayload)}`,
+          );
+          const result = await response.json();
+          if (!response.ok)
+            throw new Error(
+              result.message || "Could not verify this merchant QR.",
+            );
+          configureMerchant(result.data || result);
+        };
+
+        loadMerchant().catch((error) => {
+          document.getElementById("merchant").textContent = error.message;
+          document.getElementById("checkout").classList.add("hidden");
+          document.getElementById("app-pay").classList.add("hidden");
+        });
+
+        document
+          .getElementById("checkout")
+          .addEventListener("submit", async (event) => {
+            event.preventDefault();
+            message.textContent = "";
+            const submit = document.getElementById("submit");
+            const amount = Number(document.getElementById("amount").value);
+            if (!Number.isFinite(amount) || amount <= 0) {
+              message.textContent = "Enter an amount greater than zero.";
+              return;
+            }
+            const paymentMethod = method.value;
+            const email = document.getElementById("email").value.trim();
+
+            submit.disabled = true;
+            submit.textContent = "Preparing secure checkout…";
+            try {
+              const isNewPayment = Boolean(merchantId);
+              const response = await fetch(
+                isNewPayment
+                  ? `${api}/qr-payments/initialize`
+                  : `${api}/qr/checkout/payment`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                  },
+                  body: JSON.stringify(
+                    isNewPayment
+                      ? {
+                          merchantId,
+                          amount,
+                          method: {
+                            MOBILE_MONEY: "mpesa",
+                            CARD: "card",
+                            BANK_TRANSFER: "bank",
+                            CRYPTO: "crypto",
+                          }[paymentMethod],
+                          guestEmail: email,
+                        }
+                      : {
+                          qr_payload: qrPayload,
+                          amount_kes: amount,
+                          payment_method: paymentMethod,
+                          email,
+                          ...(paymentMethod === "CRYPTO" ? { crypto: "USDT" } : {}),
+                        },
+                  ),
+                },
+              );
+              const result = await response.json();
+              if (!response.ok)
+                throw new Error(result.message || "Could not start payment.");
+              const paymentUrl =
+                result.data &&
+                (result.data.authorization_url || result.data.payment_url);
+              if (!paymentUrl || !/^https:\/\//i.test(paymentUrl)) {
+                throw new Error(
+                  "The payment provider returned an invalid checkout link.",
+                );
+              }
+              location.assign(paymentUrl);
+            } catch (error) {
+              message.textContent = error.message;
+              submit.disabled = false;
+              submit.textContent = "Continue to payment";
+            }
+          });
+      })();
+    </script>
+  </body>
+</html>

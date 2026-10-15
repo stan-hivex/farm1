@@ -18,6 +18,9 @@ import '/pages/settings/legal_document_page.dart';
 import '/pages/payment_requests/request_money_widget.dart';
 import '/admin/pages/admin_shell.dart';
 import '/pages/payment_requests/incoming_requests_widget.dart';
+import '/pages/public_pay_page.dart';
+import '/pages/payment_success_page.dart';
+import '/pages/receipts/receipt_pages.dart';
 import '/index.dart';
 
 export 'package:go_router/go_router.dart';
@@ -41,15 +44,6 @@ class AppStateNotifier extends ChangeNotifier {
   }
 }
 
-bool _isAuthorizedRestoredRoute(String route, String role) {
-  if (route.isEmpty || RouteGuardService().isPublicRoute(route)) return false;
-  if (route.startsWith('/superadmin')) return role == 'super_admin';
-  if (route.startsWith('/admin')) {
-    return role == 'admin' || role == 'super_admin';
-  }
-  return role == 'user';
-}
-
 GoRouter createRouter(
   AppStateNotifier appStateNotifier, {
   String? initialLocation,
@@ -64,6 +58,9 @@ GoRouter createRouter(
       redirect: (context, state) {
         final authState = FFAppState();
         final path = state.uri.path;
+        if (path == '/pay/success' || path.startsWith('/pay/')) {
+          return null;
+        }
         final publicRoute = RouteGuardService().isPublicRoute(path);
 
         if (authState.authStartupState == AuthStartupState.initializing) {
@@ -72,14 +69,17 @@ GoRouter createRouter(
               : OnboardingWidget.routePath;
         }
 
+        if (authState.loginPreferencesPending &&
+            (path == '/login' ||
+                path == '/loginpage' ||
+                path == '/otp' ||
+                path == '/otppage')) {
+          return null;
+        }
+
         final role = authState.role.toLowerCase();
         if (authState.isLoggedIn &&
             (publicRoute || path == OnboardingWidget.routePath)) {
-          final savedRoute = authState.lastAuthenticatedRoute;
-          if (_isAuthorizedRestoredRoute(savedRoute, role)) {
-            debugPrint('[AUTH ROUTE] Restoring last authenticated route');
-            return savedRoute;
-          }
           if (role == 'super_admin') return SuperadminDashboardPage.routePath;
           if (role == 'admin') return '/admin';
           return DashboardWidget.routePath;
@@ -88,6 +88,9 @@ GoRouter createRouter(
         if (!authState.isLoggedIn || authState.accessToken.isEmpty) {
           if (authState.isLoggedIn && authState.refreshToken.isNotEmpty) {
             return null;
+          }
+          if (path == '/merchantPayment') {
+            authState.pendingMerchantPaymentRoute = state.uri.toString();
           }
           return publicRoute ? null : LoginpageWidget.routePath;
         }
@@ -109,6 +112,50 @@ GoRouter createRouter(
         return null;
       },
       routes: [
+        FFRoute(
+          name: 'PaymentSuccess',
+          path: '/pay/success',
+          builder: (context, params) {
+            final queryParameters = params.state.uri.queryParameters;
+            final reference = [
+              'farm_reference',
+              'reference',
+              'trxref',
+              'tx_ref',
+              'transaction_reference',
+              'transactionId',
+              'transaction_id',
+              'payment_reference',
+              'paymentReference',
+              'payment_id',
+              'paymentId',
+              'checkout_id',
+              'checkoutId',
+              'merchant_reference',
+              'invoice_id',
+              'provider_reference',
+              'provider_transaction_id',
+              'provider_payment_id',
+              'provider_checkout_id',
+              'providerReference',
+              'id',
+            ]
+                .map((key) => queryParameters[key])
+                .whereType<String>()
+                .map((value) => value.trim())
+                .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+            return PaymentSuccessPage(
+              reference: reference.isEmpty ? null : reference,
+            );
+          },
+        ),
+        FFRoute(
+          name: 'PublicPay',
+          path: '/pay/:merchantId',
+          builder: (context, params) => PublicPayPage(
+            merchantId: params.getParam('merchantId', ParamType.String) ?? '',
+          ),
+        ),
         FFRoute(
           name: SplashPage.routeName,
           path: SplashPage.routePath,
@@ -206,6 +253,18 @@ GoRouter createRouter(
           builder: (context, params) => const MerchantSalesWidget(),
         ),
         FFRoute(
+          name: 'ReceiptHistory',
+          path: '/receipts',
+          builder: (context, params) => const ReceiptHistoryPage(),
+        ),
+        FFRoute(
+          name: 'ReceiptDetails',
+          path: '/receipts/:receiptId',
+          builder: (context, params) => ReceiptDetailsPage(
+            receiptId: params.getParam('receiptId', ParamType.String) ?? '',
+          ),
+        ),
+        FFRoute(
           name: RequestMoneyWidget.routeName,
           path: '/request-money',
           builder: (context, params) => const RequestMoneyWidget(),
@@ -244,8 +303,7 @@ GoRouter createRouter(
             pendingLoginId:
                 params.getParam('pendingLoginId', ParamType.String) ?? '',
             phone: params.getParam('phone', ParamType.String) ?? '',
-            countryCode:
-              params.getParam('countryCode', ParamType.String),
+            countryCode: params.getParam('countryCode', ParamType.String),
           ),
         ),
         FFRoute(
@@ -433,21 +491,6 @@ class RouteLogger extends NavigatorObserver {
         FFAppState().refreshToken.isNotEmpty;
     print(
         'ROUTE CHANGE: event=$event route=$routeName previous=$previousName role=$role accessTokenLength=$accessTokenLength refreshTokenLength=$refreshTokenLength sessionExists=$sessionExists');
-    if (event == 'didPush') {
-      String? location;
-      try {
-        location =
-            GoRouter.of(appNavigatorKey.currentContext!).getCurrentLocation();
-      } catch (_) {}
-      final publicRoute = location == null ||
-          location == '/' ||
-          location.startsWith('/login') ||
-          location.startsWith('/onboarding') ||
-          location.startsWith('/register');
-      if (!publicRoute && sessionExists) {
-        FFAppState().lastAuthenticatedRoute = location;
-      }
-    }
   }
 
   @override

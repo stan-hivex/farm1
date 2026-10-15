@@ -18,6 +18,13 @@ class EscrowApiService {
     return list.map((e) => EscrowModel.fromJson(e)).toList();
   }
 
+  static Future<Map<String, dynamic>> getEscrowDetails(String escrowId) =>
+      ApiService.request(
+        method: 'GET',
+        path: '/escrow/${Uri.encodeComponent(escrowId)}',
+        requiresAuth: true,
+      );
+
   // ── Create escrow (PIN required) ────────────────────────────────────────
   static Future<Map<String, dynamic>> createEscrow({
     required String sellerIdentifier,

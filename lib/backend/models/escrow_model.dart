@@ -1,6 +1,7 @@
 class EscrowModel {
   final String id;
   final double amount;
+  final double fee;
   final String status;
   final DateTime createdAt;
   final String? buyerId;
@@ -13,6 +14,7 @@ class EscrowModel {
   EscrowModel({
     required this.id,
     required this.amount,
+    required this.fee,
     required this.status,
     required this.createdAt,
     this.buyerId,
@@ -97,6 +99,7 @@ class EscrowModel {
     return EscrowModel(
       id: json['id'].toString(),
       amount: double.tryParse(json['amount'].toString()) ?? 0,
+      fee: double.tryParse(json['fee']?.toString() ?? '') ?? 0,
       status: json['status'] ?? 'active',
       createdAt: DateTime.parse(json['created_at']),
       buyerId: buyerId,

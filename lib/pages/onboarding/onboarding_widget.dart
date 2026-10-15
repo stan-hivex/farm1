@@ -13,7 +13,6 @@ import '/pages/superadmin/superadmin_dashboard_page.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'onboarding_model.dart';
 export 'onboarding_model.dart';
 
@@ -92,15 +91,20 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
     }
 
     if (isAuthenticated) {
-      final restoredRoute = await _readRestoredRoute();
-      if (!mounted) return;
       final lockService = BiometricLockService();
       final shouldLock = await lockService.shouldRequireUnlock();
       if (!mounted) return;
       if (shouldLock) {
         context.goNamed(BiometricUnlockPageWidget.routeName);
+      } else if (FFAppState().role.toLowerCase() == 'super_admin') {
+        context.go(SuperadminDashboardPage.routePath);
+      } else if (FFAppState().role.toLowerCase() == 'admin') {
+        AuthNavigation.replaceAllWithBuilder(
+          context,
+          (_) => AdminShell(),
+        );
       } else {
-        context.go(restoredRoute);
+        context.go(DashboardWidget.routePath);
       }
       return;
     }
@@ -109,27 +113,6 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
       _isCheckingAuth = false;
       _showAuthActions = true;
     });
-  }
-
-  Future<String> _readRestoredRoute() async {
-    final saved = (await SharedPreferences.getInstance())
-        .getString('lastAuthenticatedRoute');
-    final role = FFAppState().role.toLowerCase();
-    final route = saved ?? '';
-    if (role == 'super_admin') {
-      return route.startsWith('/superadmin')
-          ? route
-          : SuperadminDashboardPage.routePath;
-    }
-    if (role == 'admin') {
-      return route.startsWith('/admin') ? route : '/admin';
-    }
-    return route.isNotEmpty &&
-            !route.startsWith('/admin') &&
-            !route.startsWith('/superadmin') &&
-            !RouteGuardService().isPublicRoute(route)
-        ? route
-        : DashboardWidget.routePath;
   }
 
   @override

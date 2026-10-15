@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
@@ -52,7 +53,6 @@ class _KycManagementPageState extends State<KycManagementPage>
     } finally {
       if (mounted) setState(() => _loading = false);
     }
-
   }
 
   @override
@@ -135,70 +135,70 @@ class _KycManagementPageState extends State<KycManagementPage>
               ElevatedButton(onPressed: _load, child: const Text('Retry'))
             ])))
       else ...[
-      SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Row(children: [
-          for (final value in ['pending', 'rejected', 'all'])
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: ChoiceChip(
-                  label: Text(value.toUpperCase()),
-                  selected: _status == value,
-                  onSelected: (_) {
-                    setState(() => _status = value);
-                    _load();
-                  }),
-            ),
-        ]),
-      ),
-      Expanded(
-          child: RefreshIndicator(
-        onRefresh: _load,
-        child: _queue.isEmpty
-            ? Center(child: Text('No pending KYC applications'))
-            : ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _queue
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(children: [
+            for (final value in ['pending', 'rejected', 'all'])
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                    label: Text(value.toUpperCase()),
+                    selected: _status == value,
+                    onSelected: (_) {
+                      setState(() => _status = value);
+                      _load();
+                    }),
+              ),
+          ]),
+        ),
+        Expanded(
+            child: RefreshIndicator(
+          onRefresh: _load,
+          child: _queue.isEmpty
+              ? Center(child: Text('No pending KYC applications'))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _queue
+                          .where((doc) =>
+                              _search.isEmpty ||
+                              doc
+                                  .toString()
+                                  .toLowerCase()
+                                  .contains(_search.toLowerCase()))
+                          .length +
+                      1,
+                  itemBuilder: (_, i) {
+                    if (i == 0)
+                      return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: TextField(
+                              controller: _searchController,
+                              decoration: const InputDecoration(
+                                  hintText:
+                                      'Search name, username, ID or document number',
+                                  prefixIcon: Icon(Icons.search_rounded),
+                                  border: OutlineInputBorder()),
+                              onChanged: (value) =>
+                                  setState(() => _search = value)));
+                    final visible = _queue
                         .where((doc) =>
                             _search.isEmpty ||
                             doc
                                 .toString()
                                 .toLowerCase()
                                 .contains(_search.toLowerCase()))
-                        .length +
-                    1,
-                itemBuilder: (_, i) {
-                  if (i == 0)
-                    return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: TextField(
-                            controller: _searchController,
-                            decoration: const InputDecoration(
-                                hintText:
-                                    'Search name, username, ID or document number',
-                                prefixIcon: Icon(Icons.search_rounded),
-                                border: OutlineInputBorder()),
-                            onChanged: (value) =>
-                                setState(() => _search = value)));
-                  final visible = _queue
-                      .where((doc) =>
-                          _search.isEmpty ||
-                          doc
-                              .toString()
-                              .toLowerCase()
-                              .contains(_search.toLowerCase()))
-                      .toList();
-                  return _kycCard(visible[i - 1]);
-                },
-              ),
-      )),
+                        .toList();
+                    return _kycCard(visible[i - 1]);
+                  },
+                ),
+        )),
       ],
     ]);
   }
 
   Widget _kycCard(Map<String, dynamic> doc) {
-    final user = doc['users_kyc_documents_user_idTousers'] as Map? ?? {};
+    final user = doc['users_kyc_documents_user_idTousers'] as Map? ?? doc;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -323,23 +323,23 @@ class _KycManagementPageState extends State<KycManagementPage>
                       _detailRow('Postal Code', doc['postal_code']?.toString()),
                   ]),
             ),
-            // Document images preview row
-            if (doc['front_image'] != null)
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Row(children: [
-                  Expanded(child: _docImg('Front ID', doc['front_image'])),
-                  if (doc['back_image'] != null) ...[
-                    const SizedBox(width: 8),
-                    Expanded(child: _docImg('Back ID', doc['back_image'])),
-                  ],
-                  if (doc['selfie_image'] != null) ...[
-                    const SizedBox(width: 8),
-                    Expanded(child: _docImg('Selfie', doc['selfie_image'])),
-                  ],
-                ]),
-              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(children: [
+                Expanded(
+                    child: _docImg('Front ID', _imageUrl(doc, 'front_image'))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: _docImg('Back ID', _imageUrl(doc, 'back_image'))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: _docImg('Selfie', _imageUrl(doc, 'selfie_image'))),
+                const SizedBox(width: 8),
+                Expanded(
+                    child: _docImg(
+                        'Address proof', _imageUrl(doc, 'address_document'))),
+              ]),
+            ),
             Padding(
               padding: const EdgeInsets.all(14),
               child: Row(children: [
@@ -530,25 +530,16 @@ class _KycManagementPageState extends State<KycManagementPage>
   }
 
   Widget finalImgsSection(Map<String, dynamic> d) {
-    final List<String> imgs = [];
-    void addIf(dynamic v) {
-      if (v == null) return;
-      if (v is String && v.isNotEmpty) imgs.add(v);
-      if (v is Map && v['url'] != null) imgs.add(v['url'].toString());
-    }
-
-    addIf(d['front_image_url'] ?? d['front_image'] ?? d['front_image_path']);
-    addIf(d['back_image_url'] ?? d['back_image']);
-    addIf(d['selfie_image_url'] ?? d['selfie_image']);
-    if (d['additional_documents'] != null &&
-        d['additional_documents'] is List) {
-      for (final doc in d['additional_documents']) {
-        if (doc is String) imgs.add(doc);
-        if (doc is Map && doc['url'] != null) imgs.add(doc['url'].toString());
-      }
-    }
-
-    if (imgs.isEmpty) return const SizedBox();
+    final images = <MapEntry<String, String?>>[
+      MapEntry('Front ID', _imageUrl(d, 'front_image')),
+      MapEntry('Back ID', _imageUrl(d, 'back_image')),
+      MapEntry('Selfie', _imageUrl(d, 'selfie_image')),
+      MapEntry('Address proof', _imageUrl(d, 'address_document')),
+    ];
+    final urls = images
+        .where((image) => image.value != null)
+        .map((image) => image.value!)
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.only(top: 16),
@@ -558,24 +549,43 @@ class _KycManagementPageState extends State<KycManagementPage>
                 fontWeight: FontWeight.w600, fontSize: 13)),
         const SizedBox(height: 12),
         SizedBox(
-          height: 110,
+          height: 142,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            itemCount: imgs.length,
+            itemCount: images.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, i) {
-              final url = imgs[i];
+              final image = images[i];
+              final url = image.value;
               return GestureDetector(
-                onTap: () => _openImageGallery(imgs, i),
-                child: Container(
+                onTap: url == null
+                    ? null
+                    : () => _openImageGallery(urls, urls.indexOf(url)),
+                child: SizedBox(
                   width: 160,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    color: context.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    image: DecorationImage(
-                        image: NetworkImage(url), fit: BoxFit.cover),
-                  ),
+                  child: Column(children: [
+                    Container(
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: context.surface,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: url == null
+                          ? const Center(child: Text('Not uploaded'))
+                          : Image.network(
+                              url,
+                              width: 160,
+                              height: 110,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                  child: Text('Image unavailable')),
+                            ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(image.key,
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12)),
+                  ]),
                 ),
               );
             },
@@ -583,6 +593,16 @@ class _KycManagementPageState extends State<KycManagementPage>
         )
       ]),
     );
+  }
+
+  String? _imageUrl(Map<dynamic, dynamic> document, String imageField) {
+    final value = document['${imageField}_url'] ?? document[imageField];
+    if (value is String && value.trim().isNotEmpty) return value.trim();
+    if (value is Map && value['url'] is String) {
+      final url = (value['url'] as String).trim();
+      return url.isEmpty ? null : url;
+    }
+    return null;
   }
 
   void _openImageGallery(List<String> urls, int initialIndex) {
@@ -596,7 +616,12 @@ class _KycManagementPageState extends State<KycManagementPage>
             controller: controller,
             itemCount: urls.length,
             itemBuilder: (context, i) => InteractiveViewer(
-                child: Image.network(urls[i], fit: BoxFit.contain)),
+                child: Image.network(
+              urls[i],
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  const Center(child: Text('Image unavailable')),
+            )),
           ),
           Positioned(
             top: 24,
@@ -610,6 +635,16 @@ class _KycManagementPageState extends State<KycManagementPage>
             right: 12,
             child: Row(children: [
               IconButton(
+                  tooltip: 'Open image in browser',
+                  icon: const Icon(Icons.open_in_new, color: Colors.white),
+                  onPressed: () async {
+                    final index = controller.hasClients
+                        ? controller.page?.round() ?? initialIndex
+                        : initialIndex;
+                    await _openKycImage(urls[index]);
+                  }),
+              IconButton(
+                  tooltip: 'Copy image URL',
                   icon: const Icon(Icons.copy, color: Colors.white),
                   onPressed: () async {
                     final url = urls[controller.hasClients
@@ -627,21 +662,47 @@ class _KycManagementPageState extends State<KycManagementPage>
     );
   }
 
+  Future<void> _openKycImage(String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.toLowerCase() != 'res.cloudinary.com') {
+      _snack('The KYC image link is invalid.', context.errorColor);
+      return;
+    }
+
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened && mounted) {
+        _snack('Could not open the KYC image.', context.errorColor);
+      }
+    } catch (error) {
+      if (mounted) {
+        _snack('Could not open the KYC image: $error', context.errorColor);
+      }
+    }
+  }
+
   Widget _docImg(String label, String? url) => Column(children: [
         Container(
           height: 70,
+          width: double.infinity,
           decoration: BoxDecoration(
             color: context.surface,
             borderRadius: BorderRadius.circular(10),
-            image: url != null
-                ? DecorationImage(image: NetworkImage(url), fit: BoxFit.cover)
-                : null,
           ),
+          clipBehavior: Clip.antiAlias,
           child: url == null
-              ? Center(
-                  child: Icon(Icons.image_not_supported,
-                      color: context.textSecondary))
-              : null,
+              ? const Center(child: Text('Not uploaded'))
+              : Image.network(
+                  url,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      const Center(child: Text('Image unavailable')),
+                ),
         ),
         const SizedBox(height: 4),
         Text(label,

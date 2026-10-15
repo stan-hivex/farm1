@@ -12,7 +12,6 @@ import '/pages/superadmin/superadmin_dashboard_page.dart';
 import '/services/secure_storage_service.dart';
 import '/services/auth/auth_service.dart';
 import '/services/auth/biometric_login_service.dart';
-import '/services/biometric_enrollment_prompt.dart';
 import '/services/auth/session_store_service.dart';
 import '/pages/forgot_password_page/forgot_password_page_widget.dart';
 import '/pages/otppage/otppage_widget.dart';
@@ -112,13 +111,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
 
   final String baseUrl = '${AppConfig.api}/auth';
 
-  String _countryShortCode(Map<String, String> country) {
-    final flagRunes = (country['flag'] ?? '').runes.where(
-          (rune) => rune >= 0x1F1E6 && rune <= 0x1F1FF,
-        );
-    return String.fromCharCodes(flagRunes.map((rune) => rune - 0x1F1A5));
-  }
-
   @override
   void initState() {
     super.initState();
@@ -157,13 +149,15 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         ? response['data'] as Map<String, dynamic>
         : response['data'] is Map
             ? Map<String, dynamic>.from(response['data'] as Map)
-          : response;
+            : response;
 
-      final accessToken = (payload['access_token'] as String? ??
-          payload['farmJwt'] as String? ?? '')
+    final accessToken = (payload['access_token'] as String? ??
+            payload['farmJwt'] as String? ??
+            '')
         .trim();
-      final refreshToken = (payload['refresh_token'] as String? ??
-          payload['refreshToken'] as String? ?? '')
+    final refreshToken = (payload['refresh_token'] as String? ??
+            payload['refreshToken'] as String? ??
+            '')
         .trim();
     final data = payload['user'] is Map<String, dynamic>
         ? payload['user'] as Map<String, dynamic>
@@ -226,10 +220,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         await prefs.setString('adminRole', role);
         await prefs.setString('adminName', data['first_name'] ?? 'Admin');
       }
-    }
-
-    if (FFAppState().role == 'user') {
-      await BiometricEnrollmentPrompt.showAfterLogin(context);
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -303,7 +293,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         final pendingLoginId = loginData['pendingLoginId']?.toString() ?? '';
         final verifiedPhone = loginData['phone']?.toString() ?? identifier;
         if (pendingLoginId.isEmpty) {
-          throw Exception('Unable to start phone verification. Please try again.');
+          throw Exception(
+              'Unable to start phone verification. Please try again.');
         }
         if (!mounted) return;
         context.go(
@@ -456,95 +447,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
     );
   }
 
-  Future<void> _selectCountry() async {
-    final searchController = TextEditingController();
-    Map<String, String>? selected;
-
-    try {
-      selected = await showModalBottomSheet<Map<String, String>>(
-        context: context,
-        isScrollControlled: true,
-        builder: (sheetContext) {
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              final query = searchController.text.trim().toLowerCase();
-              final countries = _africanCountries.where((country) {
-                final name = (country['name'] ?? '').toLowerCase();
-                final code = (country['code'] ?? '').toLowerCase();
-                final shortCode = _countryShortCode(country).toLowerCase();
-                return name.contains(query) ||
-                    code.contains(query) ||
-                    shortCode.contains(query);
-              }).toList();
-
-              return SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-                  ),
-                  child: SizedBox(
-                    height: MediaQuery.sizeOf(sheetContext).height * 0.7,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Text(
-                            'common.select_country'.tr(),
-                            style: FlutterFlowTheme.of(context).titleMedium,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                          child: TextField(
-                            controller: searchController,
-                            onChanged: (_) => setSheetState(() {}),
-                            decoration: InputDecoration(
-                              hintText: 'Search country or code',
-                              prefixIcon: const Icon(Icons.search),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: countries.isEmpty
-                              ? const Center(child: Text('No countries found'))
-                              : ListView.builder(
-                                  itemCount: countries.length,
-                                  itemBuilder: (context, index) {
-                                    final country = countries[index];
-                                    return ListTile(
-                                      leading: Text(country['flag'] ?? ''),
-                                      title: Text(country['name'] ?? ''),
-                                      trailing: Text(country['code'] ?? ''),
-                                      onTap: () =>
-                                          Navigator.of(context).pop(country),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      searchController.dispose();
-    }
-
-    if (selected != null && mounted) {
-      setState(() {
-        _selectedCountry = selected!;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -669,65 +571,167 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         const SizedBox(height: 8.0),
                         Row(
                           children: [
-                            Expanded(
-                              flex: 4,
-                              child: InkWell(
-                                onTap: _selectCountry,
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: FlutterFlowTheme.of(context)
-                                        .secondaryBackground,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                        color: FlutterFlowTheme.of(context)
-                                            .alternate),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Text(
-                                                _selectedCountry['flag'] ?? ''),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _countryShortCode(
-                                                  _selectedCountry),
-                                          style: FlutterFlowTheme.of(context)
-                                              .bodyMedium,
+                            GestureDetector(
+                              onTap: () async {
+                                final searchController =
+                                    TextEditingController();
+                                final selected = await showModalBottomSheet<
+                                    Map<String, String>>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (sheetContext) => StatefulBuilder(
+                                    builder: (context, setSheetState) {
+                                      final query = searchController.text
+                                          .trim()
+                                          .toLowerCase();
+                                      final matches = _africanCountries
+                                          .where((country) =>
+                                              (country['name'] ?? '')
+                                                  .toLowerCase()
+                                                  .contains(query) ||
+                                              (country['code'] ?? '')
+                                                  .toLowerCase()
+                                                  .contains(query))
+                                          .toList();
+
+                                      return SafeArea(
+                                        child: Padding(
+                                          padding: EdgeInsets.only(
+                                            bottom: MediaQuery.viewInsetsOf(
+                                                    sheetContext)
+                                                .bottom,
+                                          ),
+                                          child: SizedBox(
+                                            height:
+                                                MediaQuery.sizeOf(sheetContext)
+                                                        .height *
+                                                    0.7,
+                                            child: Column(
+                                              children: [
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          16, 16, 16, 8),
+                                                  child: Text(
+                                                    'common.select_country'
+                                                        .tr(),
+                                                    style: FlutterFlowTheme.of(
+                                                            context)
+                                                        .titleMedium,
+                                                  ),
+                                                ),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.fromLTRB(
+                                                          16, 8, 16, 12),
+                                                  child: TextField(
+                                                    controller:
+                                                        searchController,
+                                                    onChanged: (_) =>
+                                                        setSheetState(() {}),
+                                                    decoration: InputDecoration(
+                                                      hintText:
+                                                          'Search country or code',
+                                                      prefixIcon: const Icon(
+                                                          Icons.search),
+                                                      border:
+                                                          OutlineInputBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(12),
+                                                      ),
+                                                      isDense: true,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Expanded(
+                                                  child: matches.isEmpty
+                                                      ? const Center(
+                                                          child: Text(
+                                                            'No countries found',
+                                                          ),
+                                                        )
+                                                      : ListView.builder(
+                                                          itemCount:
+                                                              matches.length,
+                                                          itemBuilder:
+                                                              (ctx, i) {
+                                                            final country =
+                                                                matches[i];
+                                                            return ListTile(
+                                                              leading: Text(
+                                                                  country['flag'] ??
+                                                                      ''),
+                                                              title: Text(
+                                                                country['name'] ??
+                                                                    '',
+                                                                style: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .bodyMedium,
+                                                              ),
+                                                              trailing: Text(
+                                                                  country['code'] ??
+                                                                      ''),
+                                                              onTap: () =>
+                                                                  Navigator.of(
+                                                                          ctx)
+                                                                      .pop(
+                                                                          country),
+                                                            );
+                                                          },
+                                                        ),
+                                                ),
+                                              ],
                                             ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              _selectedCountry['code'] ?? '',
-                                              style:
-                                                  FlutterFlowTheme.of(context)
-                                                      .bodyMedium,
-                                            ),
-                                            const Icon(
-                                              Icons.arrow_drop_down,
-                                              size: 20,
-                                            ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      );
+                                    },
                                   ),
+                                );
+                                searchController.dispose();
+
+                                if (selected != null) {
+                                  setState(() {
+                                    _selectedCountry = selected;
+                                  });
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: FlutterFlowTheme.of(context)
+                                      .secondaryBackground,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: FlutterFlowTheme.of(context)
+                                          .alternate),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text(_selectedCountry['flag'] ?? ''),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        '${_selectedCountry['name'] ?? ''} ${_selectedCountry['code'] ?? ''}',
+                                        style: FlutterFlowTheme.of(context)
+                                            .bodyMedium,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.arrow_drop_down),
+                                  ],
                                 ),
                               ),
                             ),
                             const SizedBox(width: 8),
                             Expanded(
-                              flex: 7,
                               child: TextFormField(
                                 controller: phoneController,
-                                decoration: inputDecoration(context,
-                                    'auth.enter_phone'.tr()),
+                                decoration: inputDecoration(
+                                    context, 'auth.enter_phone'.tr()),
                                 keyboardType: TextInputType.phone,
                               ),
                             ),
@@ -757,7 +761,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         const SizedBox(height: 8.0),
                         TextFormField(
                           controller: passwordController,
-                          decoration: inputDecoration(context, 'auth.enter_password'.tr())
+                          decoration: inputDecoration(
+                                  context, 'auth.enter_password'.tr())
                               .copyWith(
                             suffixIcon: IconButton(
                               icon: Icon(
@@ -781,7 +786,9 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                     /// Login Button
                     FFButtonWidget(
                       onPressed: isLoading ? null : handleLogin,
-                      text: isLoading ? 'auth.signing_in'.tr() : 'common.sign_in'.tr(),
+                      text: isLoading
+                          ? 'auth.signing_in'.tr()
+                          : 'common.sign_in'.tr(),
                       options: FFButtonOptions(
                         width: double.infinity,
                         height: 56.0,

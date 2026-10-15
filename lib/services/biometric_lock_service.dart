@@ -1,6 +1,3 @@
-import 'dart:convert';
-import 'dart:math';
-
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import '/app_state.dart';
@@ -95,14 +92,6 @@ class BiometricLockService {
     await SecureStorageService.writeBiometricLastVerified(now.toIso8601String());
     FFAppState().biometricLastVerified = now;
     debugPrint('Stored biometric last verified: ${now.toIso8601String()}');
-  }
-
-  String _generateFingerprint() {
-    final rnd = Random.secure();
-    final bytes = List<int>.generate(16, (_) => rnd.nextInt(256));
-    final fingerprint = base64Url.encode(bytes);
-    debugPrint('Generated fingerprint: $fingerprint');
-    return fingerprint;
   }
 
   Future<bool> enableBiometrics() async {

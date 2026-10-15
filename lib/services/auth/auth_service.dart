@@ -39,16 +39,16 @@ class AuthService {
 
   AuthService._internal();
 
-  static Map<String, dynamic> normalizeLoginResponse(Map<String, dynamic> response) {
+  static Map<String, dynamic> normalizeLoginResponse(
+      Map<String, dynamic> response) {
     final rawData = response['data'];
     final data = rawData is Map
         ? Map<String, dynamic>.from(rawData)
         : <String, dynamic>{};
 
     final user = data['user'];
-    final normalizedUser = user is Map
-        ? Map<String, dynamic>.from(user)
-        : <String, dynamic>{};
+    final normalizedUser =
+        user is Map ? Map<String, dynamic>.from(user) : <String, dynamic>{};
 
     return {
       'success': true,
@@ -89,7 +89,6 @@ class AuthService {
         referralCode: referralCode,
         turnstileToken: turnstileToken,
       );
-
     } on AuthException catch (e) {
       throw Exception('Sign up error: ${e.message}');
     } catch (e) {

@@ -138,7 +138,12 @@ class AppSessionManager {
           if (cachedWallet != null && cachedWallet.isNotEmpty) {
             final walletData = _extractData(cachedWallet);
             if (walletData.isNotEmpty) {
-              final walletBalance = double.tryParse(walletData['balance']?.toString() ?? '') ?? FFAppState().walletBalance;
+              final walletBalance = double.tryParse(
+                    (walletData['available_balance'] ?? walletData['balance'])
+                            ?.toString() ??
+                        '',
+                  ) ??
+                  FFAppState().walletBalance;
               final kesEquivalent = double.tryParse(walletData['kes_equivalent']?.toString() ?? '') ?? FFAppState().kesEquivalent;
               FFAppState().walletBalance = walletBalance;
               FFAppState().kesEquivalent = kesEquivalent;
@@ -179,7 +184,12 @@ class AppSessionManager {
         if (walletResp != null && walletResp.isNotEmpty) {
           final walletData = _extractData(walletResp);
           if (walletData.isNotEmpty) {
-            final walletBalance = double.tryParse(walletData['balance']?.toString() ?? '') ?? FFAppState().walletBalance;
+            final walletBalance = double.tryParse(
+                  (walletData['available_balance'] ?? walletData['balance'])
+                          ?.toString() ??
+                      '',
+                ) ??
+                FFAppState().walletBalance;
             final kesEquivalent = double.tryParse(walletData['kes_equivalent']?.toString() ?? '') ?? FFAppState().kesEquivalent;
             FFAppState().walletBalance = walletBalance;
             FFAppState().kesEquivalent = kesEquivalent;
@@ -393,7 +403,12 @@ class AppSessionManager {
       if (walletRes != null && walletRes.isNotEmpty) {
         final walletData = _extractData(walletRes);
         if (walletData.isNotEmpty) {
-          final walletBalance = double.tryParse(walletData['balance']?.toString() ?? '') ?? FFAppState().walletBalance;
+          final walletBalance = double.tryParse(
+                (walletData['available_balance'] ?? walletData['balance'])
+                        ?.toString() ??
+                    '',
+              ) ??
+              FFAppState().walletBalance;
           final kesEquivalent = double.tryParse(walletData['kes_equivalent']?.toString() ?? '') ?? FFAppState().kesEquivalent;
           FFAppState().walletBalance = walletBalance;
           FFAppState().kesEquivalent = kesEquivalent;

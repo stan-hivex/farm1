@@ -437,6 +437,10 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     final creationRevenue = _asDouble(_walletData?['escrow_creation_revenue']);
     final releaseRevenue = _asDouble(_walletData?['escrow_release_revenue']);
     final withdrawalRevenue = _asDouble(_walletData?['withdrawal_revenue']);
+    final merchantSalesRevenue =
+        _asDouble(_walletData?['merchant_sales_revenue']);
+    final merchantSalesCount =
+        _asDouble(_walletData?['merchant_sales_count']).toInt();
     final totalPlatformRevenue =
         _asDouble(_walletData?['total_platform_revenue']);
 
@@ -486,6 +490,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                 creationRevenue,
                 releaseRevenue,
                 withdrawalRevenue,
+                merchantSalesRevenue,
+                merchantSalesCount,
                 totalPlatformRevenue,
                 accent,
                 cardColor,
@@ -837,6 +843,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       double creation,
       double release,
       double withdrawal,
+      double merchantSales,
+      int merchantSalesCount,
       double total,
       Color accent,
       Color cardColor,
@@ -894,6 +902,50 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
               revenueItem('Escrow release', release, Colors.lightBlueAccent),
               revenueItem('Withdrawals', withdrawal, Colors.orangeAccent),
             ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cardColor.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Merchant revenue',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.purpleAccent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '1% from $merchantSalesCount sales',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  '${merchantSales.toStringAsFixed(2)} FARM',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: Colors.purpleAccent,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
           ),
           const Divider(color: Colors.white12, height: 24),
           Row(

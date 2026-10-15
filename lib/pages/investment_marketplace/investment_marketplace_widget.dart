@@ -4,6 +4,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/core/app_config.dart';
 import '/backend/services/api_service.dart';
+import '/widgets/common/back_chevron.dart';
 // Removed unused import
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -134,6 +135,7 @@ class _InvestmentMarketplaceWidgetState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const BackChevron(),
                           Text(
                             'Investment Marketplace',
                             style: FlutterFlowTheme.of(context).headlineSmall.override(

@@ -8,6 +8,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_peer_resolver.dart';
 import '/utils/transaction_history_utils.dart';
+import '/widgets/common/back_chevron.dart';
 import 'all_transactions_model.dart';
 
 export 'all_transactions_model.dart';
@@ -244,17 +245,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.goNamed('Dashboard');
-            }
-          },
-        ),
+        leading: const BackChevron(),
         title: const Text('Transactions'),
         backgroundColor: theme.primaryBackground,
         elevation: 0,

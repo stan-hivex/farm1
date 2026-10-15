@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '/services/auth/auth_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import '/widgets/common/back_chevron.dart';
 
 class VerifyEmailPageWidget extends StatefulWidget {
   const VerifyEmailPageWidget({super.key});
@@ -85,9 +86,9 @@ class _VerifyEmailPageWidgetState extends State<VerifyEmailPageWidget> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const BackChevron(),
         title: const Text('Verify Email'),
         backgroundColor: FlutterFlowTheme.of(context).primary,
-        automaticallyImplyLeading: true,
       ),
       body: SafeArea(
         child: Padding(

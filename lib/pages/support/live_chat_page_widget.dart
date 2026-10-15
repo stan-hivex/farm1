@@ -1,8 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
+
+enum _SupportMediaSource {
+  galleryPhoto,
+  galleryVideo,
+  cameraPhoto,
+  cameraVideo
+}
 
 class LiveChatPageWidget extends StatefulWidget {
   const LiveChatPageWidget({super.key});
@@ -14,13 +25,18 @@ class LiveChatPageWidget extends StatefulWidget {
 class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
   final TextEditingController _subjectController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
+  final ImagePicker _imagePicker = ImagePicker();
   final Map<String, TextEditingController> _replyControllers = {};
+  final Map<String, FocusNode> _replyFocusNodes = {};
   List<Map<String, dynamic>> _tickets = [];
   bool _sending = false;
   String? _sendingReplyTicketId;
   bool _loadingTickets = true;
   String? _ticketsError;
   Timer? _refreshTimer;
+  XFile? _newEnquiryAttachment;
+
+  static const int _maxAttachmentBytes = 20 * 1024 * 1024;
 
   @override
   void initState() {
@@ -40,6 +56,9 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
     _messageController.dispose();
     for (final controller in _replyControllers.values) {
       controller.dispose();
+    }
+    for (final focusNode in _replyFocusNodes.values) {
+      focusNode.dispose();
     }
     super.dispose();
   }
@@ -78,9 +97,12 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
   Future<void> _sendMessage() async {
     final subject = _subjectController.text.trim();
     final message = _messageController.text.trim();
-    if (subject.isEmpty || message.isEmpty) {
+    final attachment = _newEnquiryAttachment;
+    if (subject.isEmpty || (message.isEmpty && attachment == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a subject and message')),
+        const SnackBar(
+          content: Text('Enter a subject and message or attach a photo/video'),
+        ),
       );
       return;
     }
@@ -90,10 +112,17 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
       await ApiService.request(
         method: 'POST',
         path: '/support/tickets',
-        body: {'subject': subject, 'message': message},
+        timeoutSeconds: attachment == null ? 20 : 90,
+        body: {
+          'subject': subject,
+          'message': message,
+          if (attachment != null) ...(await _attachmentPayload(attachment)),
+        },
       );
+      if (!mounted) return;
       _subjectController.clear();
       _messageController.clear();
+      setState(() => _newEnquiryAttachment = null);
       await _loadTickets();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -112,20 +141,245 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
     }
   }
 
+  Future<Map<String, dynamic>> _attachmentPayload(XFile file) async {
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty || bytes.length > _maxAttachmentBytes) {
+      throw Exception('Choose a photo or video smaller than 20 MB.');
+    }
+    final mimeType = _mimeTypeFor(file);
+    if (mimeType == null) {
+      throw Exception('Choose a supported photo or video file.');
+    }
+    if (const {'image/jpeg', 'image/png', 'image/webp'}.contains(mimeType)) {
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw Exception('Images must be no larger than 5 MB.');
+      }
+      final extension = switch (mimeType) {
+        'image/png' => 'png',
+        'image/webp' => 'webp',
+        _ => 'jpg',
+      };
+      final urls = await ApiService.uploadImages(
+        files: [bytes],
+        filenames: ['support-attachment.$extension'],
+        mimeTypes: [mimeType],
+      );
+      return {
+        'attachmentUrl': urls.single,
+        'attachmentMimeType': mimeType,
+      };
+    }
+    return {
+      'attachmentBase64': base64Encode(bytes),
+      'attachmentMimeType': mimeType,
+    };
+  }
+
+  String? _mimeTypeFor(XFile file) {
+    const supported = {
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'image/heic',
+      'image/heif',
+      'video/mp4',
+      'video/quicktime',
+      'video/webm',
+      'video/x-m4v',
+    };
+    final detected = file.mimeType?.toLowerCase();
+    if (detected != null && supported.contains(detected)) return detected;
+    final extension = file.name.split('.').last.toLowerCase();
+    return switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      'gif' => 'image/gif',
+      'heic' => 'image/heic',
+      'heif' => 'image/heif',
+      'mp4' || 'm4v' => 'video/mp4',
+      'mov' => 'video/quicktime',
+      'webm' => 'video/webm',
+      _ => null,
+    };
+  }
+
+  Future<XFile?> _pickMedia() async {
+    final choice = await showModalBottomSheet<_SupportMediaSource>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Choose photo from gallery'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _SupportMediaSource.galleryPhoto,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library_outlined),
+              title: const Text('Choose video from gallery'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _SupportMediaSource.galleryVideo,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _SupportMediaSource.cameraPhoto,
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam_outlined),
+              title: const Text('Record a video'),
+              onTap: () => Navigator.pop(
+                sheetContext,
+                _SupportMediaSource.cameraVideo,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return null;
+
+    final isVideo = choice == _SupportMediaSource.galleryVideo ||
+        choice == _SupportMediaSource.cameraVideo;
+    final source = choice == _SupportMediaSource.galleryPhoto ||
+            choice == _SupportMediaSource.galleryVideo
+        ? ImageSource.gallery
+        : ImageSource.camera;
+    final file = isVideo
+        ? await _imagePicker.pickVideo(
+            source: source,
+            maxDuration: const Duration(minutes: 2),
+          )
+        : await _imagePicker.pickImage(
+            source: source,
+            imageQuality: 85,
+            maxWidth: 1920,
+          );
+    if (file == null) return null;
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty || bytes.length > _maxAttachmentBytes) {
+      throw Exception('Choose a photo or video smaller than 20 MB.');
+    }
+    if (_mimeTypeFor(file) == null) {
+      throw Exception('Choose a supported photo or video file.');
+    }
+    return file;
+  }
+
+  Future<void> _chooseEnquiryAttachment() async {
+    try {
+      final file = await _pickMedia();
+      if (mounted && file != null) {
+        setState(() => _newEnquiryAttachment = file);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not attach media: $error')),
+        );
+      }
+    }
+  }
+
+  Widget _buildAttachmentPreview(dynamic rawUrl) {
+    if (rawUrl is! String || rawUrl.isEmpty) return const SizedBox.shrink();
+    final uri = Uri.tryParse(rawUrl);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'res.cloudinary.com') {
+      return const Text('Attachment unavailable');
+    }
+    final isVideo = uri.path.contains('/video/upload/');
+    if (isVideo) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: () => _openVideo(uri),
+          icon: const Icon(Icons.play_circle_outline),
+          label: const Text('Open attached video'),
+        ),
+      );
+    }
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: GestureDetector(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (dialogContext) => Dialog(
+            child: InteractiveViewer(
+              child: Image.network(
+                rawUrl,
+                errorBuilder: (_, __, ___) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Could not load this photo.'),
+                ),
+              ),
+            ),
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Image.network(
+            rawUrl,
+            width: 220,
+            height: 180,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const Text('Could not load photo'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openVideo(Uri uri) async {
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this video.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open this video: $error')),
+        );
+      }
+    }
+  }
+
   TextEditingController _replyControllerFor(String ticketId) =>
       _replyControllers.putIfAbsent(ticketId, TextEditingController.new);
 
-  Future<void> _replyToTicket(String ticketId) async {
+  FocusNode _replyFocusNodeFor(String ticketId) =>
+      _replyFocusNodes.putIfAbsent(ticketId, FocusNode.new);
+
+  Future<bool> _replyToTicket(String ticketId, {XFile? attachment}) async {
     final controller = _replyControllerFor(ticketId);
     final message = controller.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && attachment == null) return false;
 
     setState(() => _sendingReplyTicketId = ticketId);
     try {
       await ApiService.request(
         method: 'POST',
         path: '/support/tickets/$ticketId/reply',
-        body: {'message': message},
+        timeoutSeconds: attachment == null ? 20 : 90,
+        body: {
+          'message': message,
+          if (attachment != null) ...(await _attachmentPayload(attachment)),
+        },
       );
       controller.clear();
       await _loadTickets();
@@ -134,15 +388,138 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
           const SnackBar(content: Text('Your reply has been sent.')),
         );
       }
+      return true;
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Could not send reply: $error')),
         );
       }
+      return false;
     } finally {
       if (mounted) setState(() => _sendingReplyTicketId = null);
     }
+  }
+
+  Future<void> _openReplyComposer(String ticketId) async {
+    final controller = _replyControllerFor(ticketId);
+    final focusNode = _replyFocusNodeFor(ticketId);
+    XFile? selectedAttachment;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) {
+        var isSending = false;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              left: 16,
+              top: 16,
+              right: 16,
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Reply to support',
+                  style: Theme.of(sheetContext).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  autofocus: true,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                  minLines: 2,
+                  maxLines: 5,
+                  maxLength: 5000,
+                  decoration: const InputDecoration(
+                    hintText: 'Write your message',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (selectedAttachment != null)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      _mimeTypeFor(selectedAttachment!)!.startsWith('video/')
+                          ? Icons.videocam_outlined
+                          : Icons.image_outlined,
+                    ),
+                    title: Text(
+                      selectedAttachment!.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: IconButton(
+                      tooltip: 'Remove attachment',
+                      onPressed: () =>
+                          setSheetState(() => selectedAttachment = null),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: isSending
+                        ? null
+                        : () async {
+                            try {
+                              final file = await _pickMedia();
+                              if (file != null && sheetContext.mounted) {
+                                setSheetState(() => selectedAttachment = file);
+                              }
+                            } catch (error) {
+                              if (sheetContext.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content:
+                                        Text('Could not attach media: $error'),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    icon: const Icon(Icons.attach_file),
+                    label: const Text('Add photo or video'),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton.icon(
+                    onPressed: isSending
+                        ? null
+                        : () async {
+                            setSheetState(() => isSending = true);
+                            final sent = await _replyToTicket(ticketId,
+                                attachment: selectedAttachment);
+                            if (sent && sheetContext.mounted) {
+                              Navigator.of(sheetContext).pop();
+                            } else if (sheetContext.mounted) {
+                              setSheetState(() => isSending = false);
+                            }
+                          },
+                    icon: isSending
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.send),
+                    label: const Text('Send reply'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   String _value(dynamic value, [String fallback = '']) =>
@@ -162,6 +539,7 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
         title: const Text('Live Chat'),
@@ -217,6 +595,35 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+            ),
+          ),
+          if (_newEnquiryAttachment != null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                _mimeTypeFor(_newEnquiryAttachment!)!.startsWith('video/')
+                    ? Icons.videocam_outlined
+                    : Icons.image_outlined,
+              ),
+              title: Text(
+                _newEnquiryAttachment!.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: IconButton(
+                tooltip: 'Remove attachment',
+                onPressed: _sending
+                    ? null
+                    : () => setState(() => _newEnquiryAttachment = null),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _sending ? null : _chooseEnquiryAttachment,
+              icon: const Icon(Icons.attach_file),
+              label: const Text('Add photo or video'),
             ),
           ),
           const SizedBox(height: 8),
@@ -296,49 +703,52 @@ class _LiveChatPageWidgetState extends State<LiveChatPageWidget> {
                                   _value(sender['last_name']),
                                 ].where((part) => part.isNotEmpty).join(' ')
                               : '';
+                          final senderDisplayName = senderName.isNotEmpty
+                              ? senderName
+                              : sender is Map<String, dynamic>
+                                  ? _value(sender['username'])
+                                  : '';
                           final senderLabel = senderRole.contains('admin')
-                              ? 'Support${senderName.isEmpty ? '' : ' · $senderName'}'
+                              ? 'Support${senderDisplayName.isEmpty ? '' : ' · $senderDisplayName'}'
                               : 'You';
                           final sentAt = _dateTimeValue(reply['created_at']);
                           return ListTile(
                             contentPadding: EdgeInsets.zero,
-                            title: Text(_value(reply['message'])),
-                            subtitle: Text([
-                              senderLabel,
-                              sentAt,
-                            ].where((part) => part.isNotEmpty).join(' · ')),
+                            title: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_value(reply['message']).isNotEmpty)
+                                  Text(_value(reply['message'])),
+                                _buildAttachmentPreview(
+                                  reply['attachment_url'],
+                                ),
+                              ],
+                            ),
+                            subtitle: Text(
+                              [senderLabel, sentAt]
+                                  .where((part) => part.isNotEmpty)
+                                  .join(' · '),
+                            ),
                           );
                         },
                       ),
                     const Divider(height: 24),
-                    TextField(
-                      controller: _replyControllerFor(
-                        _value(ticket['id']),
-                      ),
-                      minLines: 2,
-                      maxLines: 4,
-                      maxLength: 5000,
-                      decoration: const InputDecoration(
-                        labelText: 'Reply to support',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton.icon(
-                        onPressed: _value(ticket['id']).isEmpty ||
+                    Semantics(
+                      button: true,
+                      label: 'Reply to support',
+                      child: InkWell(
+                        onTap: _value(ticket['id']).isEmpty ||
                                 _sendingReplyTicketId == _value(ticket['id'])
                             ? null
-                            : () => _replyToTicket(_value(ticket['id'])),
-                        icon: _sendingReplyTicketId == _value(ticket['id'])
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.send),
-                        label: const Text('Send reply'),
+                            : () => _openReplyComposer(_value(ticket['id'])),
+                        borderRadius: BorderRadius.circular(8),
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Reply to support',
+                            border: OutlineInputBorder(),
+                          ),
+                          child: const SizedBox(height: 24),
+                        ),
                       ),
                     ),
                   ],

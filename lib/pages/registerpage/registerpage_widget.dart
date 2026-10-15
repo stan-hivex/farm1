@@ -1,11 +1,7 @@
-import 'dart:async';
-
 import '/services/auth/auth_service.dart';
-import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'registerpage_model.dart';
@@ -46,32 +42,6 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
   final TextEditingController countryController = TextEditingController();
 
   final TextEditingController referralController = TextEditingController();
-  Timer? _usernameCheckTimer;
-  final Map<String, Timer?> _contactCheckTimers = {
-    'email': null,
-    'phone': null,
-  };
-  int _usernameCheckRequestId = 0;
-  String? _usernameCheckResultFor;
-  bool? _usernameAvailable;
-  bool _usernameChecking = false;
-  String? _usernameCheckError;
-  final Map<String, int> _contactCheckRequestIds = {'email': 0, 'phone': 0};
-  final Map<String, String?> _contactCheckResultFor = {
-    'email': null,
-    'phone': null,
-  };
-  final Map<String, bool?> _contactAvailable = {
-    'email': null,
-    'phone': null,
-  };
-  final Map<String, bool> _contactChecking = {'email': false, 'phone': false};
-  final Map<String, String?> _contactCheckErrors = {
-    'email': null,
-    'phone': null,
-  };
-
-  final CountryService _countryService = CountryService();
 
   String? _selectedCountry = 'United States';
   String _selectedCountryCode = '+1';
@@ -132,407 +102,255 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
     '+503': 'El Salvador',
   };
 
-  List<String> get _countries => {
-        ..._countryService.getAll().map((country) => country.name),
-        'Afghanistan',
-        'Albania',
-        'Algeria',
-        'Andorra',
-        'Angola',
-        'Argentina',
-        'Armenia',
-        'Australia',
-        'Austria',
-        'Azerbaijan',
-        'Bahamas',
-        'Bahrain',
-        'Bangladesh',
-        'Barbados',
-        'Belarus',
-        'Belgium',
-        'Belize',
-        'Benin',
-        'Bhutan',
-        'Bolivia',
-        'Bosnia and Herzegovina',
-        'Botswana',
-        'Brazil',
-        'Brunei',
-        'Bulgaria',
-        'Burkina Faso',
-        'Burundi',
-        'Cambodia',
-        'Cameroon',
-        'Canada',
-        'Cape Verde',
-        'Central African Republic',
-        'Chad',
-        'Chile',
-        'China',
-        'Colombia',
-        'Comoros',
-        'Congo',
-        'Costa Rica',
-        'Croatia',
-        'Cuba',
-        'Cyprus',
-        'Czech Republic',
-        'Denmark',
-        'Djibouti',
-        'Dominica',
-        'Dominican Republic',
-        'Ecuador',
-        'Egypt',
-        'El Salvador',
-        'Equatorial Guinea',
-        'Eritrea',
-        'Estonia',
-        'Eswatini',
-        'Ethiopia',
-        'Fiji',
-        'Finland',
-        'France',
-        'Gabon',
-        'Gambia',
-        'Georgia',
-        'Germany',
-        'Ghana',
-        'Greece',
-        'Grenada',
-        'Guatemala',
-        'Guinea',
-        'Guinea-Bissau',
-        'Guyana',
-        'Haiti',
-        'Honduras',
-        'Hungary',
-        'Iceland',
-        'India',
-        'Indonesia',
-        'Iran',
-        'Iraq',
-        'Ireland',
-        'Israel',
-        'Italy',
-        'Jamaica',
-        'Japan',
-        'Jordan',
-        'Kazakhstan',
-        'Kenya',
-        'Kiribati',
-        'Kosovo',
-        'Kuwait',
-        'Kyrgyzstan',
-        'Laos',
-        'Latvia',
-        'Lebanon',
-        'Lesotho',
-        'Liberia',
-        'Libya',
-        'Liechtenstein',
-        'Lithuania',
-        'Luxembourg',
-        'Madagascar',
-        'Malawi',
-        'Malaysia',
-        'Maldives',
-        'Mali',
-        'Malta',
-        'Marshall Islands',
-        'Mauritania',
-        'Mauritius',
-        'Mexico',
-        'Micronesia',
-        'Moldova',
-        'Monaco',
-        'Mongolia',
-        'Montenegro',
-        'Morocco',
-        'Mozambique',
-        'Myanmar',
-        'Namibia',
-        'Nauru',
-        'Nepal',
-        'Netherlands',
-        'New Zealand',
-        'Nicaragua',
-        'Niger',
-        'Nigeria',
-        'North Korea',
-        'North Macedonia',
-        'Norway',
-        'Oman',
-        'Pakistan',
-        'Palau',
-        'Palestine',
-        'Panama',
-        'Papua New Guinea',
-        'Paraguay',
-        'Peru',
-        'Philippines',
-        'Poland',
-        'Portugal',
-        'Qatar',
-        'Romania',
-        'Russia',
-        'Rwanda',
-        'Saint Kitts and Nevis',
-        'Saint Lucia',
-        'Saint Vincent and the Grenadines',
-        'Samoa',
-        'San Marino',
-        'Sao Tome and Principe',
-        'Saudi Arabia',
-        'Senegal',
-        'Serbia',
-        'Seychelles',
-        'Sierra Leone',
-        'Singapore',
-        'Slovakia',
-        'Slovenia',
-        'Solomon Islands',
-        'Somalia',
-        'South Africa',
-        'South Korea',
-        'South Sudan',
-        'Spain',
-        'Sri Lanka',
-        'Sudan',
-        'Suriname',
-        'Sweden',
-        'Switzerland',
-        'Syria',
-        'Taiwan',
-        'Tajikistan',
-        'Tanzania',
-        'Thailand',
-        'Timor-Leste',
-        'Togo',
-        'Tonga',
-        'Trinidad and Tobago',
-        'Tunisia',
-        'Turkey',
-        'Turkmenistan',
-        'Tuvalu',
-        'Uganda',
-        'Ukraine',
-        'United Arab Emirates',
-        'United Kingdom',
-        'United States',
-        'Uruguay',
-        'Uzbekistan',
-        'Vanuatu',
-        'Vatican City',
-        'Venezuela',
-        'Vietnam',
-        'Yemen',
-        'Zambia',
-        'Zimbabwe',
-      }.toList()
-        ..sort();
+  final List<String> _countries = [
+    'Afghanistan',
+    'Albania',
+    'Algeria',
+    'Andorra',
+    'Angola',
+    'Argentina',
+    'Armenia',
+    'Australia',
+    'Austria',
+    'Azerbaijan',
+    'Bahamas',
+    'Bahrain',
+    'Bangladesh',
+    'Barbados',
+    'Belarus',
+    'Belgium',
+    'Belize',
+    'Benin',
+    'Bhutan',
+    'Bolivia',
+    'Bosnia and Herzegovina',
+    'Botswana',
+    'Brazil',
+    'Brunei',
+    'Bulgaria',
+    'Burkina Faso',
+    'Burundi',
+    'Cambodia',
+    'Cameroon',
+    'Canada',
+    'Cape Verde',
+    'Central African Republic',
+    'Chad',
+    'Chile',
+    'China',
+    'Colombia',
+    'Comoros',
+    'Congo',
+    'Costa Rica',
+    'Croatia',
+    'Cuba',
+    'Cyprus',
+    'Czech Republic',
+    'Denmark',
+    'Djibouti',
+    'Dominica',
+    'Dominican Republic',
+    'Ecuador',
+    'Egypt',
+    'El Salvador',
+    'Equatorial Guinea',
+    'Eritrea',
+    'Estonia',
+    'Eswatini',
+    'Ethiopia',
+    'Fiji',
+    'Finland',
+    'France',
+    'Gabon',
+    'Gambia',
+    'Georgia',
+    'Germany',
+    'Ghana',
+    'Greece',
+    'Grenada',
+    'Guatemala',
+    'Guinea',
+    'Guinea-Bissau',
+    'Guyana',
+    'Haiti',
+    'Honduras',
+    'Hungary',
+    'Iceland',
+    'India',
+    'Indonesia',
+    'Iran',
+    'Iraq',
+    'Ireland',
+    'Israel',
+    'Italy',
+    'Jamaica',
+    'Japan',
+    'Jordan',
+    'Kazakhstan',
+    'Kenya',
+    'Kiribati',
+    'Kosovo',
+    'Kuwait',
+    'Kyrgyzstan',
+    'Laos',
+    'Latvia',
+    'Lebanon',
+    'Lesotho',
+    'Liberia',
+    'Libya',
+    'Liechtenstein',
+    'Lithuania',
+    'Luxembourg',
+    'Madagascar',
+    'Malawi',
+    'Malaysia',
+    'Maldives',
+    'Mali',
+    'Malta',
+    'Marshall Islands',
+    'Mauritania',
+    'Mauritius',
+    'Mexico',
+    'Micronesia',
+    'Moldova',
+    'Monaco',
+    'Mongolia',
+    'Montenegro',
+    'Morocco',
+    'Mozambique',
+    'Myanmar',
+    'Namibia',
+    'Nauru',
+    'Nepal',
+    'Netherlands',
+    'New Zealand',
+    'Nicaragua',
+    'Niger',
+    'Nigeria',
+    'North Korea',
+    'North Macedonia',
+    'Norway',
+    'Oman',
+    'Pakistan',
+    'Palau',
+    'Palestine',
+    'Panama',
+    'Papua New Guinea',
+    'Paraguay',
+    'Peru',
+    'Philippines',
+    'Poland',
+    'Portugal',
+    'Qatar',
+    'Romania',
+    'Russia',
+    'Rwanda',
+    'Saint Kitts and Nevis',
+    'Saint Lucia',
+    'Saint Vincent and the Grenadines',
+    'Samoa',
+    'San Marino',
+    'Sao Tome and Principe',
+    'Saudi Arabia',
+    'Senegal',
+    'Serbia',
+    'Seychelles',
+    'Sierra Leone',
+    'Singapore',
+    'Slovakia',
+    'Slovenia',
+    'Solomon Islands',
+    'Somalia',
+    'South Africa',
+    'South Korea',
+    'South Sudan',
+    'Spain',
+    'Sri Lanka',
+    'Sudan',
+    'Suriname',
+    'Sweden',
+    'Switzerland',
+    'Syria',
+    'Taiwan',
+    'Tajikistan',
+    'Tanzania',
+    'Thailand',
+    'Timor-Leste',
+    'Togo',
+    'Tonga',
+    'Trinidad and Tobago',
+    'Tunisia',
+    'Turkey',
+    'Turkmenistan',
+    'Tuvalu',
+    'Uganda',
+    'Ukraine',
+    'United Arab Emirates',
+    'United Kingdom',
+    'United States',
+    'Uruguay',
+    'Uzbekistan',
+    'Vanuatu',
+    'Vatican City',
+    'Venezuela',
+    'Vietnam',
+    'Yemen',
+    'Zambia',
+    'Zimbabwe',
+  ];
 
   String _flagForCountry(String country) {
-    final countryData = _countryService.findByName(country);
-    if (countryData != null) {
-      return countryData.flagEmoji;
-    }
-
     const countryIso = {
-      'Afghanistan': 'AF',
-      'Albania': 'AL',
-      'Algeria': 'DZ',
-      'Andorra': 'AD',
-      'Angola': 'AO',
-      'Argentina': 'AR',
-      'Armenia': 'AM',
-      'Australia': 'AU',
-      'Austria': 'AT',
-      'Azerbaijan': 'AZ',
-      'Bahamas': 'BS',
-      'Bahrain': 'BH',
-      'Bangladesh': 'BD',
-      'Barbados': 'BB',
-      'Belarus': 'BY',
-      'Belgium': 'BE',
-      'Belize': 'BZ',
-      'Benin': 'BJ',
-      'Bhutan': 'BT',
-      'Bolivia': 'BO',
-      'Bosnia and Herzegovina': 'BA',
-      'Botswana': 'BW',
-      'Brazil': 'BR',
-      'Brunei': 'BN',
-      'Bulgaria': 'BG',
-      'Burkina Faso': 'BF',
-      'Burundi': 'BI',
-      'Cambodia': 'KH',
-      'Cameroon': 'CM',
-      'Canada': 'CA',
-      'Cabo Verde': 'CV',
-      'Cape Verde': 'CV',
-      'Central African Republic': 'CF',
-      'Chad': 'TD',
-      'Chile': 'CL',
-      'China': 'CN',
-      'Colombia': 'CO',
-      'Comoros': 'KM',
-      'Congo': 'CG',
-      'Costa Rica': 'CR',
-      'Croatia': 'HR',
-      'Cuba': 'CU',
-      'Cyprus': 'CY',
-      'Czech Republic': 'CZ',
-      'Denmark': 'DK',
-      'Djibouti': 'DJ',
-      'Dominica': 'DM',
-      'Dominican Republic': 'DO',
-      'Ecuador': 'EC',
-      'Egypt': 'EG',
-      'El Salvador': 'SV',
-      'Equatorial Guinea': 'GQ',
-      'Eritrea': 'ER',
-      'Estonia': 'EE',
-      'Eswatini': 'SZ',
-      'Ethiopia': 'ET',
-      'Fiji': 'FJ',
-      'Finland': 'FI',
-      'France': 'FR',
-      'Gabon': 'GA',
-      'Gambia': 'GM',
-      'Georgia': 'GE',
-      'Germany': 'DE',
-      'Ghana': 'GH',
-      'Greece': 'GR',
-      'Grenada': 'GD',
-      'Guatemala': 'GT',
-      'Guinea': 'GN',
-      'Guinea-Bissau': 'GW',
-      'Guyana': 'GY',
-      'Haiti': 'HT',
-      'Honduras': 'HN',
-      'Hungary': 'HU',
-      'Iceland': 'IS',
-      'India': 'IN',
-      'Indonesia': 'ID',
-      'Iran': 'IR',
-      'Iraq': 'IQ',
-      'Ireland': 'IE',
-      'Israel': 'IL',
-      'Italy': 'IT',
-      'Jamaica': 'JM',
-      'Japan': 'JP',
-      'Jordan': 'JO',
-      'Kazakhstan': 'KZ',
-      'Kenya': 'KE',
-      'Kiribati': 'KI',
-      'Kosovo': 'XK',
-      'Kuwait': 'KW',
-      'Kyrgyzstan': 'KG',
-      'Laos': 'LA',
-      'Latvia': 'LV',
-      'Lebanon': 'LB',
-      'Lesotho': 'LS',
-      'Liberia': 'LR',
-      'Libya': 'LY',
-      'Liechtenstein': 'LI',
-      'Lithuania': 'LT',
-      'Luxembourg': 'LU',
-      'Madagascar': 'MG',
-      'Malawi': 'MW',
-      'Malaysia': 'MY',
-      'Maldives': 'MV',
-      'Mali': 'ML',
-      'Malta': 'MT',
-      'Marshall Islands': 'MH',
-      'Mauritania': 'MR',
-      'Mauritius': 'MU',
-      'Mexico': 'MX',
-      'Micronesia': 'FM',
-      'Moldova': 'MD',
-      'Monaco': 'MC',
-      'Mongolia': 'MN',
-      'Montenegro': 'ME',
-      'Morocco': 'MA',
-      'Mozambique': 'MZ',
-      'Myanmar': 'MM',
-      'Namibia': 'NA',
-      'Nauru': 'NR',
-      'Nepal': 'NP',
-      'Netherlands': 'NL',
-      'New Zealand': 'NZ',
-      'Nicaragua': 'NI',
-      'Niger': 'NE',
-      'Nigeria': 'NG',
-      'North Korea': 'KP',
-      'North Macedonia': 'MK',
-      'Norway': 'NO',
-      'Oman': 'OM',
-      'Pakistan': 'PK',
-      'Palau': 'PW',
-      'Palestine': 'PS',
-      'Panama': 'PA',
-      'Papua New Guinea': 'PG',
-      'Paraguay': 'PY',
-      'Peru': 'PE',
-      'Philippines': 'PH',
-      'Poland': 'PL',
-      'Portugal': 'PT',
-      'Qatar': 'QA',
-      'Romania': 'RO',
-      'Russia': 'RU',
-      'Rwanda': 'RW',
-      'Saint Kitts and Nevis': 'KN',
-      'Saint Lucia': 'LC',
-      'Saint Vincent and the Grenadines': 'VC',
-      'Samoa': 'WS',
-      'San Marino': 'SM',
-      'Sao Tome and Principe': 'ST',
-      'Saudi Arabia': 'SA',
-      'Senegal': 'SN',
-      'Serbia': 'RS',
-      'Seychelles': 'SC',
-      'Sierra Leone': 'SL',
-      'Singapore': 'SG',
-      'Slovakia': 'SK',
-      'Slovenia': 'SI',
-      'Solomon Islands': 'SB',
-      'Somalia': 'SO',
-      'South Africa': 'ZA',
-      'South Korea': 'KR',
-      'South Sudan': 'SS',
-      'Spain': 'ES',
-      'Sri Lanka': 'LK',
-      'Sudan': 'SD',
-      'Suriname': 'SR',
-      'Sweden': 'SE',
-      'Switzerland': 'CH',
-      'Syria': 'SY',
-      'Taiwan': 'TW',
-      'Tajikistan': 'TJ',
-      'Tanzania': 'TZ',
-      'Thailand': 'TH',
-      'Timor-Leste': 'TL',
-      'Togo': 'TG',
-      'Tonga': 'TO',
-      'Trinidad and Tobago': 'TT',
-      'Tunisia': 'TN',
-      'Turkey': 'TR',
-      'Turkmenistan': 'TM',
-      'Tuvalu': 'TV',
-      'Uganda': 'UG',
-      'Ukraine': 'UA',
-      'United Arab Emirates': 'AE',
-      'United Kingdom': 'GB',
       'United States': 'US',
-      'Uruguay': 'UY',
-      'Uzbekistan': 'UZ',
-      'Vanuatu': 'VU',
-      'Vatican City': 'VA',
-      'Venezuela': 'VE',
+      'Canada': 'CA',
+      'United Kingdom': 'GB',
+      'France': 'FR',
+      'Germany': 'DE',
+      'Italy': 'IT',
+      'Spain': 'ES',
+      'Netherlands': 'NL',
+      'Belgium': 'BE',
+      'Austria': 'AT',
+      'Switzerland': 'CH',
+      'Sweden': 'SE',
+      'Norway': 'NO',
+      'Denmark': 'DK',
+      'Finland': 'FI',
+      'Ireland': 'IE',
+      'Poland': 'PL',
+      'Czech Republic': 'CZ',
+      'Hungary': 'HU',
+      'Romania': 'RO',
+      'Bulgaria': 'BG',
+      'Greece': 'GR',
+      'Portugal': 'PT',
+      'Croatia': 'HR',
+      'Slovenia': 'SI',
+      'Japan': 'JP',
+      'China': 'CN',
+      'India': 'IN',
+      'Singapore': 'SG',
+      'Malaysia': 'MY',
+      'Thailand': 'TH',
       'Vietnam': 'VN',
-      'Yemen': 'YE',
-      'Zambia': 'ZM',
-      'Zimbabwe': 'ZW',
+      'Indonesia': 'ID',
+      'Philippines': 'PH',
+      'South Korea': 'KR',
+      'Nigeria': 'NG',
+      'Kenya': 'KE',
+      'South Africa': 'ZA',
+      'Uganda': 'UG',
+      'Tanzania': 'TZ',
+      'Morocco': 'MA',
+      'Algeria': 'DZ',
+      'Egypt': 'EG',
+      'Tunisia': 'TN',
+      'Brazil': 'BR',
+      'Argentina': 'AR',
+      'Chile': 'CL',
+      'Colombia': 'CO',
+      'Peru': 'PE',
+      'Mexico': 'MX',
     };
 
     final iso = countryIso[country];
@@ -544,271 +362,6 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
     return String.fromCharCodes(
       codeUnits.map((unit) => unit + 0x1F1A5),
     );
-  }
-
-  String _shortCodeForCountry(String country) {
-    final flagRunes = _flagForCountry(country).runes.where(
-          (rune) => rune >= 0x1F1E6 && rune <= 0x1F1FF,
-        );
-    return String.fromCharCodes(flagRunes.map((rune) => rune - 0x1F1A5));
-  }
-
-  List<Country> get _registrationCountries =>
-      _countries.map(_countryService.findByName).whereType<Country>().toList();
-
-  void _onUsernameChanged(String value) {
-    _usernameCheckTimer?.cancel();
-    final requestId = ++_usernameCheckRequestId;
-    final username = value.trim().toLowerCase();
-    setState(() {
-      _usernameCheckResultFor = null;
-      _usernameAvailable = null;
-      _usernameChecking = false;
-      _usernameCheckError = null;
-    });
-
-    if (!RegExp(r'^[a-z0-9_]+$').hasMatch(username)) return;
-
-    setState(() => _usernameChecking = true);
-    _usernameCheckTimer = Timer(const Duration(milliseconds: 450), () {
-      _checkUsernameAvailability(username, requestId);
-    });
-  }
-
-  Future<bool?> _checkUsernameAvailability(
-    String username,
-    int requestId,
-  ) async {
-    try {
-      final query = Uri(queryParameters: {'username': username}).query;
-      final response = await ApiService.request(
-        method: 'GET',
-        path: '/auth/username-availability?$query',
-        requiresAuth: false,
-      );
-      final data = response['data'];
-      final available =
-          data is Map<String, dynamic> && data['available'] is bool
-              ? data['available'] as bool
-              : null;
-      if (available == null) {
-        throw const FormatException('Invalid username availability response');
-      }
-
-      if (mounted && requestId == _usernameCheckRequestId) {
-        setState(() {
-          _usernameCheckResultFor = username;
-          _usernameAvailable = available;
-          _usernameChecking = false;
-          _usernameCheckError = null;
-        });
-      }
-      return available;
-    } catch (error) {
-      if (mounted && requestId == _usernameCheckRequestId) {
-        setState(() {
-          _usernameCheckResultFor = username;
-          _usernameAvailable = null;
-          _usernameChecking = false;
-          _usernameCheckError = error.toString();
-        });
-      }
-      return null;
-    }
-  }
-
-  Future<bool?> _checkCurrentUsernameNow() {
-    _usernameCheckTimer?.cancel();
-    final username = usernameController.text.trim().toLowerCase();
-    final requestId = ++_usernameCheckRequestId;
-    setState(() {
-      _usernameCheckResultFor = null;
-      _usernameAvailable = null;
-      _usernameChecking = true;
-      _usernameCheckError = null;
-    });
-    return _checkUsernameAvailability(username, requestId);
-  }
-
-  String _contactValue(String field) {
-    if (field == 'email') return emailController.text.trim().toLowerCase();
-    return '$_selectedCountryCode${phoneController.text.trim()}';
-  }
-
-  bool _isValidContact(String field, String value) {
-    if (field == 'email') {
-      return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(value);
-    }
-    return RegExp(r'^\+?[1-9]\d{7,14}$').hasMatch(value);
-  }
-
-  void _onContactChanged(String field) {
-    _contactCheckTimers[field]?.cancel();
-    final requestId = (_contactCheckRequestIds[field] ?? 0) + 1;
-    final value = _contactValue(field);
-    setState(() {
-      _contactCheckRequestIds[field] = requestId;
-      _contactCheckResultFor[field] = null;
-      _contactAvailable[field] = null;
-      _contactChecking[field] = false;
-      _contactCheckErrors[field] = null;
-    });
-    if (!_isValidContact(field, value)) return;
-
-    setState(() => _contactChecking[field] = true);
-    _contactCheckTimers[field] = Timer(const Duration(milliseconds: 450), () {
-      _checkContactAvailability(field, value, requestId);
-    });
-  }
-
-  Future<bool?> _checkContactAvailability(
-    String field,
-    String value,
-    int requestId,
-  ) async {
-    try {
-      final query = Uri(queryParameters: {field: value}).query;
-      final response = await ApiService.request(
-        method: 'GET',
-        path: '/auth/registration-availability?$query',
-        requiresAuth: false,
-      );
-      final data = response['data'];
-      final availabilityKey =
-          field == 'email' ? 'emailAvailable' : 'phoneAvailable';
-      final available = data is Map && data[availabilityKey] is bool
-          ? data[availabilityKey] as bool
-          : null;
-      if (available == null) {
-        throw const FormatException('Invalid contact availability response');
-      }
-
-      if (mounted && requestId == _contactCheckRequestIds[field]) {
-        setState(() {
-          _contactCheckResultFor[field] = value;
-          _contactAvailable[field] = available;
-          _contactChecking[field] = false;
-          _contactCheckErrors[field] = null;
-        });
-      }
-      return available;
-    } catch (error) {
-      if (mounted && requestId == _contactCheckRequestIds[field]) {
-        setState(() {
-          _contactCheckResultFor[field] = value;
-          _contactAvailable[field] = null;
-          _contactChecking[field] = false;
-          _contactCheckErrors[field] = error.toString();
-        });
-      }
-      return null;
-    }
-  }
-
-  Future<bool?> _checkCurrentContactNow(String field) {
-    _contactCheckTimers[field]?.cancel();
-    final value = _contactValue(field);
-    final requestId = (_contactCheckRequestIds[field] ?? 0) + 1;
-    setState(() {
-      _contactCheckRequestIds[field] = requestId;
-      _contactCheckResultFor[field] = null;
-      _contactAvailable[field] = null;
-      _contactChecking[field] = true;
-      _contactCheckErrors[field] = null;
-    });
-    return _checkContactAvailability(field, value, requestId);
-  }
-
-  String _dialCodeForCountry(Country country) {
-    for (final entry in _countryCodeMap.entries) {
-      if (entry.value == country.name) {
-        return entry.key;
-      }
-    }
-    return '+${country.phoneCode}';
-  }
-
-  Future<String?> _showSearchableCountryPicker({
-    required String title,
-  }) async {
-    final searchController = TextEditingController();
-    try {
-      return await showModalBottomSheet<String>(
-        context: context,
-        isScrollControlled: true,
-        builder: (sheetContext) {
-          return StatefulBuilder(
-            builder: (context, setSheetState) {
-              final query = searchController.text.trim().toLowerCase();
-              final matches = _registrationCountries
-                  .where((country) =>
-                      country.name.toLowerCase().contains(query) ||
-                      country.countryCode.toLowerCase().contains(query) ||
-                      country.phoneCode.contains(query))
-                  .toList();
-
-              return SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
-                  ),
-                  child: SizedBox(
-                    height: MediaQuery.sizeOf(sheetContext).height * 0.7,
-                    child: Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Text(title,
-                              style: FlutterFlowTheme.of(context).titleMedium),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                          child: TextField(
-                            controller: searchController,
-                            onChanged: (_) => setSheetState(() {}),
-                            decoration: InputDecoration(
-                              hintText: 'Search country or code',
-                              prefixIcon: const Icon(Icons.search),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: matches.isEmpty
-                              ? const Center(child: Text('No countries found'))
-                              : ListView.builder(
-                                  itemCount: matches.length,
-                                  itemBuilder: (context, index) {
-                                    final country = matches[index];
-                                    return ListTile(
-                                      leading: Text(
-                                        country.flagEmoji,
-                                        style: const TextStyle(fontSize: 20),
-                                      ),
-                                      title: Text(
-                                        '${country.countryCode}  +${country.phoneCode}  ${country.name}',
-                                      ),
-                                      onTap: () => Navigator.of(context)
-                                          .pop(country.countryCode),
-                                    );
-                                  },
-                                ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      searchController.dispose();
-    }
   }
 
   bool passwordVisible = false;
@@ -885,14 +438,11 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
       context,
       () => RegisterpageModel(),
     );
+    FFAppState().themeMode = ThemeMode.light;
   }
 
   @override
   void dispose() {
-    _usernameCheckTimer?.cancel();
-    for (final timer in _contactCheckTimers.values) {
-      timer?.cancel();
-    }
     firstNameController.dispose();
     lastNameController.dispose();
     usernameController.dispose();
@@ -1134,74 +684,15 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         return 'Username required';
                       }
 
-                      if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
-                        return 'Letters, numbers and underscores only';
-                      }
-
-                      final username = value.trim().toLowerCase();
-                      if (_usernameCheckResultFor == username &&
-                          _usernameAvailable == false) {
-                        return 'Username already exists. Choose another username.';
+                      if (!RegExp(r'^[a-z0-9_]+$').hasMatch(value)) {
+                        return 'Lowercase letters, numbers and underscores only';
                       }
 
                       return null;
                     },
-                    onChanged: _onUsernameChanged,
-                    decoration:
-                        inputDecoration(context, 'Enter username').copyWith(
-                      helperText: _usernameCheckError != null
-                          ? 'Could not check username. Try again before continuing.'
-                          : _usernameCheckResultFor ==
-                                      usernameController.text
-                                          .trim()
-                                          .toLowerCase() &&
-                                  _usernameAvailable == false
-                              ? 'Username already exists. Choose another username.'
-                              : _usernameCheckResultFor ==
-                                          usernameController.text
-                                              .trim()
-                                              .toLowerCase() &&
-                                      _usernameAvailable == true
-                                  ? 'Username is available.'
-                                  : _usernameChecking
-                                      ? 'Checking username...'
-                                      : null,
-                      helperStyle: TextStyle(
-                        color: _usernameCheckError != null ||
-                                (_usernameAvailable == false &&
-                                    _usernameCheckResultFor ==
-                                        usernameController.text
-                                            .trim()
-                                            .toLowerCase())
-                            ? Colors.red
-                            : _usernameAvailable == true
-                                ? Colors.green
-                                : null,
-                      ),
-                      suffixIcon: _usernameChecking
-                          ? const Padding(
-                              padding: EdgeInsets.all(14),
-                              child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              ),
-                            )
-                          : _usernameCheckResultFor ==
-                                      usernameController.text
-                                          .trim()
-                                          .toLowerCase() &&
-                                  _usernameAvailable == true
-                              ? const Icon(Icons.check_circle,
-                                  color: Colors.green)
-                              : _usernameCheckResultFor ==
-                                          usernameController.text
-                                              .trim()
-                                              .toLowerCase() &&
-                                      _usernameAvailable == false
-                                  ? const Icon(Icons.error, color: Colors.red)
-                                  : null,
+                    decoration: inputDecoration(
+                      context,
+                      'Enter username',
                     ),
                   ),
                   const SizedBox(height: 16.0),
@@ -1210,77 +701,53 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   Row(
                     children: [
                       Expanded(
-                        flex: 4,
-                        child: FormField<String>(
-                          key: ValueKey(_selectedCountryCode),
+                        flex: 2,
+                        child: DropdownButtonFormField<String>(
                           initialValue: _selectedCountryCode,
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _selectedCountryCode = value;
+                            });
+                          },
+                          decoration: inputDecoration(
+                            context,
+                            'Code',
+                          ),
+                          items: _countryCodeMap.keys.map(
+                            (dialCode) {
+                              final country = _countryCodeMap[dialCode] ?? '';
+                              final flag = _flagForCountry(country);
+                              return DropdownMenuItem(
+                                value: dialCode,
+                                child: Row(
+                                  children: [
+                                    if (flag.isNotEmpty) ...[
+                                      Text(flag),
+                                      const SizedBox(width: 6.0),
+                                    ],
+                                    Expanded(
+                                      child: Text(
+                                        '$dialCode $country',
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ).toList(),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Country code required';
                             }
                             return null;
                           },
-                          builder: (field) {
-                            final country = _selectedCountry ?? '';
-                            final flag = _flagForCountry(country);
-                            final shortCode = _shortCodeForCountry(country);
-                            return InkWell(
-                              borderRadius: BorderRadius.circular(14),
-                              onTap: () async {
-                                final selected =
-                                    await _showSearchableCountryPicker(
-                                  title: 'Select country code',
-                                );
-                                if (selected == null || !mounted) return;
-                                final selectedCountry =
-                                    _countryService.findByCode(selected);
-                                if (selectedCountry == null) return;
-                                setState(() {
-                                  _selectedCountry = selectedCountry.name;
-                                  _selectedCountryCode =
-                                      _dialCodeForCountry(selectedCountry);
-                                });
-                                _onContactChanged('phone');
-                                field.didChange(_selectedCountryCode);
-                              },
-                              child: InputDecorator(
-                                decoration:
-                                    inputDecoration(context, 'Code').copyWith(
-                                  errorText: field.errorText,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 16,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      flag,
-                                      style: const TextStyle(fontSize: 18),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        '$shortCode $_selectedCountryCode',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium,
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.arrow_drop_down,
-                                      size: 18,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
                         ),
                       ),
-                      const SizedBox(width: 8.0),
+                      const SizedBox(width: 12.0),
                       Expanded(
-                        flex: 7,
+                        flex: 3,
                         child: TextFormField(
                           controller: phoneController,
                           keyboardType: TextInputType.number,
@@ -1291,41 +758,11 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                             if (!RegExp(r'^[0-9]{6,15}$').hasMatch(value)) {
                               return 'Enter valid phone number';
                             }
-                            final phone = _contactValue('phone');
-                            if (_contactCheckResultFor['phone'] == phone &&
-                                _contactAvailable['phone'] == false) {
-                              return 'Phone number already exists. Use another number.';
-                            }
                             return null;
                           },
-                          onChanged: (_) => _onContactChanged('phone'),
                           decoration: inputDecoration(
                             context,
                             '700123456',
-                          ).copyWith(
-                            helperText: _contactCheckErrors['phone'] != null
-                                ? 'Could not check phone number. Try again before continuing.'
-                                : _contactCheckResultFor['phone'] ==
-                                            _contactValue('phone') &&
-                                        _contactAvailable['phone'] == false
-                                    ? 'Phone number already exists. Use another number.'
-                                    : _contactCheckResultFor['phone'] ==
-                                                _contactValue('phone') &&
-                                            _contactAvailable['phone'] == true
-                                        ? 'Phone number is available.'
-                                        : _contactChecking['phone'] == true
-                                            ? 'Checking phone number...'
-                                            : null,
-                            helperStyle: TextStyle(
-                              color: _contactCheckErrors['phone'] != null ||
-                                      (_contactAvailable['phone'] == false &&
-                                          _contactCheckResultFor['phone'] ==
-                                              _contactValue('phone'))
-                                  ? Colors.red
-                                  : _contactAvailable['phone'] == true
-                                      ? Colors.green
-                                      : null,
-                            ),
                           ),
                         ),
                       ),
@@ -1337,47 +774,9 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   TextFormField(
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Email is required';
-                      }
-                      final email = value.trim().toLowerCase();
-                      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                          .hasMatch(email)) {
-                        return 'Enter a valid email address';
-                      }
-                      if (_contactCheckResultFor['email'] == email &&
-                          _contactAvailable['email'] == false) {
-                        return 'Email already exists. Use another email.';
-                      }
-                      return null;
-                    },
-                    onChanged: (_) => _onContactChanged('email'),
-                    decoration:
-                        inputDecoration(context, 'Enter email').copyWith(
-                      helperText: _contactCheckErrors['email'] != null
-                          ? 'Could not check email. Try again before continuing.'
-                          : _contactCheckResultFor['email'] ==
-                                      _contactValue('email') &&
-                                  _contactAvailable['email'] == false
-                              ? 'Email already exists. Use another email.'
-                              : _contactCheckResultFor['email'] ==
-                                          _contactValue('email') &&
-                                      _contactAvailable['email'] == true
-                                  ? 'Email is available.'
-                                  : _contactChecking['email'] == true
-                                      ? 'Checking email...'
-                                      : null,
-                      helperStyle: TextStyle(
-                        color: _contactCheckErrors['email'] != null ||
-                                (_contactAvailable['email'] == false &&
-                                    _contactCheckResultFor['email'] ==
-                                        _contactValue('email'))
-                            ? Colors.red
-                            : _contactAvailable['email'] == true
-                                ? Colors.green
-                                : null,
-                      ),
+                    decoration: inputDecoration(
+                      context,
+                      'Enter email',
                     ),
                   ),
                   const SizedBox(height: 16.0),
@@ -1473,43 +872,31 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   const SizedBox(height: 16.0),
                   buildLabel(context, 'Country'),
                   const SizedBox(height: 8.0),
-                  FormField<String>(
+                  DropdownButtonFormField<String>(
                     initialValue: _selectedCountry,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Country required';
-                      }
-                      return null;
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        _selectedCountry = value;
+                        final countryCodeEntry =
+                            _countryCodeMap.entries.firstWhere(
+                          (entry) => entry.value == value,
+                          orElse: () => const MapEntry('', ''),
+                        );
+                        if (countryCodeEntry.key.isNotEmpty) {
+                          _selectedCountryCode = countryCodeEntry.key;
+                        }
+                      });
                     },
-                    builder: (field) {
-                      final country = _selectedCountry ?? '';
-                      final flag = _flagForCountry(country);
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(14),
-                        onTap: () async {
-                          final selected = await _showSearchableCountryPicker(
-                            title: 'Select country',
-                          );
-                          if (selected == null || !mounted) return;
-                          final selectedCountry =
-                              _countryService.findByCode(selected);
-                          if (selectedCountry == null) return;
-                          setState(() {
-                            _selectedCountry = selectedCountry.name;
-                            _selectedCountryCode =
-                                _dialCodeForCountry(selectedCountry);
-                          });
-                          _onContactChanged('phone');
-                          field.didChange(selectedCountry.name);
-                        },
-                        child: InputDecorator(
-                          decoration: inputDecoration(
-                            context,
-                            'Select country',
-                          ).copyWith(
-                            errorText: field.errorText,
-                            suffixIcon: const Icon(Icons.arrow_drop_down),
-                          ),
+                    decoration: inputDecoration(
+                      context,
+                      'Select country',
+                    ),
+                    items: _countries.map(
+                      (country) {
+                        final flag = _flagForCountry(country);
+                        return DropdownMenuItem(
+                          value: country,
                           child: Row(
                             children: [
                               if (flag.isNotEmpty) ...[
@@ -1524,8 +911,14 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                               ),
                             ],
                           ),
-                        ),
-                      );
+                        );
+                      },
+                    ).toList(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Country required';
+                      }
+                      return null;
                     },
                   ),
                   const SizedBox(height: 16.0),
@@ -1550,58 +943,9 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         return;
                       }
 
-                      final usernameAvailable =
-                          await _checkCurrentUsernameNow();
-                      if (!mounted) return;
-                      if (usernameAvailable != true) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              usernameAvailable == false
-                                  ? 'Username already exists. Choose another username.'
-                                  : 'Could not check username. Please try again.',
-                            ),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-
-                      final contactAvailability = await Future.wait<bool?>([
-                        _checkCurrentContactNow('email'),
-                        _checkCurrentContactNow('phone'),
-                      ]);
-                      if (!mounted) return;
-                      if (contactAvailability[0] != true) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              contactAvailability[0] == false
-                                  ? 'Email already exists. Use another email.'
-                                  : 'Could not check email. Please try again.',
-                            ),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-                      if (contactAvailability[1] != true) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              contactAvailability[1] == false
-                                  ? 'Phone number already exists. Use another number.'
-                                  : 'Could not check phone number. Please try again.',
-                            ),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                        return;
-                      }
-
                       final fullPhone =
                           '$_selectedCountryCode${phoneController.text.trim()}';
-                      final email = emailController.text.trim().toLowerCase();
+                      final email = emailController.text.trim();
                       final password = passwordController.text.trim();
 
                       if (!email.contains('@')) {
@@ -1620,8 +964,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                           password: password,
                           firstName: firstNameController.text.trim(),
                           lastName: lastNameController.text.trim(),
-                          username:
-                              usernameController.text.trim().toLowerCase(),
+                          username: usernameController.text.trim(),
                           phone: fullPhone,
                           country: _selectedCountry,
                           referralCode: referralController.text.trim(),
@@ -1647,18 +990,9 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                       } catch (e) {
                         print('ERROR: $e');
 
-                        final errorText = e.toString().toLowerCase();
-                        final message = errorText
-                                .contains('could not connect to backend server')
+                        final message = e.toString().contains('Could not connect to backend server')
                             ? 'common.network_error'.tr()
-                            : errorText.contains('username taken')
-                                ? 'Username already exists. Choose another username.'
-                                : errorText.contains('phone already registered')
-                                    ? 'Phone number already exists. Use another number.'
-                                    : errorText.contains(
-                                            'email already registered')
-                                        ? 'Email already exists. Use another email.'
-                                        : 'auth.registration_failed'.tr();
+                            : 'auth.registration_failed'.tr();
 
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(

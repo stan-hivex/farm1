@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '/widgets/common/back_chevron.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/auth/auth_service.dart';
@@ -93,6 +94,7 @@ class _DeleteAccountPageWidgetState extends State<DeleteAccountPageWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         title: Text('settings.delete_account'.tr()),
         backgroundColor: theme.primaryBackground,
         elevation: 0,

@@ -456,13 +456,17 @@ class _OtppageWidgetState extends State<OtppageWidget> {
       }
 
       // Use authorized backend verify endpoint (password was already used)
+      FFAppState().loginPreferencesPending = true;
       final response = await AuthService().verifyPhone(
         firebaseIdToken: firebaseToken,
         pendingLoginId: widget.pendingLoginId,
       );
       debugPrint('[PHONE AUTH] /api/auth/verify-phone reached = true');
 
-      if (!mounted) return;
+      if (!mounted) {
+        FFAppState().loginPreferencesPending = false;
+        return;
+      }
 
       if (response['success'] == true) {
         debugPrint('[OTP] completeFirebaseVerification succeeded');
@@ -481,6 +485,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         throw Exception(response['message'] ?? 'Unable to complete login.');
       }
     } catch (e) {
+      FFAppState().loginPreferencesPending = false;
       try {
         await FirebaseAuth.instance.signOut();
       } catch (_) {}
@@ -534,12 +539,16 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         if (firebaseToken.isEmpty)
           throw Exception('Unable to obtain Firebase ID token.');
 
+        FFAppState().loginPreferencesPending = true;
         final response = await AuthService().verifyPhone(
           firebaseIdToken: firebaseToken,
           pendingLoginId: widget.pendingLoginId,
         );
 
-        if (!mounted) return;
+        if (!mounted) {
+          FFAppState().loginPreferencesPending = false;
+          return;
+        }
         if (response['success'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text('Phone verified. Logging you in...'),
@@ -552,6 +561,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         }
         throw Exception(response['message'] ?? 'Unable to complete login.');
       } catch (e) {
+        FFAppState().loginPreferencesPending = false;
         try {
           await FirebaseAuth.instance.signOut();
         } catch (_) {}
@@ -592,16 +602,24 @@ class _OtppageWidgetState extends State<OtppageWidget> {
     final payload =
         response['data'] is Map ? response['data'] as Map : response;
     final user = payload['user'] is Map ? payload['user'] as Map : const {};
-    final role = user['role']?.toString().toLowerCase() ?? 'user';
-    if (role == 'user') {
+    final responseRole = user['role']?.toString().trim().toLowerCase() ?? '';
+    final role = responseRole.isEmpty ? 'user' : responseRole;
+    if (role != 'admin' && role != 'super_admin') {
       await BiometricEnrollmentPrompt.showAfterLogin(context);
     }
     if (!mounted) return;
+    FFAppState().loginPreferencesPending = false;
     if (role == 'super_admin') {
       context.go(SuperadminDashboardPage.routePath);
     } else if (role == 'admin') {
       context.go('/admin');
     } else {
+      final paymentRoute = FFAppState().pendingMerchantPaymentRoute;
+      if (paymentRoute.startsWith('/merchantPayment')) {
+        FFAppState().pendingMerchantPaymentRoute = '';
+        context.go(paymentRoute);
+        return;
+      }
       context.goNamed('Dashboard');
     }
   }
@@ -730,14 +748,6 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                       ),
                 ),
                 const SizedBox(height: 10),
-                Text(
-                  'If you don’t see the code in your messages, check your messaging app’s Spam folder. If it’s there, mark it as “Not spam” so future codes arrive in your main inbox.',
-                  textAlign: TextAlign.center,
-                  style: FlutterFlowTheme.of(context).bodySmall.override(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 24),
                 if (_isVerifying)
                   const CircularProgressIndicator()
                 else

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
+import '/widgets/common/back_chevron.dart';
 
 class ForgotPinPageWidget extends StatefulWidget {
   const ForgotPinPageWidget({super.key});
@@ -20,6 +22,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -31,22 +34,23 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
   }
 
   Future<void> submit() async {
-    final contact = _contactController.text.trim();
+    final phone = _contactController.text.trim();
     final newPin = _newPinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
-    final password = _passwordController.text.trim();
+    final password = _passwordController.text;
 
-    if (contact.isEmpty) {
+    if (phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your phone number or email')),
+        const SnackBar(content: Text('Enter your phone number')),
       );
       return;
     }
 
-    if (newPin.length < 4 || confirmPin.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PIN must be at least 4 digits')),
-      );
+    if (!RegExp(r'^\d{4,6}$').hasMatch(newPin) ||
+        !RegExp(r'^\d{4,6}$').hasMatch(confirmPin)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('PIN must be 4 to 6 digits'),
+      ));
       return;
     }
 
@@ -57,7 +61,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
       return;
     }
 
-    if (password.isEmpty) {
+    if (password.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Enter your password to continue')),
       );
@@ -67,8 +71,10 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await ApiService.setPin(
-        pin: newPin,
+      final response = await ApiService.resetForgottenPin(
+        phone: phone,
+        password: password,
+        newPin: newPin,
         confirmPin: confirmPin,
       );
 
@@ -99,6 +105,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
     return Scaffold(
       backgroundColor: theme.primaryBackground,
       appBar: AppBar(
+        leading: const BackChevron(),
         title: const Text('Forgot PIN'),
         backgroundColor: theme.primaryBackground,
         elevation: 0,
@@ -114,7 +121,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Use this screen to restore or update your PIN. We will validate your request and update your account when the backend accepts it.',
+              'Enter the phone number registered to your account and your password to replace your transaction PIN. This also unlocks a PIN locked after failed attempts.',
               style: theme.bodyMedium,
             ),
             const SizedBox(height: 20),
@@ -128,9 +135,9 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
                   children: [
                     TextField(
                       controller: _contactController,
-                      keyboardType: TextInputType.emailAddress,
+                      keyboardType: TextInputType.phone,
                       decoration: const InputDecoration(
-                        labelText: 'Phone or email',
+                        labelText: 'Phone number',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.contact_phone_outlined),
                       ),
@@ -141,8 +148,9 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
                       obscureText: true,
                       keyboardType: TextInputType.number,
                       maxLength: 6,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
-                        labelText: 'New PIN',
+                        labelText: 'New PIN (4-6 digits)',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
@@ -153,8 +161,9 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
                       obscureText: true,
                       keyboardType: TextInputType.number,
                       maxLength: 6,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       decoration: const InputDecoration(
-                        labelText: 'Confirm PIN',
+                        labelText: 'Confirm new PIN',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.lock_outline),
                       ),
@@ -162,11 +171,24 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
                     const SizedBox(height: 15),
                     TextField(
                       controller: _passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
                         labelText: 'Your password',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.password_outlined),
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
                       ),
                     ),
                   ],

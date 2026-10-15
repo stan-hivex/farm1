@@ -3,6 +3,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/loginpage/loginpage_widget.dart';
 import '/services/auth/auth_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 class ResetPasswordPageWidget extends StatefulWidget {
   const ResetPasswordPageWidget({
@@ -92,6 +93,7 @@ class _ResetPasswordPageWidgetState extends State<ResetPasswordPageWidget> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: const BackChevron(),
         title: const Text('Create New Password'),
         backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
         foregroundColor: FlutterFlowTheme.of(context).primaryText,

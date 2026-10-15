@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../pages/loginpage/loginpage_widget.dart';
 import '../core/admin_navigation.dart';
 import '../services/admin_api_service.dart';
+import '/widgets/common/back_chevron.dart';
 
 String _firebaseErrorMessage(FirebaseAuthException error) {
   switch (error.code) {
@@ -77,7 +78,10 @@ class _AdminForgotPasswordPageState extends State<AdminForgotPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset admin password')),
+      appBar: AppBar(
+        leading: const BackChevron(),
+        title: const Text('Reset admin password'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -101,8 +105,7 @@ class _AdminForgotPasswordPageState extends State<AdminForgotPasswordPage> {
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            'If an active admin account uses this email, '
-                            'a password reset link has been sent.',
+                            'If an account exists, we have sent a reset link.',
                             textAlign: TextAlign.center,
                           ),
                         ],
@@ -270,7 +273,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   Widget build(BuildContext context) {
     final error = _verificationError;
     return Scaffold(
-      appBar: AppBar(title: const Text('Set a new password')),
+      appBar: AppBar(
+        leading: const BackChevron(),
+        title: const Text('Set a new password'),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),

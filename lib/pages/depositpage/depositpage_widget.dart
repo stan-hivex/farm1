@@ -2,14 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/backend/services/api_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 // Removed unused import
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/components/kyc_required_widget.dart';
-import '/services/ivorypay_inline_checkout.dart';
 import '/services/transaction_receipt_service.dart';
-import '/services/paystack_inline_checkout.dart';
 
 class DepositpageWidget extends StatefulWidget {
   const DepositpageWidget({super.key});
@@ -33,7 +32,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
   double walletBalance = 0;
   List<dynamic> recentDeposits = [];
-  final Set<String> _selectedDepositKeys = {};
+  final Set<int> _selectedDeposits = <int>{};
 
   // Deposit fees are disabled. The amount entered by the user is the amount credited.
   final Map<String, double> _feeRates = {
@@ -51,9 +50,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   };
 
   double get amount => double.tryParse(amountController.text.trim()) ?? 0;
-  double get feeRate => _feeRates[selectedMethod] ?? 0.02;
-  double get fee => amount * feeRate;
-  double get total => amount + fee;
+  double get feeRate => _feeRates[selectedMethod] ?? 0.0;
+  double get fee => 0;
+  double get total => amount;
 
   Map<String, double?> get _activeDepositLimits =>
       _depositLimits[selectedMethod] ?? _depositLimits['CARD']!;
@@ -127,66 +126,64 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     }
   }
 
-  String _depositSelectionKey(Map<String, dynamic> deposit, int index) {
-    final reference = deposit['transaction_reference'] ??
-        deposit['reference'] ??
-        deposit['id'];
-    return reference?.toString() ?? 'deposit-index-$index';
-  }
+  Map<String, dynamic> _depositReceipt(
+      Map<String, dynamic> deposit, Map<String, dynamic> metadata) {
+    final receipt = Map<String, dynamic>.from(deposit);
+    final farmAmount =
+        deposit['amount_farm'] ?? metadata['amount_farm'] ?? deposit['amount'];
+    final reference = deposit['reference'] ??
+        deposit['transaction_reference'] ??
+        metadata['reference'];
+    final method = _depositMethodLabel(deposit, metadata);
+    final provider = deposit['payment_provider'] ??
+        deposit['provider'] ??
+        metadata['provider'];
 
-  List<Map<String, dynamic>> get _selectedDepositReceipts {
-    final selected = <Map<String, dynamic>>[];
-    for (var index = 0; index < recentDeposits.length; index++) {
-      final item = recentDeposits[index];
-      if (item is! Map) continue;
-      final deposit = Map<String, dynamic>.from(item);
-      if (_selectedDepositKeys.contains(_depositSelectionKey(deposit, index))) {
-        selected.add(deposit);
-      }
+    receipt['amount'] = farmAmount;
+    receipt['transaction_type'] = 'Deposit';
+    receipt['description'] = 'FARM deposit via $method';
+    receipt['currency'] = 'FARM';
+    receipt['payment_method'] = method;
+    if (provider != null) receipt['payment_provider'] = provider;
+    if (reference != null) receipt['transaction_reference'] = reference;
+    if (deposit['amount_fiat'] != null || metadata['amount_fiat'] != null) {
+      receipt['fiat_amount'] =
+          metadata['amount_fiat'] ?? deposit['amount_fiat'];
+      receipt['fiat_currency'] =
+          metadata['currency_fiat'] ?? deposit['currency'] ?? selectedCurrency;
     }
-    return selected;
+    return receipt;
   }
 
-  void _toggleSelectAllDeposits() {
-    setState(() {
-      if (_selectedDepositKeys.length == recentDeposits.length) {
-        _selectedDepositKeys.clear();
-        return;
-      }
-      _selectedDepositKeys
-        ..clear()
-        ..addAll([
-          for (var index = 0; index < recentDeposits.length; index++)
-            if (recentDeposits[index] is Map)
-              _depositSelectionKey(
-                Map<String, dynamic>.from(recentDeposits[index] as Map),
-                index,
-              ),
-        ]);
-    });
-  }
+  List<Map<String, dynamic>> get _selectedDepositReceipts => _selectedDeposits
+          .where((index) => index >= 0 && index < recentDeposits.length)
+          .map((index) {
+        final deposit = Map<String, dynamic>.from(recentDeposits[index] as Map);
+        final metadata = deposit['metadata'] is Map
+            ? Map<String, dynamic>.from(deposit['metadata'] as Map)
+            : <String, dynamic>{};
+        return _depositReceipt(deposit, metadata);
+      }).toList();
 
   Future<void> _downloadSelectedDeposits() async {
     try {
       await TransactionReceiptService.downloadReceipts(
-        _selectedDepositReceipts,
-      );
+          _selectedDepositReceipts);
       if (!mounted) return;
-      setState(_selectedDepositKeys.clear);
-      _snack('Selected deposit receipts saved to gallery');
+      setState(() => _selectedDeposits.clear());
+      _snack('Selected receipts saved to gallery');
     } catch (error) {
-      if (!mounted) return;
-      _snack('Could not save deposit receipts: $error');
+      if (mounted) _snack('Could not save receipts: $error');
     }
   }
 
   Future<void> _shareSelectedDeposits() async {
     try {
       await TransactionReceiptService.shareReceipts(_selectedDepositReceipts);
-      if (mounted) setState(_selectedDepositKeys.clear);
-    } catch (error) {
       if (!mounted) return;
-      _snack('Could not share deposit receipts: $error');
+      setState(() => _selectedDeposits.clear());
+    } catch (error) {
+      if (mounted) _snack('Could not share receipts: $error');
     }
   }
 
@@ -247,40 +244,174 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
               data['data']?['authorization_url'] ??
               data['data']?['payment_url'])
           ?.toString();
-      final accessCode =
-          (data['access_code'] ?? data['data']?['access_code'])?.toString();
+      final farmAmount = data['data']?['amount_farm'];
       final depositRef = data['data']?['reference'] ??
           data['data']?['transaction_reference'] ??
           data['reference'] ??
           data['transaction_reference'];
 
       if (paymentUrl != null) {
-        final isPaystack = selectedMethod != 'CRYPTO';
-        if (isPaystack) {
-          await PaystackInlineCheckout.show(
-            context,
-            accessCode: accessCode,
-            paymentUrl: paymentUrl,
-          );
-          if (!mounted) return;
-          _snack('Checkout closed. Checking your deposit status.');
-        } else {
-          await IvoryPayInlineCheckout.show(
-            context,
-            paymentUrl: paymentUrl,
-          );
-          if (!mounted) return;
-          _snack('IvoryPay checkout closed. Checking your crypto deposit.');
-        }
+        // Launch Paystack / Ivorypay payment page in browser
+        final uri = Uri.parse(paymentUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        _snack(
+          'Complete payment in browser.\n'
+          '~$farmAmount FARM will credit after confirmation.',
+        );
 
-        if (depositRef != null) {
-          unawaited(
-            _monitorDeposit(
-              depositRef.toString(),
-              isIvoryPay: selectedMethod == 'CRYPTO',
-            ),
-          );
-        }
+        // Poll with timeout and handle all statuses: completed, failed, cancelled
+        int pollAttempts = 0;
+        const maxAttempts = 60; // ~10 minutes (60 * 10 seconds)
+
+        Timer.periodic(const Duration(seconds: 10), (timer) async {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+
+          pollAttempts++;
+
+          // Timeout after 10 minutes
+          if (pollAttempts > maxAttempts) {
+            timer.cancel();
+            if (mounted) {
+              _snack(
+                'Payment verification timed out. '
+                'Please check your transaction status on the dashboard.',
+              );
+            }
+            return;
+          }
+
+          await _fetchHistory();
+          await _fetchWallet();
+
+          // Find the specific deposit by reference if available
+          Map<String, dynamic>? targetDeposit;
+          if (depositRef != null) {
+            targetDeposit = recentDeposits.firstWhere(
+              (d) =>
+                  d['reference'] == depositRef ||
+                  d['transaction_reference'] == depositRef,
+              orElse: () => {},
+            );
+            if ((targetDeposit?.isEmpty ?? false)) targetDeposit = null;
+          }
+
+          // Fallback to latest if no specific reference found
+          final deposit = targetDeposit ??
+              (recentDeposits.isNotEmpty ? recentDeposits.first : null);
+
+          if (deposit != null) {
+            final status = (deposit['status'] ?? '').toString().toLowerCase();
+
+            // Accept backend `SUCCESS`/`success` as completed as well as legacy `completed`
+            if (status == 'completed' || status == 'success') {
+              timer.cancel();
+              if (mounted && FFAppState().accessToken.isNotEmpty) {
+                // Try to surface merchant fee information when available.
+                final metadata = deposit['metadata'] is Map
+                    ? Map<String, dynamic>.from(deposit['metadata'] as Map)
+                    : <String, dynamic>{};
+
+                double? amount;
+                if (deposit['amount_farm'] != null) {
+                  amount = (deposit['amount_farm'] as num).toDouble();
+                } else if (deposit['amount'] != null) {
+                  amount = (deposit['amount'] as num).toDouble();
+                }
+
+                double? fee;
+                // Prefer explicit platform_fee in metadata if provided
+                if (metadata.containsKey('platform_fee')) {
+                  final v = metadata['platform_fee'];
+                  if (v is num) fee = v.toDouble();
+                  if (v is String) fee = double.tryParse(v);
+                }
+
+                // Fall back to percent if provided
+                if (fee == null &&
+                    metadata.containsKey('platform_fee_percent') &&
+                    amount != null) {
+                  final p = metadata['platform_fee_percent'];
+                  double? pp;
+                  if (p is num) pp = p.toDouble();
+                  if (p is String) pp = double.tryParse(p);
+                  if (pp != null) fee = (amount * (pp / 100.0));
+                }
+
+                // As a last resort, detect merchant QR sale hints and compute 1%
+                if (fee == null &&
+                    amount != null &&
+                    (metadata['qr_guest_payment'] == true ||
+                        metadata['platform_fee_type'] == 'merchant_sale')) {
+                  fee = amount * 0.01;
+                }
+
+                final grossAmount = amount;
+                final platformFee = fee;
+                if (platformFee != null && grossAmount != null) {
+                  final net = grossAmount - platformFee;
+                  // Show a dialog summarizing the merchant fee and net amount before redirect
+                  showDialog<void>(
+                    context: context,
+                    barrierDismissible: true,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Payment confirmed'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              'Gross amount: ${grossAmount.toStringAsFixed(2)} FARM'),
+                          const SizedBox(height: 8),
+                          Text(
+                              'Platform fee: ${platformFee.toStringAsFixed(2)} FARM (1%)'),
+                          const SizedBox(height: 8),
+                          Text(
+                              'Net credited to merchant: ${net.toStringAsFixed(2)} FARM'),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            // Short delay to allow dialog to close smoothly, then navigate
+                            Future.delayed(const Duration(milliseconds: 300),
+                                () {
+                              if (mounted) context.go('/dashboard');
+                            });
+                          },
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                } else {
+                  _snack('Payment confirmed! Redirecting to dashboard...');
+                  Future.delayed(const Duration(milliseconds: 1500), () {
+                    if (mounted) context.go('/dashboard');
+                  });
+                }
+              }
+            } else if (status == 'failed' ||
+                status == 'cancelled' ||
+                status == 'error') {
+              timer.cancel();
+              if (mounted) {
+                _snack(
+                  'Payment ${status == 'cancelled' ? 'cancelled' : 'failed'}. '
+                  'No funds were deducted. Please try again.',
+                );
+
+                // Refresh history and wallet to reflect backend state. Do not call a
+                // non-existent DELETE endpoint; backend controls lifecycle.
+                await _fetchHistory();
+                await _fetchWallet();
+              }
+            }
+          }
+        });
       } else {
         _snack(
           data['message'] ??
@@ -294,71 +425,6 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
       if (mounted) _snack('Network error: $e');
     } finally {
       if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _monitorDeposit(
-    String reference, {
-    bool isIvoryPay = false,
-  }) async {
-    if (isIvoryPay) {
-      try {
-        await ApiService.request(
-          method: 'POST',
-          path: '/crypto/status/${Uri.encodeComponent(reference)}/verify',
-          body: const <String, dynamic>{},
-          requiresAuth: true,
-        );
-      } catch (error) {
-        debugPrint('IvoryPay deposit verification request failed: $error');
-      }
-    }
-
-    const maxAttempts = 60;
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      if (!mounted) return;
-
-      await _fetchHistory();
-      await _fetchWallet();
-
-      Map<String, dynamic>? deposit;
-      for (final item in recentDeposits) {
-        if (item is! Map) continue;
-        final candidate = Map<String, dynamic>.from(item);
-        if ((candidate['reference'] ?? candidate['transaction_reference'])
-                ?.toString() ==
-            reference) {
-          deposit = candidate;
-          break;
-        }
-      }
-
-      final status = (deposit?['status'] ?? '').toString().toLowerCase();
-      if (status == 'completed' || status == 'success') {
-        if (mounted) _snack('Payment confirmed. Your wallet has been updated.');
-        return;
-      }
-      if (status == 'failed' || status == 'cancelled' || status == 'error') {
-        if (mounted) {
-          _snack(
-            'Payment ${status == 'cancelled' ? 'cancelled' : 'failed'}. '
-            'No funds were credited.',
-          );
-        }
-        return;
-      }
-
-      if (attempt + 1 < maxAttempts) {
-        await Future.delayed(const Duration(seconds: 10));
-      }
-    }
-
-    if (mounted) {
-      _snack(
-        isIvoryPay
-            ? 'Crypto payment is still awaiting confirmation. Your wallet will update once IvoryPay confirms it.'
-            : 'Payment is still awaiting confirmation. Your wallet will update once Paystack confirms it.',
-      );
     }
   }
 
@@ -697,46 +763,27 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
               // Recent deposits
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Recent Deposits',
+                  Text('Recent Deposits',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                  if (_selectedDeposits.isNotEmpty)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: 'Share selected receipts',
+                          icon: const Icon(Icons.share_rounded),
+                          onPressed: _shareSelectedDeposits,
+                        ),
+                        IconButton(
+                          tooltip: 'Download selected receipts',
+                          icon: const Icon(Icons.download_rounded),
+                          onPressed: _downloadSelectedDeposits,
+                        ),
+                      ],
                     ),
-                  ),
-                  if (_selectedDepositKeys.isNotEmpty) ...[
-                    Text('${_selectedDepositKeys.length} selected'),
-                    IconButton(
-                      tooltip:
-                          _selectedDepositKeys.length == recentDeposits.length
-                              ? 'Deselect all deposits'
-                              : 'Select all deposits',
-                      icon: Icon(
-                        _selectedDepositKeys.length == recentDeposits.length
-                            ? Icons.deselect_rounded
-                            : Icons.select_all_rounded,
-                      ),
-                      onPressed: _toggleSelectAllDeposits,
-                    ),
-                    IconButton(
-                      tooltip: 'Share selected deposit receipts',
-                      icon: const Icon(Icons.share_rounded),
-                      onPressed: _shareSelectedDeposits,
-                    ),
-                    IconButton(
-                      tooltip: 'Download selected deposit receipts',
-                      icon: const Icon(Icons.download_rounded),
-                      onPressed: _downloadSelectedDeposits,
-                    ),
-                    IconButton(
-                      tooltip: 'Clear selection',
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => setState(_selectedDepositKeys.clear),
-                    ),
-                  ],
                 ],
               ),
               const SizedBox(height: 12),
@@ -754,36 +801,32 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                 ...recentDeposits.asMap().entries.map((entry) {
                   final index = entry.key;
                   final d = entry.value;
-                  if (d is! Map) return const SizedBox.shrink();
-                  final deposit = Map<String, dynamic>.from(d);
-                  final selectionKey = _depositSelectionKey(deposit, index);
-                  final isSelectionMode = _selectedDepositKeys.isNotEmpty;
-                  final isSelected =
-                      _selectedDepositKeys.contains(selectionKey);
-                  final status = (deposit['status'] ?? 'pending').toString();
+                  final deposit = Map<String, dynamic>.from(d as Map);
+                  final status = (d['status'] ?? 'pending') as String;
                   final isComplete = status == 'completed';
                   final meta = deposit['metadata'] is Map
                       ? Map<String, dynamic>.from(deposit['metadata'] as Map)
                       : <String, dynamic>{};
                   return InkWell(
                     borderRadius: BorderRadius.circular(14),
-                    onLongPress: () => setState(
-                      () => _selectedDepositKeys.add(selectionKey),
-                    ),
                     onTap: () {
-                      if (isSelectionMode) {
+                      if (_selectedDeposits.isNotEmpty) {
                         setState(() {
-                          if (!_selectedDepositKeys.add(selectionKey)) {
-                            _selectedDepositKeys.remove(selectionKey);
+                          if (!_selectedDeposits.add(index)) {
+                            _selectedDeposits.remove(index);
                           }
                         });
                         return;
                       }
                       TransactionReceiptService.showDetails(
                         context,
-                        deposit,
-                        fetchLatest: true,
+                        _depositReceipt(deposit, meta),
                       );
+                    },
+                    onLongPress: () {
+                      if (!_selectedDeposits.contains(index)) {
+                        setState(() => _selectedDeposits.add(index));
+                      }
                     },
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 10),
@@ -796,14 +839,14 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                       ),
                       child: Row(
                         children: [
-                          if (isSelectionMode)
+                          if (_selectedDeposits.isNotEmpty)
                             Checkbox(
-                              value: isSelected,
+                              value: _selectedDeposits.contains(index),
                               onChanged: (selected) => setState(() {
                                 if (selected == true) {
-                                  _selectedDepositKeys.add(selectionKey);
+                                  _selectedDeposits.add(index);
                                 } else {
-                                  _selectedDepositKeys.remove(selectionKey);
+                                  _selectedDeposits.remove(index);
                                 }
                               }),
                             ),
@@ -844,7 +887,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                                       color: theme.primaryText),
                                 ),
                                 Text(
-                                  '≈ ${deposit['amount']} FARM • $status',
+                                  '≈ ${d['amount']} FARM • $status',
                                   style: GoogleFonts.plusJakartaSans(
                                       fontSize: 12, color: theme.secondaryText),
                                 ),
