@@ -677,16 +677,16 @@ class _DashboardWidgetState extends State<DashboardWidget>
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             FloatingActionButton.extended(
-              onPressed: openNewTransactionSheet,
+              onPressed: () => context.pushNamed(QRScannerWidget.routeName),
               backgroundColor: FlutterFlowTheme.of(context).primary,
               icon: Icon(
-                Icons.add_rounded,
+                Icons.qr_code_scanner_rounded,
                 color: FlutterFlowTheme.of(context).onPrimary,
                 size: 24.0,
               ),
               elevation: 0.0,
               label: Text(
-                'New Transaction',
+                'Scan QR',
                 style: FlutterFlowTheme.of(context).labelLarge.override(
                       font: GoogleFonts.plusJakartaSans(
                         fontWeight:

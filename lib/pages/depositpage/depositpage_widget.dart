@@ -26,7 +26,8 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   final TextEditingController amountController = TextEditingController();
 
   String selectedCurrency = 'KES';
-  String selectedMethod = 'MOBILE_MONEY'; // MOBILE_MONEY | CRYPTO
+  String selectedMethod =
+      'MOBILE_MONEY'; // CARD | BANK_TRANSFER | MOBILE_MONEY | CRYPTO
   String? _selectedCryptoToken;
   List<String> _cryptoTokens = [];
   bool _loadingCryptoTokens = false;
@@ -42,11 +43,15 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
   // Deposit fees are disabled. The amount entered by the user is the amount credited.
   final Map<String, double> _feeRates = {
+    'CARD': 0.0,
+    'BANK_TRANSFER': 0.0,
     'MOBILE_MONEY': 0.0,
     'CRYPTO': 0.0,
   };
 
   final Map<String, Map<String, double?>> _depositLimits = {
+    'CARD': {'min': 10, 'max': 19999},
+    'BANK_TRANSFER': {'min': 10, 'max': 999999},
     'MOBILE_MONEY': {'min': 10, 'max': 249000},
     'CRYPTO': {'min': 100, 'max': null},
   };
@@ -179,7 +184,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     }
   }
 
-  Future<Map<String, String>> _fetchPaystackDepositUserDetails() async {
+  Future<Map<String, String>> _fetchPaystackDepositUserDetails({
+    required bool requirePhone,
+  }) async {
     final profileResponse = await ApiService.getProfile();
     final profile = profileResponse['data'] is Map
         ? Map<String, dynamic>.from(profileResponse['data'] as Map)
@@ -193,15 +200,15 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
         'Add an email address to your account before making a Paystack deposit.',
       );
     }
-    if (phone.isEmpty) {
+    if (requirePhone && phone.isEmpty) {
       throw StateError(
         'Add a phone number to your account before making a mobile money deposit.',
       );
     }
 
     FFAppState().email = email;
-    FFAppState().phone = phone;
-    return {'email': email, 'phone': phone};
+    if (phone.isNotEmpty) FFAppState().phone = phone;
+    return {'email': email, if (phone.isNotEmpty) 'phone': phone};
   }
 
   Map<String, dynamic> _depositReceipt(
@@ -284,11 +291,17 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     setState(() => isLoading = true);
 
     try {
-      final paymentMethodRaw =
-          selectedMethod == 'CRYPTO' ? 'crypto' : 'mobile_money';
+      final paymentMethodRaw = switch (selectedMethod) {
+        'CARD' => 'card',
+        'BANK_TRANSFER' => 'bank_transfer',
+        'MOBILE_MONEY' => 'mobile_money',
+        _ => 'crypto',
+      };
       final depositUserDetails = selectedMethod == 'CRYPTO'
           ? null
-          : await _fetchPaystackDepositUserDetails();
+          : await _fetchPaystackDepositUserDetails(
+              requirePhone: selectedMethod == 'MOBILE_MONEY',
+            );
 
       final body = {
         'amount_fiat': amount,
@@ -401,8 +414,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
           try {
             final verification = await ApiService.request(
-              method: 'GET',
-              path: '/transaction/verify/${Uri.encodeComponent(reference)}',
+              method: 'POST',
+              path: '/deposit/verify/${Uri.encodeComponent(reference)}',
+              body: const {},
               requiresAuth: true,
             );
             final result = verification['data'];
@@ -855,6 +869,20 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                       color: theme.primaryText)),
               const SizedBox(height: 12),
 
+              _methodCard(
+                context,
+                method: 'CARD',
+                icon: Icons.credit_card,
+                title: 'Bank Card',
+                subtitle: 'Instant',
+              ),
+              _methodCard(
+                context,
+                method: 'BANK_TRANSFER',
+                icon: Icons.account_balance,
+                title: 'Bank Transfer',
+                subtitle: 'Instant',
+              ),
               _methodCard(
                 context,
                 method: 'MOBILE_MONEY',

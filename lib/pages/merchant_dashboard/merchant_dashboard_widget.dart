@@ -48,6 +48,12 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
   List<String> weeklyLabels = List<String>.filled(7, '');
   String? merchantQrImageBase64;
 
+  List<dynamic> get _completedRecentTransactions => recentTransactions
+      .where((tx) =>
+          tx is Map &&
+          tx['status']?.toString().trim().toLowerCase() == 'completed')
+      .toList();
+
   String? get _merchantQrBase64 {
     if (merchantQrImageBase64 != null && merchantQrImageBase64!.isNotEmpty) {
       return merchantQrImageBase64;
@@ -1584,7 +1590,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                         mainAxisSize: MainAxisSize.min,
                         mainAxisAlignment: MainAxisAlignment.start,
                         crossAxisAlignment: CrossAxisAlignment.center,
-                        children: recentTransactions.isEmpty
+                        children: _completedRecentTransactions.isEmpty
                             ? [
                                 Center(
                                   child: Text(
@@ -1594,7 +1600,10 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                                   ),
                                 ),
                               ]
-                            : recentTransactions.asMap().entries.map((entry) {
+                            : _completedRecentTransactions
+                                .asMap()
+                                .entries
+                                .map((entry) {
                                 int index = entry.key;
                                 dynamic tx = entry.value;
                                 return wrapWithModel(
