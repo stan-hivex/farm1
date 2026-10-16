@@ -8,7 +8,6 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/backend/services/api_service.dart';
 import '/backend/services/turnstile_payload.dart';
 import '/services/auth/refresh_manager.dart';
-import '/services/secure_storage_service.dart';
 import '/services/app_session_manager.dart';
 import '/services/notification_service.dart';
 import '/services/auth/session_store_service.dart';
@@ -389,10 +388,7 @@ class AuthService {
     }
 
     try {
-      final activeRole = FFAppState().role;
-      await SecureStorageService.clearAuthData();
       await FFAppState().clearAuthCredentials();
-      await FFAppState().clearRoleSession(activeRole);
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('language', 'en');
     } catch (e) {
@@ -431,7 +427,6 @@ class AuthService {
     }
 
     try {
-      await SecureStorageService.clearAuthData();
       await FFAppState().clearAuthCredentials();
     } catch (e) {
       debugPrint('Local cleanup error during account deletion: $e');

@@ -104,6 +104,7 @@ dependencies:
   cupertino_icons: ^1.0.0
   supabase_flutter: ^2.15.3
   webview_flutter: ^4.14.0
+  country_picker: ^2.0.28
 
 dependency_overrides:
   http: 1.4.0

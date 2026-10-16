@@ -16,10 +16,34 @@ class AdminApiService {
   static const int _maxBackoffSeconds = 30;
 
   static Future<AuthSession?> _getActiveSession() async {
-    final activeRole =
+    var activeRole =
         (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+    final stateRole = FFAppState().role.toLowerCase();
+    if ((stateRole == 'admin' || stateRole == 'super_admin') &&
+        activeRole != stateRole) {
+      activeRole = stateRole;
+    }
     if (activeRole == 'admin' || activeRole == 'super_admin') {
-      return AuthSessionStore.readRoleSession(activeRole);
+      final storedSession = await AuthSessionStore.readRoleSession(activeRole);
+      if (storedSession != null &&
+          (storedSession.accessToken.isNotEmpty ||
+              storedSession.refreshToken.isNotEmpty)) {
+        return storedSession;
+      }
+
+      final accessToken = FFAppState().accessToken;
+      final refreshToken = FFAppState().refreshToken;
+      if (stateRole == activeRole &&
+          (accessToken.isNotEmpty || refreshToken.isNotEmpty)) {
+        return AuthSession(
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          role: activeRole,
+          userId: FFAppState().userId,
+          expiresAt: '',
+          loggedInAt: '',
+        );
+      }
     }
     return null;
   }
@@ -63,7 +87,27 @@ class AdminApiService {
   static Future<String> getValidAccessToken({bool force = false}) async {
     final valid = await ensureValidSession(force: force);
     if (!valid) return '';
-    return _getToken();
+    final session = await _getActiveSession();
+    final token = session?.accessToken ?? '';
+    if (session != null && token.isNotEmpty) {
+      final activeRole =
+          (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+      if (activeRole != session.role.toLowerCase()) {
+        await AuthSessionStore.saveRoleSession(
+          role: session.role,
+          accessToken: token,
+          refreshToken: session.refreshToken,
+          userId: session.userId,
+        );
+      }
+      // Keep legacy ApiService requests aligned with the role-specific session.
+      FFAppState().accessToken = token;
+      FFAppState().refreshToken = session.refreshToken;
+      FFAppState().role = session.role.toLowerCase();
+      FFAppState().userId = session.userId;
+      FFAppState().isLoggedIn = true;
+    }
+    return token;
   }
 
   static Future<bool> ensureValidSession({bool force = false}) async {
@@ -166,11 +210,7 @@ class AdminApiService {
         return false;
       }
 
-      final prefs = await SharedPreferences.getInstance();
       final activeSession = await _getActiveSession();
-      await prefs.setString('adminToken', newAccessToken);
-      await prefs.setString('adminRefreshToken', newRefreshToken);
-      await prefs.setString('adminRole', role);
       await AuthSessionStore.saveRoleSession(
         role: role,
         accessToken: newAccessToken,
@@ -297,16 +337,10 @@ class AdminApiService {
       if (roleValue != 'admin' && roleValue != 'super_admin') {
         throw Exception('Access denied. Admin account required.');
       }
-      final prefs = await SharedPreferences.getInstance();
       final accessToken = decoded['data']['access_token']?.toString() ?? '';
       final refreshToken = decoded['data']['refresh_token']?.toString() ?? '';
       final role = roleValue?.toString() ?? '';
       final userId = decoded['data']['user']['id']?.toString() ?? '';
-      await prefs.setString('adminToken', accessToken);
-      await prefs.setString('adminRefreshToken', refreshToken);
-      await prefs.setString('adminRole', role);
-      await prefs.setString('adminName',
-          decoded['data']['user']['first_name']?.toString() ?? 'Admin');
       await AuthSessionStore.saveRoleSession(
         role: role,
         accessToken: accessToken,
@@ -336,12 +370,8 @@ class AdminApiService {
       debugPrint(
           '[AdminApiService] explicit logout — clearing persisted admin session keys (reason=explicit logout)');
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('adminToken');
-      await prefs.remove('adminRefreshToken');
-      await prefs.remove('adminRole');
       await prefs.remove('adminName');
-      await AuthSessionStore.clearAdminSession();
-      await AuthSessionStore.clearSuperAdminSession();
+      await FFAppState().clearAuthCredentials('explicit admin logout');
     }
   }
 
@@ -382,7 +412,8 @@ class AdminApiService {
     String action,
   ) {
     if (action != 'suspend' && action != 'approve') {
-      throw ArgumentError.value(action, 'action', 'Expected suspend or approve');
+      throw ArgumentError.value(
+          action, 'action', 'Expected suspend or approve');
     }
     return _req(
       method: 'PATCH',
@@ -390,8 +421,7 @@ class AdminApiService {
     );
   }
 
-  static Future<Map<String, dynamic>> deleteAdmin(String adminId) =>
-      _req(
+  static Future<Map<String, dynamic>> deleteAdmin(String adminId) => _req(
         method: 'DELETE',
         path: '/admin/admins/${Uri.encodeComponent(adminId)}',
       );
@@ -478,8 +508,12 @@ class AdminApiService {
       _req(method: 'PATCH', path: '/admin/users/$userId/status', body: data);
 
   // ── KYC ───────────────────────────────────────────────────────────────────
-    static Future<Map<String, dynamic>> getKycQueue({int page = 1, String? status}) =>
-      _req(method: 'GET', path: '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
+  static Future<
+      Map<String,
+          dynamic>> getKycQueue({int page = 1, String? status}) => _req(
+      method: 'GET',
+      path:
+          '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
 
   static Future<Map<String, dynamic>> reviewKyc(String docId, String status,
           {String? rejectionReason}) =>
@@ -505,6 +539,11 @@ class AdminApiService {
             '${type != null ? "&transaction_type=$type" : ""}'
             '${status != null ? "&status=$status" : ""}'
             '${search != null ? "&search=${Uri.encodeQueryComponent(search)}" : ""}',
+      );
+
+  static Future<Map<String, dynamic>> getTransactionDetails(String id) => _req(
+        method: 'GET',
+        path: '/admin/transactions/${Uri.encodeComponent(id)}',
       );
 
   // ── Escrow ────────────────────────────────────────────────────────────────
@@ -557,11 +596,19 @@ class AdminApiService {
         },
       );
 
-      static Future<Map<String, dynamic>> getPayouts({int page = 1, String? status}) =>
-        _req(method: 'GET', path: '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
+  static Future<
+      Map<String,
+          dynamic>> getPayouts({int page = 1, String? status}) => _req(
+      method: 'GET',
+      path:
+          '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
 
-      static Future<Map<String, dynamic>> processPayout(String payoutId, String status) =>
-        _req(method: 'POST', path: '/admin/payouts/$payoutId/process', body: {'status': status});
+  static Future<Map<String, dynamic>> processPayout(
+          String payoutId, String status) =>
+      _req(
+          method: 'POST',
+          path: '/admin/payouts/$payoutId/process',
+          body: {'status': status});
 
   // ── Merchants ─────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getMerchants(
@@ -615,6 +662,6 @@ class AdminApiService {
       _req(method: 'GET', path: '/admin/audit-logs?page=$page');
 
   // ── Analytics ─────────────────────────────────────────────────────────────
-    static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
+  static Future<Map<String, dynamic>> getAnalytics({String period = 'week'}) =>
       _req(method: 'GET', path: '/admin/analytics?period=$period');
 }

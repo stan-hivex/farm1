@@ -892,8 +892,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
           ),
           const SizedBox(height: 5),
           Text(
-            'Fees credited to this superadmin wallet',
+            'Gross fees earned across escrow, withdrawals, and merchant sales',
             style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Available balance is net of pending locks and completed withdrawals.',
+            style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 11),
           ),
           const SizedBox(height: 16),
           Row(

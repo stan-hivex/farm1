@@ -55,16 +55,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  print('Reading stored session...');
-  final storedRole = await SharedPreferences.getInstance()
-      .then((prefs) => prefs.getString('role') ?? '');
-  print('Stored role = $storedRole');
-  final storedAccessToken = await SharedPreferences.getInstance()
-      .then((prefs) => prefs.getString('accessToken'));
-  final storedRefreshToken = await SharedPreferences.getInstance()
-      .then((prefs) => prefs.getString('refreshToken'));
-  print('Stored access token exists = ${storedAccessToken != null}');
-  print('Stored refresh token exists = ${storedRefreshToken != null}');
+  debugPrint('Restoring the persisted secure login session...');
   await FFAppState().initializePersistedState();
   // Attempt to restore persisted session and perform a silent refresh before
   // the app is started so routing decisions can use restored auth state.

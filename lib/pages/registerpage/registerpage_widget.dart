@@ -1,7 +1,11 @@
+import 'dart:async';
+
 import '/services/auth/auth_service.dart';
+import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
+import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'registerpage_model.dart';
@@ -23,6 +27,9 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   final _formKey = GlobalKey<FormState>();
+  final _usernameFieldKey = GlobalKey<FormFieldState<String>>();
+  final _phoneFieldKey = GlobalKey<FormFieldState<String>>();
+  final _emailFieldKey = GlobalKey<FormFieldState<String>>();
 
   final TextEditingController firstNameController = TextEditingController();
 
@@ -43,325 +50,121 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
   final TextEditingController referralController = TextEditingController();
 
-  String? _selectedCountry = 'United States';
+  String _selectedCountry = 'United States';
+  String _selectedCountryIsoCode = 'US';
   String _selectedCountryCode = '+1';
+  String? _usernameAvailabilityError;
+  String? _phoneAvailabilityError;
+  String? _emailAvailabilityError;
+  Timer? _availabilityDebounce;
+  int _availabilityRequestId = 0;
 
-  final Map<String, String> _countryCodeMap = {
-    '+1': 'United States',
-    '+44': 'United Kingdom',
-    '+33': 'France',
-    '+49': 'Germany',
-    '+39': 'Italy',
-    '+34': 'Spain',
-    '+31': 'Netherlands',
-    '+32': 'Belgium',
-    '+43': 'Austria',
-    '+41': 'Switzerland',
-    '+46': 'Sweden',
-    '+47': 'Norway',
-    '+45': 'Denmark',
-    '+358': 'Finland',
-    '+353': 'Ireland',
-    '+48': 'Poland',
-    '+420': 'Czech Republic',
-    '+36': 'Hungary',
-    '+40': 'Romania',
-    '+359': 'Bulgaria',
-    '+30': 'Greece',
-    '+351': 'Portugal',
-    '+385': 'Croatia',
-    '+386': 'Slovenia',
-    '+81': 'Japan',
-    '+86': 'China',
-    '+91': 'India',
-    '+65': 'Singapore',
-    '+60': 'Malaysia',
-    '+66': 'Thailand',
-    '+84': 'Vietnam',
-    '+62': 'Indonesia',
-    '+63': 'Philippines',
-    '+82': 'South Korea',
-    '+234': 'Nigeria',
-    '+254': 'Kenya',
-    '+27': 'South Africa',
-    '+256': 'Uganda',
-    '+255': 'Tanzania',
-    '+212': 'Morocco',
-    '+213': 'Algeria',
-    '+20': 'Egypt',
-    '+216': 'Tunisia',
-    '+55': 'Brazil',
-    '+54': 'Argentina',
-    '+56': 'Chile',
-    '+57': 'Colombia',
-    '+51': 'Peru',
-    '+52': 'Mexico',
-    '+507': 'Panama',
-    '+505': 'Nicaragua',
-    '+502': 'Guatemala',
-    '+503': 'El Salvador',
-  };
+  String _flagForCountry(String countryCode) {
+    return String.fromCharCodes(
+      countryCode.codeUnits.map((unit) => unit + 0x1F1A5),
+    );
+  }
 
-  final List<String> _countries = [
-    'Afghanistan',
-    'Albania',
-    'Algeria',
-    'Andorra',
-    'Angola',
-    'Argentina',
-    'Armenia',
-    'Australia',
-    'Austria',
-    'Azerbaijan',
-    'Bahamas',
-    'Bahrain',
-    'Bangladesh',
-    'Barbados',
-    'Belarus',
-    'Belgium',
-    'Belize',
-    'Benin',
-    'Bhutan',
-    'Bolivia',
-    'Bosnia and Herzegovina',
-    'Botswana',
-    'Brazil',
-    'Brunei',
-    'Bulgaria',
-    'Burkina Faso',
-    'Burundi',
-    'Cambodia',
-    'Cameroon',
-    'Canada',
-    'Cape Verde',
-    'Central African Republic',
-    'Chad',
-    'Chile',
-    'China',
-    'Colombia',
-    'Comoros',
-    'Congo',
-    'Costa Rica',
-    'Croatia',
-    'Cuba',
-    'Cyprus',
-    'Czech Republic',
-    'Denmark',
-    'Djibouti',
-    'Dominica',
-    'Dominican Republic',
-    'Ecuador',
-    'Egypt',
-    'El Salvador',
-    'Equatorial Guinea',
-    'Eritrea',
-    'Estonia',
-    'Eswatini',
-    'Ethiopia',
-    'Fiji',
-    'Finland',
-    'France',
-    'Gabon',
-    'Gambia',
-    'Georgia',
-    'Germany',
-    'Ghana',
-    'Greece',
-    'Grenada',
-    'Guatemala',
-    'Guinea',
-    'Guinea-Bissau',
-    'Guyana',
-    'Haiti',
-    'Honduras',
-    'Hungary',
-    'Iceland',
-    'India',
-    'Indonesia',
-    'Iran',
-    'Iraq',
-    'Ireland',
-    'Israel',
-    'Italy',
-    'Jamaica',
-    'Japan',
-    'Jordan',
-    'Kazakhstan',
-    'Kenya',
-    'Kiribati',
-    'Kosovo',
-    'Kuwait',
-    'Kyrgyzstan',
-    'Laos',
-    'Latvia',
-    'Lebanon',
-    'Lesotho',
-    'Liberia',
-    'Libya',
-    'Liechtenstein',
-    'Lithuania',
-    'Luxembourg',
-    'Madagascar',
-    'Malawi',
-    'Malaysia',
-    'Maldives',
-    'Mali',
-    'Malta',
-    'Marshall Islands',
-    'Mauritania',
-    'Mauritius',
-    'Mexico',
-    'Micronesia',
-    'Moldova',
-    'Monaco',
-    'Mongolia',
-    'Montenegro',
-    'Morocco',
-    'Mozambique',
-    'Myanmar',
-    'Namibia',
-    'Nauru',
-    'Nepal',
-    'Netherlands',
-    'New Zealand',
-    'Nicaragua',
-    'Niger',
-    'Nigeria',
-    'North Korea',
-    'North Macedonia',
-    'Norway',
-    'Oman',
-    'Pakistan',
-    'Palau',
-    'Palestine',
-    'Panama',
-    'Papua New Guinea',
-    'Paraguay',
-    'Peru',
-    'Philippines',
-    'Poland',
-    'Portugal',
-    'Qatar',
-    'Romania',
-    'Russia',
-    'Rwanda',
-    'Saint Kitts and Nevis',
-    'Saint Lucia',
-    'Saint Vincent and the Grenadines',
-    'Samoa',
-    'San Marino',
-    'Sao Tome and Principe',
-    'Saudi Arabia',
-    'Senegal',
-    'Serbia',
-    'Seychelles',
-    'Sierra Leone',
-    'Singapore',
-    'Slovakia',
-    'Slovenia',
-    'Solomon Islands',
-    'Somalia',
-    'South Africa',
-    'South Korea',
-    'South Sudan',
-    'Spain',
-    'Sri Lanka',
-    'Sudan',
-    'Suriname',
-    'Sweden',
-    'Switzerland',
-    'Syria',
-    'Taiwan',
-    'Tajikistan',
-    'Tanzania',
-    'Thailand',
-    'Timor-Leste',
-    'Togo',
-    'Tonga',
-    'Trinidad and Tobago',
-    'Tunisia',
-    'Turkey',
-    'Turkmenistan',
-    'Tuvalu',
-    'Uganda',
-    'Ukraine',
-    'United Arab Emirates',
-    'United Kingdom',
-    'United States',
-    'Uruguay',
-    'Uzbekistan',
-    'Vanuatu',
-    'Vatican City',
-    'Venezuela',
-    'Vietnam',
-    'Yemen',
-    'Zambia',
-    'Zimbabwe',
-  ];
+  void _showCountryPicker() {
+    showCountryPicker(
+      context: context,
+      showPhoneCode: true,
+      searchAutofocus: true,
+      onSelect: (country) {
+        setState(() {
+          _selectedCountry = country.name;
+          _selectedCountryIsoCode = country.countryCode;
+          _selectedCountryCode = '+${country.phoneCode}';
+          _phoneAvailabilityError = null;
+        });
+        _phoneFieldKey.currentState?.validate();
+        _scheduleAvailabilityCheck();
+      },
+    );
+  }
 
-  String _flagForCountry(String country) {
-    const countryIso = {
-      'United States': 'US',
-      'Canada': 'CA',
-      'United Kingdom': 'GB',
-      'France': 'FR',
-      'Germany': 'DE',
-      'Italy': 'IT',
-      'Spain': 'ES',
-      'Netherlands': 'NL',
-      'Belgium': 'BE',
-      'Austria': 'AT',
-      'Switzerland': 'CH',
-      'Sweden': 'SE',
-      'Norway': 'NO',
-      'Denmark': 'DK',
-      'Finland': 'FI',
-      'Ireland': 'IE',
-      'Poland': 'PL',
-      'Czech Republic': 'CZ',
-      'Hungary': 'HU',
-      'Romania': 'RO',
-      'Bulgaria': 'BG',
-      'Greece': 'GR',
-      'Portugal': 'PT',
-      'Croatia': 'HR',
-      'Slovenia': 'SI',
-      'Japan': 'JP',
-      'China': 'CN',
-      'India': 'IN',
-      'Singapore': 'SG',
-      'Malaysia': 'MY',
-      'Thailand': 'TH',
-      'Vietnam': 'VN',
-      'Indonesia': 'ID',
-      'Philippines': 'PH',
-      'South Korea': 'KR',
-      'Nigeria': 'NG',
-      'Kenya': 'KE',
-      'South Africa': 'ZA',
-      'Uganda': 'UG',
-      'Tanzania': 'TZ',
-      'Morocco': 'MA',
-      'Algeria': 'DZ',
-      'Egypt': 'EG',
-      'Tunisia': 'TN',
-      'Brazil': 'BR',
-      'Argentina': 'AR',
-      'Chile': 'CL',
-      'Colombia': 'CO',
-      'Peru': 'PE',
-      'Mexico': 'MX',
-    };
+  void _scheduleAvailabilityCheck() {
+    _availabilityDebounce?.cancel();
+    _availabilityRequestId++;
+    _availabilityDebounce = Timer(
+      const Duration(milliseconds: 700),
+      () => unawaited(_checkRegistrationAvailability()),
+    );
+  }
 
-    final iso = countryIso[country];
-    if (iso == null || iso.length != 2) {
-      return '';
+  Future<bool> _checkRegistrationAvailability() async {
+    _availabilityDebounce?.cancel();
+    final username = usernameController.text.trim().toLowerCase();
+    final email = emailController.text.trim().toLowerCase();
+    final phoneDigits = phoneController.text.trim();
+    final phone = '$_selectedCountryCode$phoneDigits';
+    final usernameToCheck =
+        RegExp(r'^[a-z0-9_]+$').hasMatch(username) ? username : null;
+    final emailToCheck = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+            .hasMatch(email)
+        ? email
+        : null;
+    final phoneToCheck =
+        RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(phone) ? phone : null;
+
+    if (usernameToCheck == null && emailToCheck == null && phoneToCheck == null) {
+      return true;
     }
 
-    final codeUnits = iso.toUpperCase().codeUnits;
-    return String.fromCharCodes(
-      codeUnits.map((unit) => unit + 0x1F1A5),
-    );
+    final requestId = ++_availabilityRequestId;
+    try {
+      final response = await ApiService.checkRegistrationAvailability(
+        username: usernameToCheck,
+        email: emailToCheck,
+        phone: phoneToCheck,
+      );
+      final data = response['data'];
+      if (data is! Map ||
+          (usernameToCheck != null && data['usernameAvailable'] is! bool) ||
+          (emailToCheck != null && data['emailAvailable'] is! bool) ||
+          (phoneToCheck != null && data['phoneAvailable'] is! bool)) {
+        throw const FormatException(
+          'The registration availability response was invalid.',
+        );
+      }
+      if (!mounted || requestId != _availabilityRequestId) return true;
+
+      setState(() {
+        _usernameAvailabilityError = usernameToCheck != null &&
+                data['usernameAvailable'] == false
+            ? 'Username already exists. Please enter another one.'
+            : null;
+        _emailAvailabilityError =
+            emailToCheck != null && data['emailAvailable'] == false
+                ? 'Email already exists. Please enter another one.'
+                : null;
+        _phoneAvailabilityError =
+            phoneToCheck != null && data['phoneAvailable'] == false
+                ? 'Phone number already exists. Please enter another one.'
+                : null;
+      });
+      _usernameFieldKey.currentState?.validate();
+      _phoneFieldKey.currentState?.validate();
+      _emailFieldKey.currentState?.validate();
+
+      return _usernameAvailabilityError == null &&
+          _emailAvailabilityError == null &&
+          _phoneAvailabilityError == null;
+    } catch (error) {
+      debugPrint('Registration availability check failed: $error');
+      return true;
+    }
+  }
+
+  String? _duplicateFieldFromError(Object error) {
+    final message = error.toString().toLowerCase();
+    if (!RegExp(r'already|exists|taken|duplicate|unique').hasMatch(message)) {
+      return null;
+    }
+    if (message.contains('username')) return 'username';
+    if (message.contains('phone')) return 'phone';
+    if (message.contains('email')) return 'email';
+    return 'unknown';
   }
 
   bool passwordVisible = false;
@@ -443,6 +246,8 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
   @override
   void dispose() {
+    _availabilityDebounce?.cancel();
+    _availabilityRequestId++;
     firstNameController.dispose();
     lastNameController.dispose();
     usernameController.dispose();
@@ -678,8 +483,19 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   buildLabel(context, 'Username'),
                   const SizedBox(height: 8.0),
                   TextFormField(
+                    key: _usernameFieldKey,
                     controller: usernameController,
+                    onChanged: (_) {
+                      if (_usernameAvailabilityError != null) {
+                        setState(() => _usernameAvailabilityError = null);
+                        _usernameFieldKey.currentState?.validate();
+                      }
+                      _scheduleAvailabilityCheck();
+                    },
                     validator: (value) {
+                      if (_usernameAvailabilityError != null) {
+                        return _usernameAvailabilityError;
+                      }
                       if (value == null || value.isEmpty) {
                         return 'Username required';
                       }
@@ -702,56 +518,50 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                     children: [
                       Expanded(
                         flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _selectedCountryCode,
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setState(() {
-                              _selectedCountryCode = value;
-                            });
-                          },
-                          decoration: inputDecoration(
-                            context,
-                            'Code',
-                          ),
-                          items: _countryCodeMap.keys.map(
-                            (dialCode) {
-                              final country = _countryCodeMap[dialCode] ?? '';
-                              final flag = _flagForCountry(country);
-                              return DropdownMenuItem(
-                                value: dialCode,
-                                child: Row(
-                                  children: [
-                                    if (flag.isNotEmpty) ...[
-                                      Text(flag),
-                                      const SizedBox(width: 6.0),
-                                    ],
-                                    Expanded(
-                                      child: Text(
-                                        '$dialCode $country',
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                        child: InkWell(
+                          onTap: _showCountryPicker,
+                          borderRadius: BorderRadius.circular(14.0),
+                          child: InputDecorator(
+                            decoration:
+                                inputDecoration(context, 'Code').copyWith(
+                              suffixIcon: const Icon(Icons.arrow_drop_down),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  _flagForCountry(_selectedCountryIsoCode),
                                 ),
-                              );
-                            },
-                          ).toList(),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Country code required';
-                            }
-                            return null;
-                          },
+                                const SizedBox(width: 6.0),
+                                Expanded(
+                                  child: Text(
+                                    '$_selectedCountryIsoCode '
+                                    '$_selectedCountryCode',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12.0),
                       Expanded(
                         flex: 3,
                         child: TextFormField(
+                          key: _phoneFieldKey,
                           controller: phoneController,
                           keyboardType: TextInputType.number,
+                          onChanged: (_) {
+                            if (_phoneAvailabilityError != null) {
+                              setState(() => _phoneAvailabilityError = null);
+                              _phoneFieldKey.currentState?.validate();
+                            }
+                            _scheduleAvailabilityCheck();
+                          },
                           validator: (value) {
+                            if (_phoneAvailabilityError != null) {
+                              return _phoneAvailabilityError;
+                            }
                             if (value == null || value.isEmpty) {
                               return 'Phone number required';
                             }
@@ -772,8 +582,17 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   buildLabel(context, 'Email'),
                   const SizedBox(height: 8.0),
                   TextFormField(
+                    key: _emailFieldKey,
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
+                    onChanged: (_) {
+                      if (_emailAvailabilityError != null) {
+                        setState(() => _emailAvailabilityError = null);
+                        _emailFieldKey.currentState?.validate();
+                      }
+                      _scheduleAvailabilityCheck();
+                    },
+                    validator: (_) => _emailAvailabilityError,
                     decoration: inputDecoration(
                       context,
                       'Enter email',
@@ -872,54 +691,28 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   const SizedBox(height: 16.0),
                   buildLabel(context, 'Country'),
                   const SizedBox(height: 8.0),
-                  DropdownButtonFormField<String>(
-                    initialValue: _selectedCountry,
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setState(() {
-                        _selectedCountry = value;
-                        final countryCodeEntry =
-                            _countryCodeMap.entries.firstWhere(
-                          (entry) => entry.value == value,
-                          orElse: () => const MapEntry('', ''),
-                        );
-                        if (countryCodeEntry.key.isNotEmpty) {
-                          _selectedCountryCode = countryCodeEntry.key;
-                        }
-                      });
-                    },
-                    decoration: inputDecoration(
-                      context,
-                      'Select country',
-                    ),
-                    items: _countries.map(
-                      (country) {
-                        final flag = _flagForCountry(country);
-                        return DropdownMenuItem(
-                          value: country,
-                          child: Row(
-                            children: [
-                              if (flag.isNotEmpty) ...[
-                                Text(flag),
-                                const SizedBox(width: 6.0),
-                              ],
-                              Expanded(
-                                child: Text(
-                                  country,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
+                  InkWell(
+                    onTap: _showCountryPicker,
+                    borderRadius: BorderRadius.circular(14.0),
+                    child: InputDecorator(
+                      decoration:
+                          inputDecoration(context, 'Select country').copyWith(
+                        suffixIcon: const Icon(Icons.arrow_drop_down),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(_flagForCountry(_selectedCountryIsoCode)),
+                          const SizedBox(width: 8.0),
+                          Expanded(
+                            child: Text(
+                              '$_selectedCountry ($_selectedCountryIsoCode) '
+                              '$_selectedCountryCode',
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        );
-                      },
-                    ).toList(),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Country required';
-                      }
-                      return null;
-                    },
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16.0),
                   buildLabel(
@@ -958,6 +751,10 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         return;
                       }
 
+                      final registrationAvailable =
+                          await _checkRegistrationAvailability();
+                      if (!mounted || !registrationAvailable) return;
+
                       try {
                         await AuthService().signUp(
                           email: email,
@@ -990,7 +787,47 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                       } catch (e) {
                         print('ERROR: $e');
 
-                        final message = e.toString().contains('Could not connect to backend server')
+                        final duplicateField = _duplicateFieldFromError(e);
+                        if (duplicateField != null) {
+                          final fieldLabel = switch (duplicateField) {
+                            'username' => 'Username',
+                            'phone' => 'Phone number',
+                            'email' => 'Email',
+                            _ => '',
+                          };
+
+                          if (duplicateField != 'unknown') {
+                            final fieldError =
+                                '$fieldLabel already exists. Please enter another one.';
+                            setState(() {
+                              if (duplicateField == 'username') {
+                                _usernameAvailabilityError = fieldError;
+                              } else if (duplicateField == 'phone') {
+                                _phoneAvailabilityError = fieldError;
+                              } else {
+                                _emailAvailabilityError = fieldError;
+                              }
+                            });
+                            _formKey.currentState?.validate();
+                          }
+
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                duplicateField == 'unknown'
+                                    ? 'An account already uses one of these details. Please check your username, phone number, and email.'
+                                    : '$fieldLabel already exists. Please enter another one.',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        final message = e
+                                .toString()
+                                .contains('Could not connect to backend server')
                             ? 'common.network_error'.tr()
                             : 'auth.registration_failed'.tr();
 

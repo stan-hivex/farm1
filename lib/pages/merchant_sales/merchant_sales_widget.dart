@@ -251,8 +251,20 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
                           tx['timestamp']);
                       return InkWell(
                         borderRadius: BorderRadius.circular(16),
-                        onTap: () =>
-                            TransactionReceiptService.showDetails(context, tx),
+                        onLongPress: () => setState(() {
+                          _selectedSales.add(index);
+                        }),
+                        onTap: () {
+                          if (_selectedSales.isNotEmpty) {
+                            setState(() {
+                              if (!_selectedSales.add(index)) {
+                                _selectedSales.remove(index);
+                              }
+                            });
+                            return;
+                          }
+                          TransactionReceiptService.showDetails(context, tx);
+                        },
                         child: Card(
                           margin: const EdgeInsets.only(bottom: 12),
                           shape: RoundedRectangleBorder(
@@ -262,19 +274,20 @@ class _MerchantSalesWidgetState extends State<MerchantSalesWidget> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                CheckboxListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  value: _selectedSales.contains(index),
-                                  title: const Text('Select receipt'),
-                                  onChanged: (selected) => setState(() {
-                                    if (selected == true) {
-                                      _selectedSales.add(index);
-                                    } else {
-                                      _selectedSales.remove(index);
-                                    }
-                                  }),
-                                ),
+                                if (_selectedSales.isNotEmpty)
+                                  CheckboxListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    value: _selectedSales.contains(index),
+                                    title: const Text('Select receipt'),
+                                    onChanged: (selected) => setState(() {
+                                      if (selected == true) {
+                                        _selectedSales.add(index);
+                                      } else {
+                                        _selectedSales.remove(index);
+                                      }
+                                    }),
+                                  ),
                                 Text(title,
                                     style: theme.titleSmall
                                         .copyWith(fontWeight: FontWeight.bold)),

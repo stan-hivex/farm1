@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/core/app_theme.dart';
 import '/core/theme_extensions.dart';
 import '../core/admin_guard.dart';
 import '../core/admin_navigation.dart';
@@ -7,7 +8,6 @@ import '../services/admin_api_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/pages/loginpage/loginpage_widget.dart';
-import 'add_superadmin_page.dart';
 import 'deposits_management_page.dart';
 import 'escrow_management_page.dart';
 import 'notifications_management_page.dart';
@@ -15,6 +15,7 @@ import 'user_management_page.dart';
 import 'withdrawals_management_page.dart';
 import 'kyc_management_page.dart';
 import 'payouts_page.dart';
+import '/services/transaction_receipt_service.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -105,7 +106,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   }
 
   void _navigateTo(Widget page) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Theme(data: AppTheme.lightTheme(), child: page),
+      ),
+    );
   }
 
   @override
@@ -284,45 +290,71 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
   Widget _buildOverviewRow(
       Map<String, dynamic> s, Color cardColor, Color accent) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      childAspectRatio: 1.55,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      children: [
-        _metricCard('Total Users', '${s['total_users'] ?? 0}', 'Active people',
-            cardColor, accent, () => _navigateTo(const UserManagementPage())),
-        _metricCard(
-            'Active Escrows',
-            '${s['active_escrows'] ?? 0}',
-            'Escrow flows',
-            cardColor,
-            accent,
-            () => _navigateTo(const EscrowManagementPage())),
-        _metricCard('Pending KYC', '${s['pending_kyc'] ?? 0}', 'Review queue',
-            cardColor, accent, () => _navigateTo(const KycManagementPage())),
-        _metricCard(
-            'Pending Payouts',
-            '${s['pending_payouts'] ?? 0}',
-            'Awaiting settlement',
-            cardColor,
-            accent,
-            () => _navigateTo(const PayoutsPage())),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 400;
+        final cardAspectRatio = isNarrow
+            ? 1.1
+            : constraints.maxWidth < 700
+                ? 1.35
+                : 1.55;
+
+        return GridView.count(
+          crossAxisCount: 2,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: cardAspectRatio,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: [
+            _metricCard(
+                'Total Users',
+                '${s['total_users'] ?? 0}',
+                'Active people',
+                cardColor,
+                accent,
+                () => _navigateTo(const UserManagementPage()),
+                isNarrow: isNarrow),
+            _metricCard(
+                'Active Escrows',
+                '${s['active_escrows'] ?? 0}',
+                'Escrow flows',
+                cardColor,
+                accent,
+                () => _navigateTo(const EscrowManagementPage()),
+                isNarrow: isNarrow),
+            _metricCard(
+                'Pending KYC',
+                '${s['pending_kyc'] ?? 0}',
+                'Review queue',
+                cardColor,
+                accent,
+                () => _navigateTo(const KycManagementPage()),
+                isNarrow: isNarrow),
+            _metricCard(
+                'Pending Payouts',
+                '${s['pending_payouts'] ?? 0}',
+                'Awaiting settlement',
+                cardColor,
+                accent,
+                () => _navigateTo(const PayoutsPage()),
+                isNarrow: isNarrow),
+          ],
+        );
+      },
     );
   }
 
   Widget _metricCard(String title, String value, String caption,
-      Color cardColor, Color accent, VoidCallback onTap) {
+      Color cardColor, Color accent, VoidCallback onTap,
+      {required bool isNarrow}) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(24),
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isNarrow ? 12 : 16),
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(24),
@@ -336,36 +368,52 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: GoogleFonts.plusJakartaSans(
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
                           color: context.onSurface.withOpacity(0.7),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700)),
+                          fontSize: isNarrow ? 13 : 15,
+                          height: 1.15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
                   Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(isNarrow ? 5 : 8),
                     decoration: BoxDecoration(
                       color: accent.withAlpha((0.12 * 255).round()),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(isNarrow ? 10 : 14),
                     ),
                     child: Icon(Icons.trending_up_rounded,
-                        size: 18, color: accent),
+                        size: isNarrow ? 15 : 18, color: accent),
                   ),
                 ],
               ),
+              const SizedBox(height: 4),
               Text(value,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface,
-                      fontSize: 30,
+                      fontSize: isNarrow ? 26 : 30,
+                      height: 1.05,
                       fontWeight: FontWeight.w900)),
+              const SizedBox(height: 3),
               Text(caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
                       color: context.onSurface.withOpacity(0.54),
-                      fontSize: 14,
+                      fontSize: isNarrow ? 12 : 14,
+                      height: 1.15,
                       fontWeight: FontWeight.w600)),
             ],
           ),
@@ -398,12 +446,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           spacing: 14,
           runSpacing: 14,
           children: [
-            _actionChip(
-                'Add Superadmin',
-                Icons.admin_panel_settings_rounded,
-                accent,
-                cardColor,
-                () => _navigateTo(const AddSuperadminPage())),
             _actionChip('Manage Users', Icons.manage_accounts_rounded, accent,
                 cardColor, () => _navigateTo(const UserManagementPage())),
             _actionChip(
@@ -517,6 +559,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 18, vertical: 12),
+                        onTap: () => TransactionReceiptService.showDetails(
+                          context,
+                          t,
+                          fetchLatest: true,
+                          detailsLoader: AdminApiService.getTransactionDetails,
+                        ),
                         leading: Container(
                           width: 44,
                           height: 44,

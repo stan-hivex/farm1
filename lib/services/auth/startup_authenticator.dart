@@ -66,11 +66,6 @@ class StartupAuthenticator {
         debugPrint('[AUTH STARTUP] Refresh temporarily unavailable: $e');
       }
 
-      if (RefreshManager().lastFailureWasRevocation) {
-        await state.clearAuthCredentials('startup refresh session revoked');
-        return;
-      }
-
       try {
         final profileResponse = await ApiService.getProfile(timeoutSeconds: 5);
         final profile = profileResponse['data'] is Map<String, dynamic>
@@ -80,24 +75,22 @@ class StartupAuthenticator {
         final serverRole = profile['role']?.toString().toLowerCase() ?? '';
         if (serverUserId.isEmpty ||
             serverRole.isEmpty ||
+            serverRole != state.role.toLowerCase() ||
             (state.userId.isNotEmpty && serverUserId != state.userId)) {
-          await state.clearAuthCredentials('startup identity mismatch');
-          return;
+          debugPrint(
+            '[AUTH STARTUP] Profile identity did not match the stored session; '
+            'preserving the local login state.',
+          );
+        } else {
+          state.userId = serverUserId;
+          await AuthSessionStore.saveRoleSession(
+            role: state.role,
+            accessToken: state.accessToken,
+            refreshToken: state.refreshToken,
+            userId: serverUserId,
+          );
         }
-        state.userId = serverUserId;
-        state.role = serverRole;
-        await AuthSessionStore.saveRoleSession(
-          role: serverRole,
-          accessToken: state.accessToken,
-          refreshToken: state.refreshToken,
-          userId: serverUserId,
-        );
       } catch (e) {
-        if (RefreshManager().lastFailureWasRevocation) {
-          await state.clearAuthCredentials(
-              'profile request confirmed session revocation');
-          return;
-        }
         debugPrint('[AUTH STARTUP] Profile verification unavailable: $e');
       }
 

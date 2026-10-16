@@ -9,7 +9,6 @@ import 'loginpage_model.dart';
 export 'loginpage_model.dart';
 import '/admin/pages/admin_shell.dart';
 import '/pages/superadmin/superadmin_dashboard_page.dart';
-import '/services/secure_storage_service.dart';
 import '/services/auth/auth_service.dart';
 import '/services/auth/biometric_login_service.dart';
 import '/services/auth/session_store_service.dart';
@@ -48,65 +47,66 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
   String _biometricButtonLabel = 'Login with Biometric';
   Map<String, String> _selectedCountry = {
     'name': 'Algeria',
+    'iso': 'DZ',
     'code': '+213',
     'flag': '🇩🇿',
   };
 
   final List<Map<String, String>> _africanCountries = [
-    {'name': 'Algeria', 'code': '+213', 'flag': '🇩🇿'},
-    {'name': 'Angola', 'code': '+244', 'flag': '🇦🇴'},
-    {'name': 'Benin', 'code': '+229', 'flag': '🇧🇯'},
-    {'name': 'Botswana', 'code': '+267', 'flag': '🇧🇼'},
-    {'name': 'Burkina Faso', 'code': '+226', 'flag': '🇧🇫'},
-    {'name': 'Burundi', 'code': '+257', 'flag': '🇧🇮'},
-    {'name': 'Cabo Verde', 'code': '+238', 'flag': '🇨🇻'},
-    {'name': 'Cameroon', 'code': '+237', 'flag': '🇨🇲'},
-    {'name': 'Central African Republic', 'code': '+236', 'flag': '🇨🇫'},
-    {'name': 'Chad', 'code': '+235', 'flag': '🇹🇩'},
-    {'name': 'Comoros', 'code': '+269', 'flag': '🇰🇲'},
-    {'name': 'Congo', 'code': '+242', 'flag': '🇨🇬'},
-    {'name': 'DR Congo', 'code': '+243', 'flag': '🇨🇩'},
-    {'name': 'Cote d\'Ivoire', 'code': '+225', 'flag': '🇨🇮'},
-    {'name': 'Djibouti', 'code': '+253', 'flag': '🇩🇯'},
-    {'name': 'Egypt', 'code': '+20', 'flag': '🇪🇬'},
-    {'name': 'Equatorial Guinea', 'code': '+240', 'flag': '🇬🇶'},
-    {'name': 'Eritrea', 'code': '+291', 'flag': '🇪🇷'},
-    {'name': 'Eswatini', 'code': '+268', 'flag': '🇸🇿'},
-    {'name': 'Ethiopia', 'code': '+251', 'flag': '🇪🇹'},
-    {'name': 'Gabon', 'code': '+241', 'flag': '🇬🇦'},
-    {'name': 'Gambia', 'code': '+220', 'flag': '🇬🇲'},
-    {'name': 'Ghana', 'code': '+233', 'flag': '🇬🇭'},
-    {'name': 'Guinea', 'code': '+224', 'flag': '🇬🇳'},
-    {'name': 'Guinea-Bissau', 'code': '+245', 'flag': '🇬🇼'},
-    {'name': 'Kenya', 'code': '+254', 'flag': '🇰🇪'},
-    {'name': 'Lesotho', 'code': '+266', 'flag': '🇱🇸'},
-    {'name': 'Liberia', 'code': '+231', 'flag': '🇱🇷'},
-    {'name': 'Libya', 'code': '+218', 'flag': '🇱🇾'},
-    {'name': 'Madagascar', 'code': '+261', 'flag': '🇲🇬'},
-    {'name': 'Malawi', 'code': '+265', 'flag': '🇲🇼'},
-    {'name': 'Mali', 'code': '+223', 'flag': '🇲🇱'},
-    {'name': 'Mauritania', 'code': '+222', 'flag': '🇲🇷'},
-    {'name': 'Mauritius', 'code': '+230', 'flag': '🇲🇺'},
-    {'name': 'Morocco', 'code': '+212', 'flag': '🇲🇦'},
-    {'name': 'Mozambique', 'code': '+258', 'flag': '🇲🇿'},
-    {'name': 'Namibia', 'code': '+264', 'flag': '🇳🇦'},
-    {'name': 'Niger', 'code': '+227', 'flag': '🇳🇪'},
-    {'name': 'Nigeria', 'code': '+234', 'flag': '🇳🇬'},
-    {'name': 'Rwanda', 'code': '+250', 'flag': '🇷🇼'},
-    {'name': 'Sao Tome and Principe', 'code': '+239', 'flag': '🇸🇹'},
-    {'name': 'Senegal', 'code': '+221', 'flag': '🇸🇳'},
-    {'name': 'Seychelles', 'code': '+248', 'flag': '🇸🇨'},
-    {'name': 'Sierra Leone', 'code': '+232', 'flag': '🇸🇱'},
-    {'name': 'Somalia', 'code': '+252', 'flag': '🇸🇴'},
-    {'name': 'South Africa', 'code': '+27', 'flag': '🇿🇦'},
-    {'name': 'South Sudan', 'code': '+211', 'flag': '🇸🇸'},
-    {'name': 'Sudan', 'code': '+249', 'flag': '🇸🇩'},
-    {'name': 'Tanzania', 'code': '+255', 'flag': '🇹🇿'},
-    {'name': 'Togo', 'code': '+228', 'flag': '🇹🇬'},
-    {'name': 'Tunisia', 'code': '+216', 'flag': '🇹🇳'},
-    {'name': 'Uganda', 'code': '+256', 'flag': '🇺🇬'},
-    {'name': 'Zambia', 'code': '+260', 'flag': '🇿🇲'},
-    {'name': 'Zimbabwe', 'code': '+263', 'flag': '🇿🇼'},
+    {'name': 'Algeria', 'iso': 'DZ', 'code': '+213', 'flag': '🇩🇿'},
+    {'name': 'Angola', 'iso': 'AO', 'code': '+244', 'flag': '🇦🇴'},
+    {'name': 'Benin', 'iso': 'BJ', 'code': '+229', 'flag': '🇧🇯'},
+    {'name': 'Botswana', 'iso': 'BW', 'code': '+267', 'flag': '🇧🇼'},
+    {'name': 'Burkina Faso', 'iso': 'BF', 'code': '+226', 'flag': '🇧🇫'},
+    {'name': 'Burundi', 'iso': 'BI', 'code': '+257', 'flag': '🇧🇮'},
+    {'name': 'Cabo Verde', 'iso': 'CV', 'code': '+238', 'flag': '🇨🇻'},
+    {'name': 'Cameroon', 'iso': 'CM', 'code': '+237', 'flag': '🇨🇲'},
+    {'name': 'Central African Republic', 'iso': 'CF', 'code': '+236', 'flag': '🇨🇫'},
+    {'name': 'Chad', 'iso': 'TD', 'code': '+235', 'flag': '🇹🇩'},
+    {'name': 'Comoros', 'iso': 'KM', 'code': '+269', 'flag': '🇰🇲'},
+    {'name': 'Congo', 'iso': 'CG', 'code': '+242', 'flag': '🇨🇬'},
+    {'name': 'DR Congo', 'iso': 'CD', 'code': '+243', 'flag': '🇨🇩'},
+    {'name': 'Cote d\'Ivoire', 'iso': 'CI', 'code': '+225', 'flag': '🇨🇮'},
+    {'name': 'Djibouti', 'iso': 'DJ', 'code': '+253', 'flag': '🇩🇯'},
+    {'name': 'Egypt', 'iso': 'EG', 'code': '+20', 'flag': '🇪🇬'},
+    {'name': 'Equatorial Guinea', 'iso': 'GQ', 'code': '+240', 'flag': '🇬🇶'},
+    {'name': 'Eritrea', 'iso': 'ER', 'code': '+291', 'flag': '🇪🇷'},
+    {'name': 'Eswatini', 'iso': 'SZ', 'code': '+268', 'flag': '🇸🇿'},
+    {'name': 'Ethiopia', 'iso': 'ET', 'code': '+251', 'flag': '🇪🇹'},
+    {'name': 'Gabon', 'iso': 'GA', 'code': '+241', 'flag': '🇬🇦'},
+    {'name': 'Gambia', 'iso': 'GM', 'code': '+220', 'flag': '🇬🇲'},
+    {'name': 'Ghana', 'iso': 'GH', 'code': '+233', 'flag': '🇬🇭'},
+    {'name': 'Guinea', 'iso': 'GN', 'code': '+224', 'flag': '🇬🇳'},
+    {'name': 'Guinea-Bissau', 'iso': 'GW', 'code': '+245', 'flag': '🇬🇼'},
+    {'name': 'Kenya', 'iso': 'KE', 'code': '+254', 'flag': '🇰🇪'},
+    {'name': 'Lesotho', 'iso': 'LS', 'code': '+266', 'flag': '🇱🇸'},
+    {'name': 'Liberia', 'iso': 'LR', 'code': '+231', 'flag': '🇱🇷'},
+    {'name': 'Libya', 'iso': 'LY', 'code': '+218', 'flag': '🇱🇾'},
+    {'name': 'Madagascar', 'iso': 'MG', 'code': '+261', 'flag': '🇲🇬'},
+    {'name': 'Malawi', 'iso': 'MW', 'code': '+265', 'flag': '🇲🇼'},
+    {'name': 'Mali', 'iso': 'ML', 'code': '+223', 'flag': '🇲🇱'},
+    {'name': 'Mauritania', 'iso': 'MR', 'code': '+222', 'flag': '🇲🇷'},
+    {'name': 'Mauritius', 'iso': 'MU', 'code': '+230', 'flag': '🇲🇺'},
+    {'name': 'Morocco', 'iso': 'MA', 'code': '+212', 'flag': '🇲🇦'},
+    {'name': 'Mozambique', 'iso': 'MZ', 'code': '+258', 'flag': '🇲🇿'},
+    {'name': 'Namibia', 'iso': 'NA', 'code': '+264', 'flag': '🇳🇦'},
+    {'name': 'Niger', 'iso': 'NE', 'code': '+227', 'flag': '🇳🇪'},
+    {'name': 'Nigeria', 'iso': 'NG', 'code': '+234', 'flag': '🇳🇬'},
+    {'name': 'Rwanda', 'iso': 'RW', 'code': '+250', 'flag': '🇷🇼'},
+    {'name': 'Sao Tome and Principe', 'iso': 'ST', 'code': '+239', 'flag': '🇸🇹'},
+    {'name': 'Senegal', 'iso': 'SN', 'code': '+221', 'flag': '🇸🇳'},
+    {'name': 'Seychelles', 'iso': 'SC', 'code': '+248', 'flag': '🇸🇨'},
+    {'name': 'Sierra Leone', 'iso': 'SL', 'code': '+232', 'flag': '🇸🇱'},
+    {'name': 'Somalia', 'iso': 'SO', 'code': '+252', 'flag': '🇸🇴'},
+    {'name': 'South Africa', 'iso': 'ZA', 'code': '+27', 'flag': '🇿🇦'},
+    {'name': 'South Sudan', 'iso': 'SS', 'code': '+211', 'flag': '🇸🇸'},
+    {'name': 'Sudan', 'iso': 'SD', 'code': '+249', 'flag': '🇸🇩'},
+    {'name': 'Tanzania', 'iso': 'TZ', 'code': '+255', 'flag': '🇹🇿'},
+    {'name': 'Togo', 'iso': 'TG', 'code': '+228', 'flag': '🇹🇬'},
+    {'name': 'Tunisia', 'iso': 'TN', 'code': '+216', 'flag': '🇹🇳'},
+    {'name': 'Uganda', 'iso': 'UG', 'code': '+256', 'flag': '🇺🇬'},
+    {'name': 'Zambia', 'iso': 'ZM', 'code': '+260', 'flag': '🇿🇲'},
+    {'name': 'Zimbabwe', 'iso': 'ZW', 'code': '+263', 'flag': '🇿🇼'},
   ];
 
   final String baseUrl = '${AppConfig.api}/auth';
@@ -171,7 +171,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
       FFAppState().role = normalizedRole;
 
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('role', normalizedRole);
 
       if (normalizedRole == 'user') {
         FFAppState().accessToken = accessToken;
@@ -183,13 +182,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         FFAppState().kycStatus = data['kyc_status'] ?? '';
         FFAppState().emailVerified = data['email_verified'] == true;
         FFAppState().isLoggedIn = true;
-
-        await SecureStorageService.writeAccessToken(accessToken);
-        await SecureStorageService.writeRefreshToken(refreshToken);
-        await prefs.setString('accessToken', accessToken);
-        await prefs.setString('refreshToken', refreshToken);
-        await prefs.setString('userId', data['id'] ?? '');
-        await prefs.setBool('isLoggedIn', true);
 
         await AuthSessionStore.saveUserSession(
           accessToken: accessToken,
@@ -211,14 +203,15 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         FFAppState().phone = data['phone'] ?? '';
         FFAppState().isLoggedIn = true;
 
-        await prefs.setString('accessToken', accessToken);
-        await prefs.setString('refreshToken', refreshToken);
-        await prefs.setString('userId', data['id'] ?? '');
-        await prefs.setBool('isLoggedIn', true);
-        await prefs.setString('adminToken', accessToken);
-        await prefs.setString('adminRefreshToken', refreshToken);
-        await prefs.setString('adminRole', role);
         await prefs.setString('adminName', data['first_name'] ?? 'Admin');
+        if (normalizedRole == 'admin' || normalizedRole == 'super_admin') {
+          await AuthSessionStore.saveRoleSession(
+            role: normalizedRole,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            userId: data['id']?.toString() ?? '',
+          );
+        }
       }
     }
 
@@ -714,7 +707,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
-                                        '${_selectedCountry['name'] ?? ''} ${_selectedCountry['code'] ?? ''}',
+                                        '${_selectedCountry['iso'] ?? ''} ${_selectedCountry['code'] ?? ''}',
                                         style: FlutterFlowTheme.of(context)
                                             .bodyMedium,
                                         overflow: TextOverflow.ellipsis,

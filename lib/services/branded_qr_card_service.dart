@@ -137,6 +137,11 @@ class BrandedQrCardService {
       qrPanel,
       Paint()..color = Colors.black,
     );
+    final qrImageBounds = const Rect.fromLTWH(190, 430, 620, 620);
+    canvas.save();
+    canvas.clipRRect(
+      RRect.fromRectAndRadius(qrImageBounds, const Radius.circular(28)),
+    );
     canvas.drawImageRect(
       qrImage,
       Rect.fromLTWH(
@@ -145,9 +150,10 @@ class BrandedQrCardService {
         qrImage.width.toDouble(),
         qrImage.height.toDouble(),
       ),
-      const Rect.fromLTWH(190, 430, 620, 620),
+      qrImageBounds,
       Paint()..filterQuality = FilterQuality.high,
     );
+    canvas.restore();
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(

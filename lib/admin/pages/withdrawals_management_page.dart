@@ -323,6 +323,11 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                 final color = _sc(status);
                                 final userLabel = _userLabel(w);
                                 final userId = (w['user_id'] ?? '').toString();
+                                final senderLabel =
+                                    (w['sender_name'] ?? userLabel).toString();
+                                final receiverLabel =
+                                    (w['receiver_name'] ?? _destinationLabel(w))
+                                        .toString();
                                 final reference = (w['transaction_reference'] ??
                                         w['id'] ??
                                         '-')
@@ -429,6 +434,30 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                         .red)),
                                                             Text(
                                                                 'User ID: ${userId.isNotEmpty ? userId : '-'}',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        13,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600)),
+                                                            Text(
+                                                                'Sender: $senderLabel',
+                                                                style: GoogleFonts.plusJakartaSans(
+                                                                    color: context
+                                                                        .onSurface
+                                                                        .withOpacity(
+                                                                            0.54),
+                                                                    fontSize:
+                                                                        13,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600)),
+                                                            Text(
+                                                                'Receiver: $receiverLabel',
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface

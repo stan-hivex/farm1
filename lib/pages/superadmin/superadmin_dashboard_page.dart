@@ -9,6 +9,7 @@ import '/core/app_config.dart';
 import '/backend/api_requests/api_manager.dart';
 import '/pages/loginpage/loginpage_widget.dart';
 import '/pages/superadmin/add_admin_page.dart';
+import '/admin/pages/add_superadmin_page.dart';
 import '/pages/superadmin/superadmin_wallet_page.dart';
 import '/pages/settings/support_help_center_page.dart';
 import '/admin/pages/user_management_page.dart';
@@ -462,6 +463,13 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     await _loadDashboardData();
   }
 
+  Future<void> _openAddSuperadminPage() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AddSuperadminPage()),
+    );
+    await _loadDashboardData();
+  }
+
   Future<void> _openAdminManagementPage() async {
     await _openAdminPage(const AdminManagementPage());
   }
@@ -824,6 +832,30 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             width: double.infinity,
             height: 50,
             child: ElevatedButton.icon(
+              onPressed: _openAddSuperadminPage,
+              icon: const Icon(Icons.admin_panel_settings_rounded,
+                  color: Colors.black),
+              label: Text(
+                'Add Superadmin',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
               onPressed: _isCreatingAdmin ? null : _openAddAdminPage,
               icon: const Icon(Icons.person_add_alt_1_rounded,
                   color: Colors.black),
@@ -1009,13 +1041,27 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
 
   Widget _buildKYCEarnings(
       Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
-    final creationEarnings = data['escrow_creation_earnings'] ?? 0.0;
-    final releaseEarnings = data['escrow_release_earnings'] ?? 0.0;
-    final withdrawEarnings = data['withdraw_fee_earnings'] ?? 0.0;
-    final creationCount = data['escrow_creation_count'] ?? 0;
-    final releaseCount = data['escrow_release_count'] ?? 0;
-    final withdrawCount =
-        data['withdraw_transaction_count'] ?? data['withdraw_count'] ?? 0;
+    double amount(String key) {
+      final value = data[key];
+      if (value is num) return value.toDouble();
+      return double.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    int count(String key, [String? fallbackKey]) {
+      final value =
+          data[key] ?? (fallbackKey == null ? null : data[fallbackKey]);
+      if (value is num) return value.toInt();
+      return int.tryParse(value?.toString() ?? '') ?? 0;
+    }
+
+    final creationEarnings = amount('escrow_creation_earnings');
+    final releaseEarnings = amount('escrow_release_earnings');
+    final withdrawEarnings = amount('withdraw_fee_earnings');
+    final merchantEarnings = amount('merchant_sales_fee_earnings');
+    final creationCount = count('escrow_creation_count');
+    final releaseCount = count('escrow_release_count');
+    final withdrawCount = count('withdraw_transaction_count', 'withdraw_count');
+    final merchantSalesCount = count('merchant_sales_count');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1101,6 +1147,14 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 '${withdrawEarnings.toStringAsFixed(2)} FARM',
                 'From $withdrawCount withdraws',
                 Colors.purple,
+                cardColor,
+              ),
+              const SizedBox(height: 12),
+              _earningsBreakdownCard(
+                'Merchant Revenue',
+                '${merchantEarnings.toStringAsFixed(2)} FARM',
+                'From $merchantSalesCount merchant sales',
+                Colors.orange,
                 cardColor,
               ),
             ],

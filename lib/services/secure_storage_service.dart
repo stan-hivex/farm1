@@ -12,13 +12,7 @@ class SecureStorageService {
       return prefs.getString(key);
     }
 
-    try {
-      return await _secureStorage.read(key: key);
-    } catch (e) {
-      debugPrint('SecureStorage read error: $e');
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(key);
-    }
+    return _secureStorage.read(key: key);
   }
 
   static Future<void> _writeValue(String key, String value) async {
@@ -28,13 +22,7 @@ class SecureStorageService {
       return;
     }
 
-    try {
-      await _secureStorage.write(key: key, value: value);
-    } catch (e) {
-      debugPrint('SecureStorage write error: $e');
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(key, value);
-    }
+    await _secureStorage.write(key: key, value: value);
   }
 
   static Future<void> _deleteValue(String key) async {
@@ -44,13 +32,7 @@ class SecureStorageService {
       return;
     }
 
-    try {
-      await _secureStorage.delete(key: key);
-    } catch (e) {
-      debugPrint('SecureStorage delete error: $e');
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(key);
-    }
+    await _secureStorage.delete(key: key);
   }
 
   static Future<DateTime?> readBiometricLastVerified() async {
@@ -89,31 +71,105 @@ class SecureStorageService {
   }
 
   static Future<String?> readAccessToken() async {
-    return _readValue('accessToken');
+    final token = await _readValue('auth_token');
+    if (token != null && token.isNotEmpty) return token;
+
+    final legacyToken = await _readValue('accessToken');
+    if (legacyToken != null && legacyToken.isNotEmpty) {
+      await writeAccessToken(legacyToken);
+    }
+    return legacyToken;
   }
 
   static Future<String?> readRefreshToken() async {
-    return _readValue('refreshToken');
+    final token = await _readValue('refresh_token');
+    if (token != null && token.isNotEmpty) return token;
+
+    final legacyToken = await _readValue('refreshToken');
+    if (legacyToken != null && legacyToken.isNotEmpty) {
+      await writeRefreshToken(legacyToken);
+    }
+    return legacyToken;
   }
 
   static Future<void> writeAccessToken(String token) async {
-    await _writeValue('accessToken', token);
+    await _writeValue('auth_token', token);
   }
 
   static Future<void> writeRefreshToken(String token) async {
-    await _writeValue('refreshToken', token);
+    await _writeValue('refresh_token', token);
   }
 
-  static Future<String?> readUserId() async => _readValue('userId');
+  static Future<String?> readUserId() async {
+    final userId = await _readValue('user_id');
+    if (userId != null && userId.isNotEmpty) return userId;
+
+    final legacyUserId = await _readValue('userId');
+    if (legacyUserId != null && legacyUserId.isNotEmpty) {
+      await writeUserId(legacyUserId);
+    }
+    return legacyUserId;
+  }
 
   static Future<void> writeUserId(String userId) async {
-    await _writeValue('userId', userId);
+    await _writeValue('user_id', userId);
   }
 
-  static Future<String?> readRole() async => _readValue('role');
+  static Future<String?> readRole() async {
+    final role = await _readValue('user_role');
+    if (role != null && role.isNotEmpty) return role;
+
+    final legacyRole = await _readValue('role');
+    if (legacyRole != null && legacyRole.isNotEmpty) {
+      await writeRole(legacyRole);
+    }
+    return legacyRole;
+  }
 
   static Future<void> writeRole(String role) async {
-    await _writeValue('role', role);
+    await _writeValue('user_role', role);
+  }
+
+  static Future<bool> readIsLoggedIn() async {
+    final storedValue = await _readValue('isLoggedIn');
+    if (storedValue != null) return storedValue.toLowerCase() == 'true';
+
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('isLoggedIn') ?? false;
+  }
+
+  static Future<void> writeIsLoggedIn(bool value) async {
+    await _writeValue('isLoggedIn', value.toString());
+  }
+
+  static Future<String?> readValue(String key) => _readValue(key);
+
+  static Future<void> writeValue(String key, String value) =>
+      _writeValue(key, value);
+
+  static Future<void> deleteValue(String key) => _deleteValue(key);
+
+  static Future<String?> readLegacyPreference(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(key);
+  }
+
+  static Future<void> removeLegacyAuthPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await Future.wait([
+      prefs.remove('accessToken'),
+      prefs.remove('refreshToken'),
+      prefs.remove('userId'),
+      prefs.remove('role'),
+      prefs.remove('isLoggedIn'),
+      prefs.remove('active_auth_role'),
+      prefs.remove('user_session'),
+      prefs.remove('admin_session'),
+      prefs.remove('super_admin_session'),
+      prefs.remove('adminToken'),
+      prefs.remove('adminRefreshToken'),
+      prefs.remove('adminRole'),
+    ]);
   }
 
   static Future<String?> readLastAuthenticatedRoute() async =>
@@ -124,14 +180,18 @@ class SecureStorageService {
   }
 
   static Future<void> clearSessionMetadata() async {
-    await _deleteValue('userId');
-    await _deleteValue('role');
+    await _deleteValue('user_id');
+    await _deleteValue('user_role');
     await _deleteValue('lastAuthenticatedRoute');
   }
 
   static Future<void> clearAuthData() async {
+    await _deleteValue('auth_token');
+    await _deleteValue('refresh_token');
     await _deleteValue('accessToken');
     await _deleteValue('refreshToken');
+    await _deleteValue('isLoggedIn');
     await clearSessionMetadata();
+    await removeLegacyAuthPreferences();
   }
 }

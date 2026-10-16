@@ -249,10 +249,6 @@ class ApiService {
           timeoutSeconds: timeoutSeconds,
         );
       }
-      if (RefreshManager().lastFailureWasRevocation) {
-        await FFAppState()
-            .clearAuthCredentials('backend refresh session revoked');
-      }
     }
 
     Map<String, dynamic> decoded = {};
@@ -398,6 +394,28 @@ class ApiService {
         ),
         requiresAuth: false,
       );
+
+  static Future<Map<String, dynamic>> checkRegistrationAvailability({
+    String? username,
+    String? email,
+    String? phone,
+  }) {
+    final query = Uri(
+      queryParameters: {
+        if (username != null && username.isNotEmpty) 'username': username,
+        if (email != null && email.isNotEmpty) 'email': email,
+        if (phone != null && phone.isNotEmpty) 'phone': phone,
+      },
+    ).query;
+    if (query.isEmpty) {
+      throw ArgumentError('Provide a username, email, or phone number.');
+    }
+    return _request(
+      method: 'GET',
+      path: '/auth/registration-availability?$query',
+      requiresAuth: false,
+    );
+  }
 
   static Future<Map<String, dynamic>> verifyOtp({
     required String phone,

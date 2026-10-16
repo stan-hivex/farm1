@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:farm/app_state.dart';
 import 'package:farm/backend/services/api_service.dart';
 import 'package:farm/services/auth/auth_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -14,6 +15,7 @@ void main() {
 
   test('registers through the backend without requiring Supabase', () async {
     SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
     FFAppState.reset();
     await FFAppState().initializePersistedState();
     await dotenv.load(fileName: '.env');
@@ -49,5 +51,45 @@ void main() {
       'country': 'Kenya',
     });
     expect(response['message'], contains('Registration successful'));
+  });
+
+  test('checks username, email, and phone availability through the backend',
+      () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    FFAppState.reset();
+    await FFAppState().initializePersistedState();
+    if (!dotenv.isInitialized) {
+      await dotenv.load(fileName: '.env');
+    }
+
+    late Uri capturedUri;
+    ApiService.client = MockClient((request) async {
+      capturedUri = request.url;
+      return http.Response(
+        jsonEncode({
+          'data': {
+            'usernameAvailable': true,
+            'emailAvailable': false,
+            'phoneAvailable': true,
+          },
+        }),
+        200,
+      );
+    });
+
+    final response = await ApiService.checkRegistrationAvailability(
+      username: 'farm_user',
+      email: 'person@example.com',
+      phone: '+254700123456',
+    );
+
+    expect(capturedUri.path, endsWith('/auth/registration-availability'));
+    expect(capturedUri.queryParameters, {
+      'username': 'farm_user',
+      'email': 'person@example.com',
+      'phone': '+254700123456',
+    });
+    expect(response['data']['emailAvailable'], false);
   });
 }

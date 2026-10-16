@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -7,11 +8,13 @@ import 'package:farm/admin/core/admin_guard.dart';
 import 'package:farm/app_state.dart';
 import 'package:farm/services/auth/route_guard_service.dart';
 import 'package:farm/services/auth/session_store_service.dart';
+import 'package:farm/services/secure_storage_service.dart';
 
 String _makeJwt({required int expiresInSeconds}) {
   final header = base64Url.encode(utf8.encode('{"alg":"HS256","typ":"JWT"}'));
   final payload = base64Url.encode(
-    utf8.encode('{"exp":${DateTime.now().toUtc().add(Duration(seconds: expiresInSeconds)).millisecondsSinceEpoch ~/ 1000}}'),
+    utf8.encode(
+        '{"exp":${DateTime.now().toUtc().add(Duration(seconds: expiresInSeconds)).millisecondsSinceEpoch ~/ 1000}}'),
   );
   return '$header.$payload.signature';
 }
@@ -21,11 +24,14 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
     await SharedPreferences.getInstance();
     FFAppState.reset();
   });
 
-  test('initializePersistedState restores the admin session from the role-specific store', () async {
+  test(
+      'initializePersistedState restores the admin session from the role-specific store',
+      () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('role', 'user');
     await prefs.setString('authInstallId', 'install-123');
@@ -53,7 +59,9 @@ void main() {
     expect(state.isLoggedIn, isTrue);
   });
 
-  test('initializePersistedState preserves a persisted user session when the token is expired', () async {
+  test(
+      'initializePersistedState preserves a persisted user session when the token is expired',
+      () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('role', 'user');
     await prefs.setString('authInstallId', 'install-456');
@@ -81,7 +89,9 @@ void main() {
     expect(state.isLoggedIn, isTrue);
   });
 
-  test('initializePersistedState keeps a persisted session when the access token is expired but refresh token exists', () async {
+  test(
+      'initializePersistedState keeps a persisted session when the access token is expired but refresh token exists',
+      () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('authInstallId', 'install-123');
     await prefs.setString('role', 'user');
@@ -105,7 +115,9 @@ void main() {
     expect(state.refreshToken, 'refresh-token');
   });
 
-  test('initializePersistedState does not restore auth without an active session marker', () async {
+  test(
+      'initializePersistedState does not restore auth without an active session marker',
+      () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('authInstallId');
     await prefs.setString('role', 'admin');
@@ -120,6 +132,9 @@ void main() {
       role: 'admin',
       userId: 'legacy-user',
     );
+    await SecureStorageService.deleteValue('user_role');
+    await SecureStorageService.deleteValue('active_auth_role');
+    await prefs.remove('role');
     await prefs.remove('active_auth_role');
 
     final state = FFAppState();
@@ -143,7 +158,9 @@ void main() {
     expect(authenticated, isTrue);
   });
 
-  test('RouteGuardService recognizes persisted admin sessions without app-state token', () async {
+  test(
+      'RouteGuardService recognizes persisted admin sessions without app-state token',
+      () async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('adminToken');
     await prefs.remove('adminRole');
@@ -170,7 +187,39 @@ void main() {
     expect(adminAuthenticated, isTrue);
   });
 
-  test('FFAppState resolves a super-admin token from the persisted session store', () async {
+  test('secure role session restores across an app-state restart', () async {
+    final token = _makeJwt(expiresInSeconds: 3600);
+    await AuthSessionStore.saveRoleSession(
+      role: 'super_admin',
+      accessToken: token,
+      refreshToken: 'long-lived-refresh-token',
+      userId: 'super-admin-user',
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(await SecureStorageService.readAccessToken(), token);
+    expect(await SecureStorageService.readRefreshToken(),
+        'long-lived-refresh-token');
+    expect(await SecureStorageService.readRole(), 'super_admin');
+    expect(await SecureStorageService.readUserId(), 'super-admin-user');
+    expect(await SecureStorageService.readIsLoggedIn(), isTrue);
+    expect(prefs.getString('accessToken'), isNull);
+    expect(prefs.getString('refreshToken'), isNull);
+
+    FFAppState.reset();
+    final restoredState = FFAppState();
+    await restoredState.initializePersistedState();
+
+    expect(restoredState.isLoggedIn, isTrue);
+    expect(restoredState.role, 'super_admin');
+    expect(restoredState.accessToken, token);
+    expect(restoredState.refreshToken, 'long-lived-refresh-token');
+    expect(restoredState.userId, 'super-admin-user');
+  });
+
+  test(
+      'FFAppState resolves a super-admin token from the persisted session store',
+      () async {
     final state = FFAppState();
     state.role = 'super_admin';
     state.accessToken = '';
@@ -188,7 +237,8 @@ void main() {
     expect(resolvedToken, superAdminToken);
   });
 
-  test('RouteGuardService rejects a persisted super-admin session when the role is still empty', () async {
+  test('RouteGuardService restores role from a persisted super-admin session',
+      () async {
     final state = FFAppState();
     state.role = '';
     state.accessToken = '';
@@ -206,6 +256,8 @@ void main() {
     final guard = RouteGuardService();
     final authenticated = await guard.isUserAuthenticated();
 
-    expect(authenticated, isFalse);
+    expect(authenticated, isTrue);
+    expect(state.role, 'super_admin');
+    expect(state.isLoggedIn, isTrue);
   });
 }

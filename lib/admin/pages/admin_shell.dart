@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/core/app_theme.dart';
 import '/core/theme_extensions.dart';
 import 'admin_dashboard_page.dart';
-import 'superadmins_management_page.dart';
+import 'support_inbox_page.dart';
 import 'user_management_page.dart';
 import 'kyc_management_page.dart';
 import 'transactions_management_page.dart';
@@ -11,8 +12,6 @@ import 'escrow_management_page.dart';
 import 'deposits_management_page.dart';
 import 'withdrawals_management_page.dart';
 import 'notifications_management_page.dart';
-import 'settings_management_page.dart';
-import 'fee_management_page.dart';
 import 'merchant_kyb_management_page.dart';
 import 'payouts_page.dart';
 import '../services/admin_api_service.dart';
@@ -87,7 +86,6 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   final List<_NavItem> _navItems = [
     _NavItem(icon: Icons.dashboard_rounded, label: 'Dashboard'),
-    _NavItem(icon: Icons.admin_panel_settings_rounded, label: 'Superadmins'),
     _NavItem(icon: Icons.people_rounded, label: 'Users'),
     _NavItem(icon: Icons.verified_user_rounded, label: 'KYC'),
     _NavItem(icon: Icons.swap_horiz_rounded, label: 'Transactions'),
@@ -96,8 +94,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _NavItem(icon: Icons.north_east_rounded, label: 'Withdrawals'),
     _NavItem(icon: Icons.payments_rounded, label: 'Payouts'),
     _NavItem(icon: Icons.campaign_rounded, label: 'Notifications'),
-    _NavItem(icon: Icons.settings_rounded, label: 'Settings'),
-    _NavItem(icon: Icons.percent_rounded, label: 'Fees'),
+    _NavItem(icon: Icons.support_agent_rounded, label: 'Live Support'),
     _NavItem(icon: Icons.badge_rounded, label: 'Merchant KYB'),
   ];
 
@@ -109,7 +106,6 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   List<Widget> get _pages => [
         AdminDashboardPage(onGoBack: _goToDashboard),
-        SuperadminsManagementPage(onGoBack: _goToDashboard),
         UserManagementPage(onGoBack: _goToDashboard),
         KycManagementPage(onGoBack: _goToDashboard),
         TransactionsManagementPage(onGoBack: _goToDashboard),
@@ -118,8 +114,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
         WithdrawalsManagementPage(onGoBack: _goToDashboard),
         PayoutsPage(onGoBack: _goToDashboard),
         NotificationsManagementPage(onGoBack: _goToDashboard),
-        SettingsManagementPage(onGoBack: _goToDashboard),
-        FeeManagementPage(onGoBack: _goToDashboard),
+        SupportInboxPage(onGoBack: _goToDashboard),
         MerchantKybManagementPage(onGoBack: _goToDashboard),
       ];
 
@@ -144,33 +139,36 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width > 700;
+    return Theme(
+      data: AppTheme.lightTheme(),
+      child: Builder(
+        builder: (adminContext) {
+          final isWide = MediaQuery.of(adminContext).size.width > 700;
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: const AdminSidebar(),
-      body: Row(
-        children: [
-          // Sidebar — only on wide screens
-          if (isWide) _buildSidebar(),
-
-          // Main content
-          Expanded(
-            child: Column(
+          return Scaffold(
+            backgroundColor: Colors.white,
+            drawer: const AdminSidebar(),
+            body: Row(
               children: [
-                _buildTopBar(isWide),
-                Expanded(child: _buildCurrentPage()),
+                if (isWide) _buildSidebar(adminContext),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildTopBar(adminContext, isWide),
+                      Expanded(child: _buildCurrentPage()),
+                    ],
+                  ),
+                ),
               ],
             ),
-          ),
-        ],
+            bottomNavigationBar: isWide ? null : _buildBottomNav(adminContext),
+          );
+        },
       ),
-      // Bottom nav — only on narrow screens
-      bottomNavigationBar: isWide ? null : _buildBottomNav(),
     );
   }
 
-  Widget _buildSidebar() {
+  Widget _buildSidebar(BuildContext context) {
     return Container(
       width: 220,
       color: Colors.white,
@@ -276,7 +274,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildTopBar(bool isWide) {
+  Widget _buildTopBar(BuildContext context, bool isWide) {
     return Container(
       height: 60,
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -349,7 +347,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildBottomNav() {
+  Widget _buildBottomNav(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,

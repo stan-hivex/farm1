@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -38,6 +39,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
   bool _pinEntryEnabled = false;
   bool _isBiometricChecking = false;
   TransactionAuthenticationResult? _lastPinAuthResult;
+  String? _withdrawalIdempotencyKey;
 
   String selectedMethod = 'BANK';
   String selectedCurrency = 'KES';
@@ -345,6 +347,110 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
     }
   }
 
+  String _ensureWithdrawalIdempotencyKey() {
+    return _withdrawalIdempotencyKey ??= List<int>.generate(
+      32,
+      (_) => Random.secure().nextInt(256),
+    ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  Future<String?> _registerPaystackRecipient() async {
+    if (selectedMethod == 'CRYPTO') return null;
+    final body = <String, dynamic>{
+      'method': _methodToBackend(selectedMethod),
+      'accountName': _accountNameCtrl.text.trim(),
+      if (selectedMethod == 'BANK') ...{
+        'accountNumber': _accountCtrl.text.trim(),
+        'bankName': _selectedBank,
+      },
+      if (selectedMethod == 'MOBILE_MONEY') ...{
+        'phoneNumber': _mobileCtrl.text.trim(),
+        'mobileMoneyProvider': _selectedMobileMoneyProvider,
+      },
+    };
+
+    final response = await http.post(
+      Uri.parse('${AppConfig.api}/withdraw/paystack/recipients'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': '******',
+      },
+      body: jsonEncode(body),
+    );
+
+    final decoded = jsonDecode(response.body);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded is Map ? decoded['message']?.toString() : null;
+      throw Exception(message ?? 'Paystack recipient validation failed');
+    }
+
+    final recipient = decoded is Map && decoded['data'] is Map
+        ? Map<String, dynamic>.from(decoded['data'] as Map)
+        : decoded is Map
+            ? Map<String, dynamic>.from(decoded)
+            : <String, dynamic>{};
+
+    final recipientId = recipient['id']?.toString();
+    if (recipientId == null || recipientId.isEmpty) {
+      throw const FormatException(
+        'Paystack did not return a valid recipient ID.',
+      );
+    }
+
+    await ApiService.request(
+      method: 'GET',
+      path: '/withdraw/paystack/recipients/${Uri.encodeComponent(recipientId)}/validate',
+    );
+
+    return recipientId;
+  }
+
+  Future<void> _showWithdrawalReceipt(Map<String, dynamic> response) async {
+    final withdrawal = response['withdrawal'] is Map
+        ? Map<String, dynamic>.from(response['withdrawal'] as Map)
+        : <String, dynamic>{};
+    final reference =
+        (response['reference'] ?? withdrawal['reference'] ?? '').toString();
+    final status = (withdrawal['status'] ?? response['status'] ?? 'PENDING')
+        .toString()
+        .toUpperCase();
+    final destination = selectedMethod == 'MOBILE_MONEY'
+        ? _mobileCtrl.text.trim()
+        : _selectedBank ?? selectedCryptoNetwork ?? 'Withdrawal destination';
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Withdrawal submitted'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Status: $status'),
+            const SizedBox(height: 6),
+            Text('Reference: $reference'),
+            const SizedBox(height: 6),
+            Text('Destination: $destination'),
+            const SizedBox(height: 6),
+            Text('Total deduction: ${amount.toStringAsFixed(4)} FARM'),
+            Text('Transaction fee (1.5%): ${fee.toStringAsFixed(4)} FARM'),
+            Text('Net amount: ${settlement.toStringAsFixed(4)} FARM'),
+            const SizedBox(height: 8),
+            const Text(
+              'Your withdrawal is pending Paystack confirmation. Wallet funds are updated only after verification finishes.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Validate destination fields ──────────────────────────────────────────
   bool get _destinationValid {
     switch (selectedMethod) {
@@ -418,11 +524,14 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
               )
               .then((r) => r.toTransactionAuthenticationResult());
 
+      final recipientId = await _registerPaystackRecipient();
+      final idempotencyKey = _ensureWithdrawalIdempotencyKey();
       final usedBiometric = authResult?.biometricUsed == true;
       if (usedBiometric) {
         final requestBody = {
           'amount': amount,
           'method': _methodToBackend(selectedMethod),
+          if (recipientId != null) 'recipientId': recipientId,
           'pin': null,
           'biometric_auth': true,
           'device_fingerprint': authResult?.deviceFingerprint,
@@ -452,6 +561,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer ${FFAppState().accessToken}',
+            'Idempotency-Key': idempotencyKey,
           },
           body: jsonEncode(requestBody),
         );
@@ -465,6 +575,11 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
               walletTimeoutSeconds: 5,
               transactionsTimeoutSeconds: 5,
             );
+            if (decoded is Map<String, dynamic>) {
+              await _showWithdrawalReceipt(decoded);
+            } else if (decoded is Map) {
+              await _showWithdrawalReceipt(Map<String, dynamic>.from(decoded));
+            }
             _snack('Withdrawal request submitted successfully');
           } else {
             _snack(decoded is Map && decoded['message'] != null
@@ -484,6 +599,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       final requestBody = {
         'amount': amount,
         'method': _methodToBackend(selectedMethod),
+        if (recipientId != null) 'recipientId': recipientId,
         'pin': _pinCtrl.text.trim(),
       };
 
@@ -512,6 +628,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${FFAppState().accessToken}',
+          'Idempotency-Key': idempotencyKey,
         },
         body: jsonEncode(requestBody),
       );
@@ -529,6 +646,11 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
           walletTimeoutSeconds: 5,
           transactionsTimeoutSeconds: 5,
         );
+        if (data is Map<String, dynamic>) {
+          await _showWithdrawalReceipt(data);
+        } else if (data is Map) {
+          await _showWithdrawalReceipt(Map<String, dynamic>.from(data));
+        }
         _snack('common.transaction_success'.tr());
         _clearFields();
         await _fetchWallet();
@@ -1060,17 +1182,17 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       method: 'BANK',
                       icon: Icons.account_balance,
                       title: 'Bank Transfer',
-                      subtitle: 'Paystack bank payout'),
+                      subtitle: 'bank payout'),
                   _methodCard(context,
                       method: 'MOBILE_MONEY',
                       icon: Icons.phone_android,
                       title: 'Mobile Money',
-                      subtitle: 'Paystack M-Pesa payout'),
+                      subtitle: 'M-Pesa payout'),
                   _methodCard(context,
                       method: 'CRYPTO',
                       icon: Icons.currency_bitcoin,
                       title: 'Crypto Wallet',
-                      subtitle: 'IvoryPay crypto payout'),
+                      subtitle: 'crypto payout'),
 
                   const SizedBox(height: 20),
 

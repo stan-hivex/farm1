@@ -8,7 +8,9 @@ import '../services/admin_api_service.dart';
 import '/widgets/common/back_chevron.dart';
 
 class SupportInboxPage extends StatefulWidget {
-  const SupportInboxPage({super.key});
+  const SupportInboxPage({super.key, this.onGoBack});
+
+  final VoidCallback? onGoBack;
 
   @override
   State<SupportInboxPage> createState() => _SupportInboxPageState();
@@ -543,7 +545,13 @@ class _SupportInboxPageState extends State<SupportInboxPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
-        leading: const BackChevron(),
+        leading: widget.onGoBack == null
+            ? const BackChevron()
+            : IconButton(
+                tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                onPressed: widget.onGoBack,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
         title: const Text('Support enquiries'),
         backgroundColor: Colors.white,
         actions: [

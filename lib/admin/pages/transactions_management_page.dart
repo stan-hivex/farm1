@@ -256,6 +256,14 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                                   : methodValue;
                           final userLabel = _userLabel(t);
                           final userId = (t['user_id'] ?? '').toString();
+                          final senderLabel = (t['sender_name'] ??
+                                  t['sender_wallet'] ??
+                                  'External sender')
+                              .toString();
+                          final receiverLabel = (t['receiver_name'] ??
+                                  t['receiver_wallet'] ??
+                                  'External recipient')
+                              .toString();
                           final reference =
                               (t['transaction_reference'] ?? t['id'] ?? '-')
                                   .toString();
@@ -327,6 +335,18 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                                               color: context.onSurface)),
                                       Text(
                                           'User ID: ${userId.isNotEmpty ? userId : '-'}',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Sender: $senderLabel',
+                                          style: GoogleFonts.plusJakartaSans(
+                                              color: context.onSurface
+                                                  .withOpacity(0.72),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600)),
+                                      Text('Receiver: $receiverLabel',
                                           style: GoogleFonts.plusJakartaSans(
                                               color: context.onSurface
                                                   .withOpacity(0.72),

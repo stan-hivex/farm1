@@ -40,6 +40,9 @@ class AdminGuard {
       } catch (e) {
         debugPrint('[AdminGuard] forced refresh error: $e');
       }
+      // Keep the local session and dashboard route even when the server is
+      // temporarily unavailable or the refresh token has been rejected.
+      return true;
     }
 
     return false;

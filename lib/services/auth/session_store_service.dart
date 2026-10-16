@@ -1,6 +1,7 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '/services/secure_storage_service.dart';
 
 class AuthSession {
   const AuthSession({
@@ -21,10 +22,12 @@ class AuthSession {
 
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     return AuthSession(
-      accessToken: json['accessToken']?.toString() ?? '',
-      refreshToken: json['refreshToken']?.toString() ?? '',
-      role: json['role']?.toString() ?? '',
-      userId: json['userId']?.toString() ?? '',
+      accessToken:
+          (json['accessToken'] ?? json['auth_token'])?.toString() ?? '',
+      refreshToken:
+          (json['refreshToken'] ?? json['refresh_token'])?.toString() ?? '',
+      role: (json['role'] ?? json['user_role'])?.toString() ?? '',
+      userId: (json['userId'] ?? json['user_id'])?.toString() ?? '',
       expiresAt: json['expiresAt']?.toString() ?? '',
       loggedInAt:
           json['loggedInAt']?.toString() ?? json['expiresAt']?.toString() ?? '',
@@ -42,24 +45,44 @@ class AuthSession {
 }
 
 class AuthSessionStore {
-  static const _userSessionKey = 'user_session';
-  static const _adminSessionKey = 'admin_session';
-  static const _superAdminSessionKey = 'super_admin_session';
+  static const _userSessionKey = 'auth_session_user';
+  static const _adminSessionKey = 'auth_session_admin';
+  static const _superAdminSessionKey = 'auth_session_super_admin';
   static const _activeRoleKey = 'active_auth_role';
 
   static Future<String?> readActiveRole() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_activeRoleKey);
+    final secureRole = await SecureStorageService.readRole();
+    if (secureRole != null && secureRole.isNotEmpty) {
+      return secureRole;
+    }
+
+    final legacyActiveRole =
+        await SecureStorageService.readLegacyPreference(_activeRoleKey);
+    if (legacyActiveRole != null && legacyActiveRole.isNotEmpty) {
+      await SecureStorageService.writeRole(legacyActiveRole);
+      await SecureStorageService.writeValue(_activeRoleKey, legacyActiveRole);
+      return legacyActiveRole;
+    }
+
+    final legacyRole =
+        await SecureStorageService.readLegacyPreference('role');
+    if (legacyRole != null && legacyRole.isNotEmpty) {
+      await SecureStorageService.writeRole(legacyRole);
+      await SecureStorageService.writeValue(_activeRoleKey, legacyRole);
+      return legacyRole;
+    }
+
+    return null;
   }
 
-  static Future<AuthSession?> readUserSession() async =>
-      _readSession(_userSessionKey);
+  static Future<AuthSession?> readUserSession() =>
+      _readSession(_userSessionKey, 'user');
 
-  static Future<AuthSession?> readAdminSession() async =>
-      _readSession(_adminSessionKey);
+  static Future<AuthSession?> readAdminSession() =>
+      _readSession(_adminSessionKey, 'admin');
 
-  static Future<AuthSession?> readSuperAdminSession() async =>
-      _readSession(_superAdminSessionKey);
+  static Future<AuthSession?> readSuperAdminSession() =>
+      _readSession(_superAdminSessionKey, 'super_admin');
 
   static Future<void> saveUserSession({
     required String accessToken,
@@ -68,19 +91,16 @@ class AuthSessionStore {
     required String userId,
     String? expiresAt,
     String? loggedInAt,
-  }) async {
-    await _saveSession(
-      _userSessionKey,
-      AuthSession(
+  }) =>
+      _saveSession(
+        _userSessionKey,
+        role: role,
         accessToken: accessToken,
         refreshToken: refreshToken,
-        role: role.toLowerCase(),
         userId: userId,
-        expiresAt: expiresAt ?? _defaultExpiry,
-        loggedInAt: loggedInAt ?? _defaultTimestamp,
-      ),
-    );
-  }
+        expiresAt: expiresAt,
+        loggedInAt: loggedInAt,
+      );
 
   static Future<void> saveAdminSession({
     required String accessToken,
@@ -89,19 +109,16 @@ class AuthSessionStore {
     required String userId,
     String? expiresAt,
     String? loggedInAt,
-  }) async {
-    await _saveSession(
-      _adminSessionKey,
-      AuthSession(
+  }) =>
+      _saveSession(
+        _adminSessionKey,
+        role: role,
         accessToken: accessToken,
         refreshToken: refreshToken,
-        role: role.toLowerCase(),
         userId: userId,
-        expiresAt: expiresAt ?? _defaultExpiry,
-        loggedInAt: loggedInAt ?? _defaultTimestamp,
-      ),
-    );
-  }
+        expiresAt: expiresAt,
+        loggedInAt: loggedInAt,
+      );
 
   static Future<void> saveSuperAdminSession({
     required String accessToken,
@@ -110,19 +127,16 @@ class AuthSessionStore {
     required String userId,
     String? expiresAt,
     String? loggedInAt,
-  }) async {
-    await _saveSession(
-      _superAdminSessionKey,
-      AuthSession(
+  }) =>
+      _saveSession(
+        _superAdminSessionKey,
+        role: role,
         accessToken: accessToken,
         refreshToken: refreshToken,
-        role: role.toLowerCase(),
         userId: userId,
-        expiresAt: expiresAt ?? _defaultExpiry,
-        loggedInAt: loggedInAt ?? _defaultTimestamp,
-      ),
-    );
-  }
+        expiresAt: expiresAt,
+        loggedInAt: loggedInAt,
+      );
 
   static Future<void> saveRoleSession({
     required String role,
@@ -133,75 +147,82 @@ class AuthSessionStore {
     String? loggedInAt,
   }) async {
     final normalizedRole = role.toLowerCase();
-    if (normalizedRole == 'admin') {
-      await saveAdminSession(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        role: normalizedRole,
-        userId: userId,
-        expiresAt: expiresAt,
-        loggedInAt: loggedInAt,
-      );
-    } else if (normalizedRole == 'super_admin') {
-      await saveSuperAdminSession(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        role: normalizedRole,
-        userId: userId,
-        expiresAt: expiresAt,
-        loggedInAt: loggedInAt,
-      );
-    } else {
-      await saveUserSession(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        role: normalizedRole.isEmpty ? 'user' : normalizedRole,
-        userId: userId,
-        expiresAt: expiresAt,
-        loggedInAt: loggedInAt,
-      );
-    }
+    final sessionKey = _sessionKeyForRole(normalizedRole);
+    await _saveSession(
+      sessionKey,
+      role: normalizedRole.isEmpty ? 'user' : normalizedRole,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      userId: userId,
+      expiresAt: expiresAt,
+      loggedInAt: loggedInAt,
+    );
   }
 
-  static Future<void> clearUserSession() async =>
+  static Future<void> clearUserSession() =>
       _clearSession(_userSessionKey);
 
-  static Future<void> clearAdminSession() async =>
+  static Future<void> clearAdminSession() =>
       _clearSession(_adminSessionKey);
 
-  static Future<void> clearSuperAdminSession() async =>
+  static Future<void> clearSuperAdminSession() =>
       _clearSession(_superAdminSessionKey);
 
   static Future<void> clearRoleSession(String role) async {
     final normalizedRole = role.toLowerCase();
-    if (normalizedRole == 'admin') {
-      await clearAdminSession();
-    } else if (normalizedRole == 'super_admin') {
-      await clearSuperAdminSession();
-    } else {
-      await clearUserSession();
+    await _clearSession(_sessionKeyForRole(normalizedRole));
+    if ((await readActiveRole()) == normalizedRole) {
+      await SecureStorageService.deleteValue(_activeRoleKey);
+      await SecureStorageService.clearAuthData();
     }
   }
 
   static Future<void> clearAllSessions() async {
     await Future.wait([
-      clearUserSession(),
-      clearAdminSession(),
-      clearSuperAdminSession(),
+      SecureStorageService.deleteValue(_userSessionKey),
+      SecureStorageService.deleteValue(_adminSessionKey),
+      SecureStorageService.deleteValue(_superAdminSessionKey),
+      SecureStorageService.deleteValue(_activeRoleKey),
     ]);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_activeRoleKey);
+    await SecureStorageService.clearAuthData();
   }
 
   static Future<AuthSession?> readRoleSession(String role) async {
     final normalizedRole = role.toLowerCase();
-    if (normalizedRole == 'admin') {
-      return readAdminSession();
+    final session = await _readSession(
+      _sessionKeyForRole(normalizedRole),
+      normalizedRole,
+    );
+    if (session != null) return session;
+
+    if ((await readActiveRole()) != normalizedRole) return null;
+    var accessToken = await SecureStorageService.readAccessToken() ?? '';
+    var refreshToken = await SecureStorageService.readRefreshToken() ?? '';
+    if ((normalizedRole == 'admin' || normalizedRole == 'super_admin') &&
+        accessToken.isEmpty &&
+        refreshToken.isEmpty) {
+      accessToken =
+          await SecureStorageService.readLegacyPreference('adminToken') ?? '';
+      refreshToken =
+          await SecureStorageService.readLegacyPreference('adminRefreshToken') ??
+              '';
     }
-    if (normalizedRole == 'super_admin') {
-      return readSuperAdminSession();
-    }
-    return readUserSession();
+    final userId = await SecureStorageService.readUserId() ?? '';
+    if (accessToken.isEmpty && refreshToken.isEmpty) return null;
+
+    final migrated = AuthSession(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      role: normalizedRole,
+      userId: userId,
+      expiresAt: _defaultExpiry,
+      loggedInAt: _defaultTimestamp,
+    );
+    await SecureStorageService.writeValue(
+      _sessionKeyForRole(normalizedRole),
+      jsonEncode(migrated.toJson()),
+    );
+    return migrated;
   }
 
   static Future<String> getTokenForRole(String role) async {
@@ -209,51 +230,106 @@ class AuthSessionStore {
     return session?.accessToken ?? '';
   }
 
-  static Future<void> _saveSession(String key, AuthSession session) async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonPayload = jsonEncode(session.toJson());
+  static Future<void> _saveSession(
+    String key, {
+    required String role,
+    required String accessToken,
+    required String refreshToken,
+    required String userId,
+    String? expiresAt,
+    String? loggedInAt,
+  }) async {
+    final normalizedRole = role.toLowerCase();
+    final session = AuthSession(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      role: normalizedRole,
+      userId: userId,
+      expiresAt: expiresAt ?? _defaultExpiry,
+      loggedInAt: loggedInAt ?? _defaultTimestamp,
+    );
+    await SecureStorageService.writeValue(key, jsonEncode(session.toJson()));
+    await SecureStorageService.writeAccessToken(accessToken);
+    await SecureStorageService.writeRefreshToken(refreshToken);
+    await SecureStorageService.writeRole(normalizedRole);
+    await SecureStorageService.writeUserId(userId);
+    await SecureStorageService.writeIsLoggedIn(true);
+    await SecureStorageService.writeValue(_activeRoleKey, normalizedRole);
+    await SecureStorageService.removeLegacyAuthPreferences();
     debugPrint(
-        '[AuthSessionStore] Saving session key=$key accessTokenPresent=${session.accessToken.isNotEmpty} refreshTokenPresent=${session.refreshToken.isNotEmpty} role=${session.role}');
-    await prefs.setString(key, jsonPayload);
-    await prefs.setString(_activeRoleKey, session.role.toLowerCase());
+      '[AuthSessionStore] Persisted secure session role=$normalizedRole '
+      'accessTokenPresent=${accessToken.isNotEmpty} '
+      'refreshTokenPresent=${refreshToken.isNotEmpty}',
+    );
   }
 
-  static Future<AuthSession?> _readSession(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(key);
-    debugPrint(
-        '[AuthSessionStore] Reading session key=$key present=${raw != null && raw.isNotEmpty}');
+  static Future<AuthSession?> _readSession(
+    String key,
+    String role,
+  ) async {
+    var raw = await SecureStorageService.readValue(key);
+    if (raw == null || raw.isEmpty) {
+      raw = await SecureStorageService.readLegacyPreference(
+        _legacySessionKeyForRole(role),
+      );
+      if (raw != null && raw.isNotEmpty) {
+        await SecureStorageService.writeValue(key, raw);
+      }
+    }
     if (raw == null || raw.isEmpty) return null;
+
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        return AuthSession.fromJson(decoded);
-      }
-      if (decoded is Map) {
-        return AuthSession.fromJson(Map<String, dynamic>.from(decoded));
-      }
-    } catch (e) {
-      debugPrint(
-          '[AuthSessionStore] Failed to decode session key=$key error=$e');
+      final session = decoded is Map
+          ? AuthSession.fromJson(Map<String, dynamic>.from(decoded))
+          : null;
+      if (session == null) return null;
+      return AuthSession(
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        role: session.role.isEmpty ? role : session.role,
+        userId: session.userId,
+        expiresAt:
+            session.expiresAt.isEmpty ? _defaultExpiry : session.expiresAt,
+        loggedInAt:
+            session.loggedInAt.isEmpty ? _defaultTimestamp : session.loggedInAt,
+      );
+    } catch (error) {
+      debugPrint('[AuthSessionStore] Could not decode stored $role session: $error');
       return null;
     }
-    return null;
   }
 
   static Future<void> _clearSession(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    debugPrint('[AuthSessionStore] Clearing session key=$key');
-    await prefs.remove(key);
+    await SecureStorageService.deleteValue(key);
+    final legacyKey = switch (key) {
+      _userSessionKey => 'user_session',
+      _adminSessionKey => 'admin_session',
+      _superAdminSessionKey => 'super_admin_session',
+      _ => '',
+    };
+    if (legacyKey.isNotEmpty) {
+      await SecureStorageService.deleteValue(legacyKey);
+    }
   }
 
-  static String get _defaultTimestamp {
-    return DateTime.now().toUtc().toIso8601String();
+  static String _sessionKeyForRole(String role) {
+    if (role == 'admin') return _adminSessionKey;
+    if (role == 'super_admin') return _superAdminSessionKey;
+    return _userSessionKey;
   }
 
-  static String get _defaultExpiry {
-    return DateTime.now()
-        .toUtc()
-        .add(const Duration(days: 365))
-        .toIso8601String();
+  static String _legacySessionKeyForRole(String role) {
+    if (role == 'admin') return 'admin_session';
+    if (role == 'super_admin') return 'super_admin_session';
+    return 'user_session';
   }
+
+  static String get _defaultTimestamp =>
+      DateTime.now().toUtc().toIso8601String();
+
+  static String get _defaultExpiry => DateTime.now()
+      .toUtc()
+      .add(const Duration(days: 365))
+      .toIso8601String();
 }

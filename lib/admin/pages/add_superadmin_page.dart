@@ -56,8 +56,8 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
         body: jsonEncode({
           'first_name': _firstNameController.text.trim(),
           'last_name': _lastNameController.text.trim(),
-          'username': _usernameController.text.trim(),
-          'email': _emailController.text.trim(),
+          'username': _usernameController.text.trim().toLowerCase(),
+          'email': _emailController.text.trim().toLowerCase(),
           'phone': _phoneController.text.trim(),
           'country': _countryController.text.trim(),
           'password': _passwordController.text,
@@ -153,13 +153,28 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
               const SizedBox(height: 20),
               _textField('First name', _firstNameController),
               _textField('Last name', _lastNameController),
-              _textField('Username', _usernameController),
+              _textField(
+                'Username',
+                _usernameController,
+                validator: (value) {
+                  final username = (value ?? '').trim();
+                  if (username.length < 3) {
+                    return 'Username must be at least 3 characters';
+                  }
+                  if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(username)) {
+                    return 'Use only letters, numbers, and underscores';
+                  }
+                  return null;
+                },
+              ),
               _textField(
                 'Email',
                 _emailController,
                 keyboardType: TextInputType.emailAddress,
-                validator: (value) =>
-                    (value ?? '').contains('@') ? null : 'Enter a valid email',
+                validator: (value) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                        .hasMatch((value ?? '').trim())
+                    ? null
+                    : 'Enter a valid email',
               ),
               _textField(
                 'Phone',

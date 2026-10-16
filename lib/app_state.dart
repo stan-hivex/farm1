@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'flutter_flow/flutter_flow_theme.dart';
@@ -53,10 +54,11 @@ class FFAppState extends ChangeNotifier {
     final adminSession = await AuthSessionStore.readAdminSession();
     final superAdminSession = await AuthSessionStore.readSuperAdminSession();
     final userSession = await AuthSessionStore.readUserSession();
-    final secureAccessToken =
-        await SecureStorageService.readAccessToken() ?? '';
+    final secureAccessToken = await SecureStorageService.readAccessToken() ?? '';
     final secureRefreshToken =
         await SecureStorageService.readRefreshToken() ?? '';
+    final secureUserId = await SecureStorageService.readUserId() ?? '';
+    final secureIsLoggedIn = await SecureStorageService.readIsLoggedIn();
 
     if (normalizedStoredRole == 'admin' && adminSession != null) {
       _accessToken = adminSession.accessToken;
@@ -81,19 +83,32 @@ class FFAppState extends ChangeNotifier {
       _isLoggedIn = userSession.accessToken.isNotEmpty ||
           userSession.refreshToken.isNotEmpty;
     } else if (normalizedStoredRole.isNotEmpty &&
-        (secureAccessToken.isNotEmpty || secureRefreshToken.isNotEmpty)) {
+        (secureAccessToken.isNotEmpty ||
+            secureRefreshToken.isNotEmpty ||
+            secureIsLoggedIn)) {
       _accessToken = secureAccessToken;
       _refreshToken = secureRefreshToken;
-      _userId = prefs.getString('userId') ?? '';
+      _userId = secureUserId;
       _role = normalizedStoredRole;
       _isLoggedIn =
-          secureAccessToken.isNotEmpty || secureRefreshToken.isNotEmpty;
+          secureAccessToken.isNotEmpty ||
+              secureRefreshToken.isNotEmpty ||
+              secureIsLoggedIn;
     } else {
       _accessToken = '';
       _refreshToken = '';
       _userId = '';
       _role = '';
       _isLoggedIn = false;
+    }
+
+    if (_isLoggedIn && _role.isNotEmpty) {
+      await AuthSessionStore.saveRoleSession(
+        role: _role,
+        accessToken: _accessToken,
+        refreshToken: _refreshToken,
+        userId: _userId,
+      );
     }
 
     _firstName = prefs.getString('firstName') ?? '';
@@ -179,16 +194,21 @@ class FFAppState extends ChangeNotifier {
     if (_accessToken == value) return;
     _accessToken = value;
     notifyListeners();
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('accessToken', value),
-    );
-    SecureStorageService.writeAccessToken(value);
+    unawaited(SecureStorageService.writeAccessToken(value));
   }
 
   String get authToken => _accessToken;
 
   Future<String> getActiveAccessToken() async {
     if (_accessToken.isNotEmpty) {
+      return _accessToken;
+    }
+
+    final secureToken = await SecureStorageService.readAccessToken();
+    if (secureToken != null && secureToken.isNotEmpty) {
+      _accessToken = secureToken;
+      _isLoggedIn = true;
+      notifyListeners();
       return _accessToken;
     }
 
@@ -216,10 +236,7 @@ class FFAppState extends ChangeNotifier {
     if (_refreshToken == value) return;
     _refreshToken = value;
     notifyListeners();
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('refreshToken', value),
-    );
-    SecureStorageService.writeRefreshToken(value);
+    unawaited(SecureStorageService.writeRefreshToken(value));
   }
 
   String _userId = '';
@@ -228,10 +245,7 @@ class FFAppState extends ChangeNotifier {
     if (_userId == value) return;
     _userId = value;
     notifyListeners();
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('userId', value),
-    );
-    SecureStorageService.writeUserId(value);
+    unawaited(SecureStorageService.writeUserId(value));
   }
 
   String _firstName = '';
@@ -295,9 +309,7 @@ class FFAppState extends ChangeNotifier {
     if (_isLoggedIn == value) return;
     _isLoggedIn = value;
     notifyListeners();
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setBool('isLoggedIn', value),
-    );
+    unawaited(SecureStorageService.writeIsLoggedIn(value));
   }
 
   bool _biometricsEnabled = false;
@@ -436,10 +448,7 @@ class FFAppState extends ChangeNotifier {
     if (_role == value) return;
     _role = value;
     notifyListeners();
-    SharedPreferences.getInstance().then(
-      (prefs) => prefs.setString('role', value),
-    );
-    SecureStorageService.writeRole(value);
+    unawaited(SecureStorageService.writeRole(value));
   }
 
   bool get isUser => _role.toLowerCase() == 'user';
@@ -535,19 +544,13 @@ class FFAppState extends ChangeNotifier {
     hasPin = false;
     role = '';
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('accessToken');
-    await prefs.remove('refreshToken');
-    await prefs.remove('userId');
     await prefs.remove('firstName');
     await prefs.remove('userName');
     await prefs.remove('phone');
     await prefs.remove('kycStatus');
-    await prefs.remove('isLoggedIn');
     await prefs.remove('biometricsEnabled');
-    await prefs.remove('role');
     await prefs.remove('lastAuthenticatedRoute');
     await prefs.remove('biometric_last_verified');
-    await SecureStorageService.clearAuthData();
     await SecureStorageService.clearBiometricData();
     await AuthSessionStore.clearAllSessions();
     // Cached API responses can contain another user's profile or role.

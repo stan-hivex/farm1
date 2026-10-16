@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -24,6 +25,7 @@ void main() {
       dotenv.env['API_URL'] = 'http://127.0.0.1:3000';
       // Ensure clean app state and empty SharedPreferences
       SharedPreferences.setMockInitialValues({});
+      FlutterSecureStorage.setMockInitialValues({});
       FFAppState.reset();
       // ensure role and persisted session key exist
       await AuthSessionStore.saveRoleSession(

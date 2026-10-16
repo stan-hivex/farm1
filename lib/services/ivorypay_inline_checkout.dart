@@ -69,7 +69,20 @@ class _IvoryPayInlineCheckoutState extends State<IvoryPayInlineCheckout> {
                 uri.host == 'farmapp.africa' &&
                 uri.path.replaceAll(RegExp(r'/+$'), '') ==
                     '/payment-callback') {
-              if (mounted) Navigator.of(context).pop(true);
+              final callbackStatus = (uri.queryParameters['status'] ??
+                      uri.queryParameters['payment_status'] ??
+                      uri.queryParameters['transaction_status'] ??
+                      '')
+                  .toLowerCase();
+              final isFailure = const {
+                    'failed',
+                    'failure',
+                    'cancelled',
+                    'canceled',
+                    'error',
+                  }.contains(callbackStatus) ||
+                  uri.queryParameters['success']?.toLowerCase() == 'false';
+              if (mounted) Navigator.of(context).pop(!isFailure);
               return NavigationDecision.prevent;
             }
             return uri.scheme == 'https'

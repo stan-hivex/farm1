@@ -2,13 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/backend/services/api_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 // Removed unused import
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/components/kyc_required_widget.dart';
 import '/services/transaction_receipt_service.dart';
+import '/services/ivorypay_inline_checkout.dart';
+import '/widgets/paystack_checkout_sheet.dart';
 
 class DepositpageWidget extends StatefulWidget {
   const DepositpageWidget({super.key});
@@ -25,7 +26,12 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   final TextEditingController amountController = TextEditingController();
 
   String selectedCurrency = 'KES';
-  String selectedMethod = 'CARD'; // CARD | MOBILE_MONEY | CRYPTO
+  String selectedMethod = 'MOBILE_MONEY'; // MOBILE_MONEY | CRYPTO
+  String? _selectedCryptoToken;
+  List<String> _cryptoTokens = [];
+  bool _loadingCryptoTokens = false;
+  bool _cryptoTokensLoaded = false;
+  String? _cryptoTokensError;
 
   bool isLoading = false;
   bool loadingWallet = true;
@@ -36,15 +42,11 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
   // Deposit fees are disabled. The amount entered by the user is the amount credited.
   final Map<String, double> _feeRates = {
-    'CARD': 0.0,
-    'BANK_TRANSFER': 0.0,
     'MOBILE_MONEY': 0.0,
     'CRYPTO': 0.0,
   };
 
   final Map<String, Map<String, double?>> _depositLimits = {
-    'CARD': {'min': 10, 'max': 19999},
-    'BANK_TRANSFER': {'min': 10, 'max': 999999},
     'MOBILE_MONEY': {'min': 10, 'max': 249000},
     'CRYPTO': {'min': 100, 'max': null},
   };
@@ -55,13 +57,64 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   double get total => amount;
 
   Map<String, double?> get _activeDepositLimits =>
-      _depositLimits[selectedMethod] ?? _depositLimits['CARD']!;
+      _depositLimits[selectedMethod] ?? _depositLimits['MOBILE_MONEY']!;
   double get _activeDepositMin => _activeDepositLimits['min'] ?? 10;
   double? get _activeDepositMax => _activeDepositLimits['max'];
   bool get _hasValidDepositAmount =>
       amount > 0 &&
       amount >= _activeDepositMin &&
       (_activeDepositMax == null || amount <= _activeDepositMax!);
+
+  Future<void> _fetchCryptoTokens() async {
+    if (_loadingCryptoTokens || _cryptoTokensLoaded) return;
+    setState(() {
+      _loadingCryptoTokens = true;
+      _cryptoTokensError = null;
+    });
+
+    try {
+      final response = await ApiService.request(
+        method: 'GET',
+        path: '/crypto/payment-options',
+        requiresAuth: true,
+      );
+      final data = response['data'];
+      if (data is! List) {
+        throw const FormatException(
+          'The server returned an invalid cryptocurrency list.',
+        );
+      }
+      final tokens = data
+          .whereType<String>()
+          .map((token) => token.trim().toUpperCase())
+          .where((token) => token.isNotEmpty && token != 'USD')
+          .toSet()
+          .toList()
+        ..sort();
+      if (tokens.isEmpty) {
+        throw const FormatException(
+          'No cryptocurrencies are currently available for deposit.',
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _cryptoTokens = tokens;
+        _cryptoTokensLoaded = true;
+        if (!_cryptoTokens.contains(_selectedCryptoToken)) {
+          _selectedCryptoToken = null;
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _cryptoTokens = [];
+        _cryptoTokensError = error.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _loadingCryptoTokens = false);
+    }
+  }
+
   String _formatAmount(double value) {
     final formatter = NumberFormat('#,##0', 'en_US');
     return formatter.format(value);
@@ -124,6 +177,31 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     } catch (e) {
       debugPrint('fetchHistory error: $e');
     }
+  }
+
+  Future<Map<String, String>> _fetchPaystackDepositUserDetails() async {
+    final profileResponse = await ApiService.getProfile();
+    final profile = profileResponse['data'] is Map
+        ? Map<String, dynamic>.from(profileResponse['data'] as Map)
+        : profileResponse;
+    final email =
+        (profile['email'] ?? FFAppState().email).toString().trim();
+    final phone = (profile['phone'] ?? FFAppState().phone).toString().trim();
+
+    if (email.isEmpty) {
+      throw StateError(
+        'Add an email address to your account before making a Paystack deposit.',
+      );
+    }
+    if (phone.isEmpty) {
+      throw StateError(
+        'Add a phone number to your account before making a mobile money deposit.',
+      );
+    }
+
+    FFAppState().email = email;
+    FFAppState().phone = phone;
+    return {'email': email, 'phone': phone};
   }
 
   Map<String, dynamic> _depositReceipt(
@@ -191,6 +269,13 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   Future<void> _createDeposit() async {
     if (isLoading) return;
 
+    if (selectedMethod == 'CRYPTO' &&
+        (_selectedCryptoToken == null ||
+            !_cryptoTokens.contains(_selectedCryptoToken))) {
+      _snack('Choose a cryptocurrency before continuing');
+      return;
+    }
+
     if (!_hasValidDepositAmount) {
       _snack(_depositValidationMessage);
       return;
@@ -199,13 +284,11 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     setState(() => isLoading = true);
 
     try {
-      final paymentMethodRaw = selectedMethod == 'CARD'
-          ? 'card'
-          : selectedMethod == 'BANK_TRANSFER'
-              ? 'bank_transfer'
-              : selectedMethod == 'MOBILE_MONEY'
-                  ? 'mobile_money'
-                  : 'crypto';
+      final paymentMethodRaw =
+          selectedMethod == 'CRYPTO' ? 'crypto' : 'mobile_money';
+      final depositUserDetails = selectedMethod == 'CRYPTO'
+          ? null
+          : await _fetchPaystackDepositUserDetails();
 
       final body = {
         'amount_fiat': amount,
@@ -214,14 +297,15 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
         'payment_method': paymentMethodRaw,
         'method': paymentMethodRaw,
         'payment_channel': paymentMethodRaw,
+        if (selectedMethod == 'CRYPTO') 'crypto': _selectedCryptoToken,
+        if (depositUserDetails != null) ...{
+          'email': depositUserDetails['email'],
+          'phone': depositUserDetails['phone'],
+        },
         'payment_provider':
             selectedMethod == 'CRYPTO' ? 'ivorypay' : 'paystack',
         'provider': selectedMethod == 'CRYPTO' ? 'ivorypay' : 'paystack',
       };
-
-      if (selectedMethod == 'MOBILE_MONEY' && FFAppState().phone.isNotEmpty) {
-        body['phone'] = FFAppState().phone;
-      }
 
       final path =
           selectedMethod == 'CRYPTO' ? '/crypto/deposit' : '/deposit/create';
@@ -244,20 +328,107 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
               data['data']?['authorization_url'] ??
               data['data']?['payment_url'])
           ?.toString();
-      final farmAmount = data['data']?['amount_farm'];
       final depositRef = data['data']?['reference'] ??
           data['data']?['transaction_reference'] ??
           data['reference'] ??
           data['transaction_reference'];
+      final callbackUrl = data['callback_url'] ?? data['data']?['callback_url'];
 
       if (paymentUrl != null) {
-        // Launch Paystack / Ivorypay payment page in browser
-        final uri = Uri.parse(paymentUrl);
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        _snack(
-          'Complete payment in browser.\n'
-          '~$farmAmount FARM will credit after confirmation.',
-        );
+        final reference = depositRef?.toString();
+        if (reference == null || reference.isEmpty) {
+          throw const FormatException(
+              'The payment server did not return a transaction reference.');
+        }
+
+        if (selectedMethod == 'CRYPTO') {
+          final checkoutResult = await IvoryPayInlineCheckout.show(
+            context,
+            paymentUrl: paymentUrl,
+          );
+          if (!mounted) return;
+
+          try {
+            final verification = await ApiService.request(
+              method: 'POST',
+              path: '/crypto/status/${Uri.encodeComponent(reference)}/verify',
+              body: const {},
+              requiresAuth: true,
+            );
+            final result = verification['data'];
+            final status = result is Map
+                ? result['status']?.toString().toLowerCase()
+                : null;
+            if (status == 'success' || status == 'completed') {
+              await _fetchHistory();
+              await _fetchWallet();
+              if (mounted) {
+                _snack('Payment successful. Your wallet is credited.');
+              }
+              amountController.clear();
+              return;
+            }
+            if (status == 'failed' ||
+                status == 'cancelled' ||
+                status == 'expired') {
+              await _fetchHistory();
+              await _fetchWallet();
+              if (mounted) {
+                _snack(
+                    'Payment ${status == 'cancelled' ? 'cancelled' : 'failed'}. '
+                    'No funds were deducted.');
+              }
+              return;
+            }
+            _snack(
+              checkoutResult == true
+                  ? 'Payment submitted. Waiting for IvoryPay confirmation...'
+                  : 'Payment is not confirmed yet. Your wallet will update after confirmation.',
+            );
+          } catch (error) {
+            _snack(
+              'Checkout closed, but payment verification is pending: $error',
+            );
+          }
+        } else {
+          final checkoutResult = await PaystackCheckoutSheet.show(
+            context,
+            authorizationUrl: paymentUrl,
+            reference: reference,
+            callbackUrl: callbackUrl?.toString(),
+          );
+          if (!mounted) return;
+
+          try {
+            final verification = await ApiService.request(
+              method: 'GET',
+              path: '/transaction/verify/${Uri.encodeComponent(reference)}',
+              requiresAuth: true,
+            );
+            final result = verification['data'];
+            final status = result is Map
+                ? result['status']?.toString().toUpperCase()
+                : null;
+            final credited = result is Map && result['credited'] == true;
+            if (status == 'SUCCESS' || credited) {
+              await _fetchHistory();
+              await _fetchWallet();
+              if (mounted)
+                _snack('Payment successful. Your wallet is credited.');
+              amountController.clear();
+              return;
+            }
+            _snack(
+              checkoutResult == true
+                  ? 'Payment received. Waiting for Paystack confirmation...'
+                  : 'Payment is not confirmed yet. Your wallet will update after confirmation.',
+            );
+          } catch (error) {
+            _snack(
+              'Checkout closed, but payment verification is pending: $error',
+            );
+          }
+        }
 
         // Poll with timeout and handle all statuses: completed, failed, cancelled
         int pollAttempts = 0;
@@ -523,7 +694,10 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     final subtitleColor = selected ? Colors.white70 : theme.secondaryText;
 
     return GestureDetector(
-      onTap: () => setState(() => selectedMethod = method),
+      onTap: () {
+        setState(() => selectedMethod = method);
+        if (method == 'CRYPTO') unawaited(_fetchCryptoTokens());
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 12),
@@ -683,20 +857,6 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
               _methodCard(
                 context,
-                method: 'CARD',
-                icon: Icons.credit_card,
-                title: 'Bank Card',
-                subtitle: 'Instant',
-              ),
-              _methodCard(
-                context,
-                method: 'BANK_TRANSFER',
-                icon: Icons.account_balance,
-                title: 'Bank Transfer',
-                subtitle: 'Instant',
-              ),
-              _methodCard(
-                context,
                 method: 'MOBILE_MONEY',
                 icon: Icons.phone_android,
                 title: 'Mobile Money (M-Pesa)',
@@ -709,6 +869,65 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                 title: 'Crypto',
                 subtitle: 'Instant',
               ),
+
+              if (selectedMethod == 'CRYPTO') ...[
+                const SizedBox(height: 4),
+                Text(
+                  'Cryptocurrency',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: theme.primaryText,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (_loadingCryptoTokens)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_cryptoTokensError != null)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _cryptoTokensError!,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _fetchCryptoTokens,
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  )
+                else
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedCryptoToken,
+                    decoration: InputDecoration(
+                      hintText: 'Choose a cryptocurrency',
+                      filled: true,
+                      fillColor: theme.secondaryBackground,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: _cryptoTokens
+                        .map(
+                          (token) => DropdownMenuItem<String>(
+                            value: token,
+                            child: Text(token),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (token) =>
+                        setState(() => _selectedCryptoToken = token),
+                  ),
+                const SizedBox(height: 16),
+              ],
 
               const SizedBox(height: 24),
 
@@ -821,6 +1040,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                       TransactionReceiptService.showDetails(
                         context,
                         _depositReceipt(deposit, meta),
+                        fetchLatest: true,
                       );
                     },
                     onLongPress: () {

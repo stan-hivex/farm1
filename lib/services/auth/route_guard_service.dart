@@ -62,61 +62,61 @@ class RouteGuardService {
   /// marked as logged in, or if there is a persisted backend token available.
   Future<bool> hasValidBackendJwt() async {
     final state = FFAppState();
-    final role = state.role.toLowerCase();
-    final token = state.accessToken;
-
-    if (token.isNotEmpty && _isJwtValid(token)) {
-      debugPrint('[RouteGuardService] hasValidBackendJwt using in-memory token');
-      return true;
+    var role = state.role.toLowerCase();
+    if (role.isEmpty) {
+      role = (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+      if (role.isNotEmpty) state.role = role;
     }
-
-    if (state.refreshToken.isNotEmpty) {
-      final refreshed = await RefreshManager().refreshIfNeeded(force: false);
-      debugPrint('[RouteGuardService] refreshIfNeeded returned=$refreshed');
-      if (refreshed && state.accessToken.isNotEmpty && _isJwtValid(state.accessToken)) {
-        return true;
-      }
-      if (!RefreshManager().lastFailureWasRevocation) {
-        state.isLoggedIn = true;
-        return true;
-      }
-    }
-
     if (role.isEmpty) return false;
 
-    final persistedSession = await AuthSessionStore.readRoleSession(role);
-    final persistedToken = persistedSession?.accessToken ?? '';
-    if (persistedToken.isNotEmpty && _isJwtValid(persistedToken)) {
-      if (state.accessToken != persistedToken) {
-        state.accessToken = persistedToken;
-      }
-      if (persistedSession?.refreshToken.isNotEmpty ?? false) {
-        state.refreshToken = persistedSession!.refreshToken;
-      }
-      debugPrint('[RouteGuardService] hasValidBackendJwt loaded valid persisted session for role=$role');
-      return true;
-    }
-
-    if (role == 'admin' || role == 'super_admin') {
-      final adminRefresh = await AdminApiService.ensureValidSession(force: false);
-      debugPrint('[RouteGuardService] admin session refresh returned=$adminRefresh');
-      if (adminRefresh) {
-        final refreshedSession = await AuthSessionStore.readRoleSession(role);
-        final refreshedToken = refreshedSession?.accessToken ?? '';
-        if (refreshedToken.isNotEmpty && _isJwtValid(refreshedToken)) {
-          if (state.accessToken != refreshedToken) {
-            state.accessToken = refreshedToken;
-          }
-          if (refreshedSession?.refreshToken.isNotEmpty ?? false) {
-            state.refreshToken = refreshedSession!.refreshToken;
-          }
-          return true;
+    var accessToken = state.accessToken;
+    var refreshToken = state.refreshToken;
+    if (accessToken.isEmpty || refreshToken.isEmpty) {
+      final persistedSession = await AuthSessionStore.readRoleSession(role);
+      if (persistedSession != null) {
+        if (accessToken.isEmpty && persistedSession.accessToken.isNotEmpty) {
+          accessToken = persistedSession.accessToken;
+          state.accessToken = accessToken;
+        }
+        if (refreshToken.isEmpty && persistedSession.refreshToken.isNotEmpty) {
+          refreshToken = persistedSession.refreshToken;
+          state.refreshToken = refreshToken;
+        }
+        if (state.userId.isEmpty && persistedSession.userId.isNotEmpty) {
+          state.userId = persistedSession.userId;
         }
       }
     }
 
-    debugPrint('[RouteGuardService] hasValidBackendJwt found no valid token for role=$role');
-    return false;
+    if (accessToken.isNotEmpty && _isJwtValid(accessToken)) {
+      state.isLoggedIn = true;
+      return true;
+    }
+
+    if (refreshToken.isNotEmpty) {
+      try {
+        await RefreshManager().refreshIfNeeded(force: true);
+      } catch (error) {
+        debugPrint('[RouteGuardService] Silent token refresh failed: $error');
+      }
+    } else if (role == 'admin' || role == 'super_admin') {
+      try {
+        await AdminApiService.ensureValidSession(force: true);
+      } catch (error) {
+        debugPrint('[RouteGuardService] Admin session refresh failed: $error');
+      }
+    }
+
+    // Authentication state is local and persists until an explicit logout.
+    // An expired/rejected token can make API requests fail, but must not send
+    // the user back through login or erase their stored session.
+    final hasLocalSession = state.isLoggedIn ||
+        state.accessToken.isNotEmpty ||
+        state.refreshToken.isNotEmpty ||
+        accessToken.isNotEmpty ||
+        refreshToken.isNotEmpty;
+    if (hasLocalSession) state.isLoggedIn = true;
+    return hasLocalSession;
   }
 
   static bool _isJwtValid(String token) {
@@ -166,13 +166,16 @@ class RouteGuardService {
   Future<bool> isUserAuthenticated() async {
     try {
       final state = FFAppState();
-      final role = state.role.toLowerCase();
       final hasBackendJwt = await hasValidBackendJwt();
+      final role = state.role.toLowerCase();
       final isLoggedInFlag = state.isLoggedIn;
       final hasSupabaseSession = await hasValidSupabaseSession();
       final isAdminRole = role == 'admin' || role == 'super_admin';
 
-      if (!hasBackendJwt || role.isEmpty) {
+      final hasLocalCredentials = state.isLoggedIn ||
+          state.accessToken.isNotEmpty ||
+          state.refreshToken.isNotEmpty;
+      if ((!hasBackendJwt && !hasLocalCredentials) || role.isEmpty) {
         return false;
       }
 
@@ -217,9 +220,9 @@ class RouteGuardService {
     ];
 
     return path == '/' ||
-      publicPaths
-        .where((publicPath) => publicPath != '/')
-        .any((publicPath) => path.startsWith(publicPath));
+        publicPaths
+            .where((publicPath) => publicPath != '/')
+            .any((publicPath) => path.startsWith(publicPath));
   }
 
   /// Verify authentication and handle redirect if needed.
@@ -237,7 +240,8 @@ class RouteGuardService {
     final refreshTokenLength = FFAppState().refreshToken.length;
     final persistedSession = await AuthSessionStore.readRoleSession(role);
     final sessionExists = persistedSession != null &&
-      (persistedSession.accessToken.isNotEmpty || persistedSession.refreshToken.isNotEmpty);
+        (persistedSession.accessToken.isNotEmpty ||
+            persistedSession.refreshToken.isNotEmpty);
 
     print('AUTH GUARD CHECK');
     print('Current route: $currentPath');
@@ -262,13 +266,10 @@ class RouteGuardService {
               : 'no valid auth session';
 
       debugPrint('[RouteGuardService] verifyAndRedirect NOT authenticated');
-      debugPrint('[RouteGuardService] role=$role loggedIn=$loggedIn currentPath=$currentPath');
+      debugPrint(
+          '[RouteGuardService] role=$role loggedIn=$loggedIn currentPath=$currentPath');
       debugPrint('[RouteGuardService] redirect reason=$reason');
-      if (sessionExists && !RefreshManager().lastFailureWasRevocation) return null;
-      if (RefreshManager().lastFailureWasRevocation) {
-        await FFAppState().clearAuthCredentials('backend refresh session revoked');
-        await FFAppState().clearRoleSession(role);
-      }
+      if (sessionExists) return null;
       if (role == 'super_admin') {
         debugPrint('SUPER_ADMIN REDIRECTED TO LOGIN');
         debugPrint(StackTrace.current.toString());
@@ -276,12 +277,15 @@ class RouteGuardService {
       // Do NOT clear persisted auth here — preserve tokens and let explicit
       // logout or genuine backend revocation handle clearing. Redirect to
       // login so the user can re-authenticate if desired.
-      debugPrint('[RouteGuardService] Not authenticated — redirecting to login (preserving persisted session)');
+      debugPrint(
+          '[RouteGuardService] Not authenticated — redirecting to login (preserving persisted session)');
       return '/loginpage';
     }
 
-    debugPrint('[RouteGuardService] verifyAndRedirect authenticated role=$role currentPath=$currentPath');
-    debugPrint('[RouteGuardService] verifyAndRedirect state accessTokenLength=$accessTokenLength refreshTokenLength=$refreshTokenLength sessionExists=$sessionExists');
+    debugPrint(
+        '[RouteGuardService] verifyAndRedirect authenticated role=$role currentPath=$currentPath');
+    debugPrint(
+        '[RouteGuardService] verifyAndRedirect state accessTokenLength=$accessTokenLength refreshTokenLength=$refreshTokenLength sessionExists=$sessionExists');
     return null;
   }
 }

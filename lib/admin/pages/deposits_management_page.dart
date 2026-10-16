@@ -206,6 +206,14 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                 final method = _paymentMethodLabel(meta, d);
                                 final userLabel = _userLabel(d);
                                 final userId = (d['user_id'] ?? '').toString();
+                                final senderLabel = (d['sender_name'] ??
+                                        d['sender_wallet'] ??
+                                        'External payment provider')
+                                    .toString();
+                                final receiverLabel = (d['receiver_name'] ??
+                                        d['receiver_wallet'] ??
+                                        userLabel)
+                                    .toString();
                                 final reference = (d['transaction_reference'] ??
                                         d['id'] ??
                                         '-')
@@ -292,6 +300,22 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context
                                                             .onSurface
+                                                            .withOpacity(0.78),
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600)),
+                                            Text('Sender: $senderLabel',
+                                                style:
+                                                    GoogleFonts.plusJakartaSans(
+                                                        color: context.onSurface
+                                                            .withOpacity(0.78),
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600)),
+                                            Text('Receiver: $receiverLabel',
+                                                style:
+                                                    GoogleFonts.plusJakartaSans(
+                                                        color: context.onSurface
                                                             .withOpacity(0.78),
                                                         fontSize: 13,
                                                         fontWeight:

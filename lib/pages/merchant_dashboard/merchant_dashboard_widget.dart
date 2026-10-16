@@ -1382,12 +1382,16 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                                               ),
                                             );
                                           }
-                                          return Image.memory(
-                                            Uint8List.fromList(qrBytes),
-                                            width: 210,
-                                            height: 210,
-                                            fit: BoxFit.contain,
-                                            filterQuality: FilterQuality.high,
+                                          return ClipRRect(
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            child: Image.memory(
+                                              Uint8List.fromList(qrBytes),
+                                              width: 210,
+                                              height: 210,
+                                              fit: BoxFit.contain,
+                                              filterQuality: FilterQuality.high,
+                                            ),
                                           );
                                         },
                                       ),
