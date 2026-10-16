@@ -129,7 +129,7 @@
 
         <label for="method">Payment method</label>
         <select id="method" name="method" required>
-          <option value="MOBILE_MONEY">Mobile money</option>
+          <option value="MOBILE_MONEY">M-Pesa</option>
           <option value="CARD">Card</option>
           <option value="BANK_TRANSFER">Bank transfer</option>
           <option value="CRYPTO">Cryptocurrency</option>
@@ -183,7 +183,7 @@
         const path = location.pathname.split("/").filter(Boolean);
         const isPublicPayRoute = path[0] === "pay";
         const isPaymentSuccessRoute = isPublicPayRoute && path[1] === "success";
-        const merchantId =
+        let merchantId =
           isPublicPayRoute && !isPaymentSuccessRoute
             ? path[1].replace(/[{}]/g, "").trim()
             : null;
@@ -275,6 +275,7 @@
 
         const configureMerchant = (merchant) => {
           qrPayload = merchant.qrPayload || merchant.qr_payload || qrPayload;
+          merchantId = merchant.id || merchant.merchant_id || merchantId;
           document.getElementById("merchant").textContent =
             `Pay ${merchant.farmName || merchant.business_name} securely.` +
             (merchant.ownerName ? ` Owned by ${merchant.ownerName}.` : "");
@@ -345,41 +346,34 @@
             }
             const paymentMethod = method.value;
             const email = document.getElementById("email").value.trim();
+            if (!merchantId) {
+              message.textContent =
+                "Merchant details are still loading. Please try again.";
+              return;
+            }
 
             submit.disabled = true;
             submit.textContent = "Preparing secure checkout…";
             try {
-              const isNewPayment = Boolean(merchantId);
               const response = await fetch(
-                isNewPayment
-                  ? `${api}/qr-payments/initialize`
-                  : `${api}/qr/checkout/payment`,
+                `${api}/qr-payments/initialize`,
                 {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                     Accept: "application/json",
                   },
-                  body: JSON.stringify(
-                    isNewPayment
-                      ? {
-                          merchantId,
-                          amount,
-                          method: {
-                            MOBILE_MONEY: "mpesa",
-                            CARD: "card",
-                            BANK_TRANSFER: "bank",
-                            CRYPTO: "crypto",
-                          }[paymentMethod],
-                          guestEmail: email,
-                        }
-                      : {
-                          qr_payload: qrPayload,
-                          amount_kes: amount,
-                          payment_method: paymentMethod,
-                          email,
-                        },
-                  ),
+                  body: JSON.stringify({
+                    merchantId,
+                    amount,
+                    method: {
+                      MOBILE_MONEY: "mpesa",
+                      CARD: "card",
+                      BANK_TRANSFER: "bank",
+                      CRYPTO: "crypto",
+                    }[paymentMethod],
+                    guestEmail: email,
+                  }),
                 },
               );
               const result = await response.json();

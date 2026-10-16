@@ -11,6 +11,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'registerpage_model.dart';
 export 'registerpage_model.dart';
 
+enum _RegistrationAvailability { idle, checking, available, taken, failed }
+
 class RegisterpageWidget extends StatefulWidget {
   const RegisterpageWidget({super.key});
 
@@ -53,9 +55,10 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
   String _selectedCountry = 'United States';
   String _selectedCountryIsoCode = 'US';
   String _selectedCountryCode = '+1';
-  String? _usernameAvailabilityError;
-  String? _phoneAvailabilityError;
-  String? _emailAvailabilityError;
+  _RegistrationAvailability _usernameAvailability =
+      _RegistrationAvailability.idle;
+  _RegistrationAvailability _phoneAvailability = _RegistrationAvailability.idle;
+  _RegistrationAvailability _emailAvailability = _RegistrationAvailability.idle;
   Timer? _availabilityDebounce;
   int _availabilityRequestId = 0;
 
@@ -75,7 +78,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
           _selectedCountry = country.name;
           _selectedCountryIsoCode = country.countryCode;
           _selectedCountryCode = '+${country.phoneCode}';
-          _phoneAvailabilityError = null;
+          _phoneAvailability = _RegistrationAvailability.idle;
         });
         _phoneFieldKey.currentState?.validate();
         _scheduleAvailabilityCheck();
@@ -86,6 +89,11 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
   void _scheduleAvailabilityCheck() {
     _availabilityDebounce?.cancel();
     _availabilityRequestId++;
+    setState(() {
+      _usernameAvailability = _RegistrationAvailability.idle;
+      _phoneAvailability = _RegistrationAvailability.idle;
+      _emailAvailability = _RegistrationAvailability.idle;
+    });
     _availabilityDebounce = Timer(
       const Duration(milliseconds: 700),
       () => unawaited(_checkRegistrationAvailability()),
@@ -100,18 +108,32 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
     final phone = '$_selectedCountryCode$phoneDigits';
     final usernameToCheck =
         RegExp(r'^[a-z0-9_]+$').hasMatch(username) ? username : null;
-    final emailToCheck = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
-            .hasMatch(email)
-        ? email
-        : null;
+    final emailToCheck =
+        RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email) ? email : null;
     final phoneToCheck =
         RegExp(r'^\+[1-9]\d{7,14}$').hasMatch(phone) ? phone : null;
 
-    if (usernameToCheck == null && emailToCheck == null && phoneToCheck == null) {
-      return true;
+    if (usernameToCheck == null &&
+        emailToCheck == null &&
+        phoneToCheck == null) {
+      return false;
     }
 
     final requestId = ++_availabilityRequestId;
+    if (mounted) {
+      setState(() {
+        _usernameAvailability = usernameToCheck == null
+            ? _RegistrationAvailability.idle
+            : _RegistrationAvailability.checking;
+        _emailAvailability = emailToCheck == null
+            ? _RegistrationAvailability.idle
+            : _RegistrationAvailability.checking;
+        _phoneAvailability = phoneToCheck == null
+            ? _RegistrationAvailability.idle
+            : _RegistrationAvailability.checking;
+      });
+    }
+
     try {
       final response = await ApiService.checkRegistrationAvailability(
         username: usernameToCheck,
@@ -127,33 +149,84 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
           'The registration availability response was invalid.',
         );
       }
-      if (!mounted || requestId != _availabilityRequestId) return true;
+      if (!mounted || requestId != _availabilityRequestId) return false;
 
       setState(() {
-        _usernameAvailabilityError = usernameToCheck != null &&
-                data['usernameAvailable'] == false
-            ? 'Username already exists. Please enter another one.'
-            : null;
-        _emailAvailabilityError =
-            emailToCheck != null && data['emailAvailable'] == false
-                ? 'Email already exists. Please enter another one.'
-                : null;
-        _phoneAvailabilityError =
-            phoneToCheck != null && data['phoneAvailable'] == false
-                ? 'Phone number already exists. Please enter another one.'
-                : null;
+        _usernameAvailability = usernameToCheck == null
+            ? _RegistrationAvailability.idle
+            : data['usernameAvailable'] == true
+                ? _RegistrationAvailability.available
+                : _RegistrationAvailability.taken;
+        _emailAvailability = emailToCheck == null
+            ? _RegistrationAvailability.idle
+            : data['emailAvailable'] == true
+                ? _RegistrationAvailability.available
+                : _RegistrationAvailability.taken;
+        _phoneAvailability = phoneToCheck == null
+            ? _RegistrationAvailability.idle
+            : data['phoneAvailable'] == true
+                ? _RegistrationAvailability.available
+                : _RegistrationAvailability.taken;
       });
       _usernameFieldKey.currentState?.validate();
       _phoneFieldKey.currentState?.validate();
       _emailFieldKey.currentState?.validate();
 
-      return _usernameAvailabilityError == null &&
-          _emailAvailabilityError == null &&
-          _phoneAvailabilityError == null;
+      return usernameToCheck != null &&
+          emailToCheck != null &&
+          phoneToCheck != null &&
+          _usernameAvailability == _RegistrationAvailability.available &&
+          _emailAvailability == _RegistrationAvailability.available &&
+          _phoneAvailability == _RegistrationAvailability.available;
     } catch (error) {
       debugPrint('Registration availability check failed: $error');
-      return true;
+      if (mounted && requestId == _availabilityRequestId) {
+        setState(() {
+          if (usernameToCheck != null) {
+            _usernameAvailability = _RegistrationAvailability.failed;
+          }
+          if (emailToCheck != null) {
+            _emailAvailability = _RegistrationAvailability.failed;
+          }
+          if (phoneToCheck != null) {
+            _phoneAvailability = _RegistrationAvailability.failed;
+          }
+        });
+      }
+      return false;
     }
+  }
+
+  String? _availabilityMessage(
+    _RegistrationAvailability availability,
+    String field,
+  ) {
+    return switch (availability) {
+      _RegistrationAvailability.idle => null,
+      _RegistrationAvailability.checking => 'Checking $field availability...',
+      _RegistrationAvailability.available =>
+        '$field does not exist. You can register.',
+      _RegistrationAvailability.taken =>
+        '$field already exists. Please choose another one.',
+      _RegistrationAvailability.failed =>
+        'Could not check $field. Check your connection and try again.',
+    };
+  }
+
+  Color _availabilityMessageColor(
+    BuildContext context,
+    _RegistrationAvailability availability,
+  ) {
+    return switch (availability) {
+      _RegistrationAvailability.available => Colors.green,
+      _RegistrationAvailability.taken ||
+      _RegistrationAvailability.failed =>
+        Colors.red,
+      _RegistrationAvailability.checking =>
+        FlutterFlowTheme.of(context).secondaryText,
+      _RegistrationAvailability.idle =>
+        FlutterFlowTheme.of(context).secondaryText,
+    };
   }
 
   String? _duplicateFieldFromError(Object error) {
@@ -485,17 +558,8 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                   TextFormField(
                     key: _usernameFieldKey,
                     controller: usernameController,
-                    onChanged: (_) {
-                      if (_usernameAvailabilityError != null) {
-                        setState(() => _usernameAvailabilityError = null);
-                        _usernameFieldKey.currentState?.validate();
-                      }
-                      _scheduleAvailabilityCheck();
-                    },
+                    onChanged: (_) => _scheduleAvailabilityCheck(),
                     validator: (value) {
-                      if (_usernameAvailabilityError != null) {
-                        return _usernameAvailabilityError;
-                      }
                       if (value == null || value.isEmpty) {
                         return 'Username required';
                       }
@@ -506,9 +570,18 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
                       return null;
                     },
-                    decoration: inputDecoration(
-                      context,
-                      'Enter username',
+                    decoration:
+                        inputDecoration(context, 'Enter username').copyWith(
+                      helperText: _availabilityMessage(
+                        _usernameAvailability,
+                        'Username',
+                      ),
+                      helperStyle: TextStyle(
+                        color: _availabilityMessageColor(
+                          context,
+                          _usernameAvailability,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16.0),
@@ -551,28 +624,30 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                           key: _phoneFieldKey,
                           controller: phoneController,
                           keyboardType: TextInputType.number,
-                          onChanged: (_) {
-                            if (_phoneAvailabilityError != null) {
-                              setState(() => _phoneAvailabilityError = null);
-                              _phoneFieldKey.currentState?.validate();
-                            }
-                            _scheduleAvailabilityCheck();
-                          },
+                          onChanged: (_) => _scheduleAvailabilityCheck(),
                           validator: (value) {
-                            if (_phoneAvailabilityError != null) {
-                              return _phoneAvailabilityError;
-                            }
                             if (value == null || value.isEmpty) {
                               return 'Phone number required';
                             }
-                            if (!RegExp(r'^[0-9]{6,15}$').hasMatch(value)) {
+                            final fullPhone = '$_selectedCountryCode$value';
+                            if (!RegExp(r'^\+[1-9]\d{7,14}$')
+                                .hasMatch(fullPhone)) {
                               return 'Enter valid phone number';
                             }
                             return null;
                           },
-                          decoration: inputDecoration(
-                            context,
-                            '700123456',
+                          decoration:
+                              inputDecoration(context, '700123456').copyWith(
+                            helperText: _availabilityMessage(
+                              _phoneAvailability,
+                              'Phone number',
+                            ),
+                            helperStyle: TextStyle(
+                              color: _availabilityMessageColor(
+                                context,
+                                _phoneAvailability,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -585,17 +660,29 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                     key: _emailFieldKey,
                     controller: emailController,
                     keyboardType: TextInputType.emailAddress,
-                    onChanged: (_) {
-                      if (_emailAvailabilityError != null) {
-                        setState(() => _emailAvailabilityError = null);
-                        _emailFieldKey.currentState?.validate();
+                    onChanged: (_) => _scheduleAvailabilityCheck(),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Email required';
                       }
-                      _scheduleAvailabilityCheck();
+                      if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                          .hasMatch(value.trim())) {
+                        return 'Enter a valid email address';
+                      }
+                      return null;
                     },
-                    validator: (_) => _emailAvailabilityError,
-                    decoration: inputDecoration(
-                      context,
-                      'Enter email',
+                    decoration:
+                        inputDecoration(context, 'Enter email').copyWith(
+                      helperText: _availabilityMessage(
+                        _emailAvailability,
+                        'Email',
+                      ),
+                      helperStyle: TextStyle(
+                        color: _availabilityMessageColor(
+                          context,
+                          _emailAvailability,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 16.0),
@@ -753,7 +840,19 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
                       final registrationAvailable =
                           await _checkRegistrationAvailability();
-                      if (!mounted || !registrationAvailable) return;
+                      if (!mounted) return;
+                      if (!registrationAvailable) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Use a unique username, phone number, and email. '
+                              'All three must be confirmed available before registration.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                        return;
+                      }
 
                       try {
                         await AuthService().signUp(
@@ -797,15 +896,16 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                           };
 
                           if (duplicateField != 'unknown') {
-                            final fieldError =
-                                '$fieldLabel already exists. Please enter another one.';
                             setState(() {
                               if (duplicateField == 'username') {
-                                _usernameAvailabilityError = fieldError;
+                                _usernameAvailability =
+                                    _RegistrationAvailability.taken;
                               } else if (duplicateField == 'phone') {
-                                _phoneAvailabilityError = fieldError;
+                                _phoneAvailability =
+                                    _RegistrationAvailability.taken;
                               } else {
-                                _emailAvailabilityError = fieldError;
+                                _emailAvailability =
+                                    _RegistrationAvailability.taken;
                               }
                             });
                             _formKey.currentState?.validate();

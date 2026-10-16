@@ -9,7 +9,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/components/kyc_required_widget.dart';
 import '/services/transaction_receipt_service.dart';
 import '/services/ivorypay_inline_checkout.dart';
-import '/widgets/paystack_checkout_sheet.dart';
+import '/services/paystack_inline_checkout.dart';
 
 class DepositpageWidget extends StatefulWidget {
   const DepositpageWidget({super.key});
@@ -191,8 +191,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
     final profile = profileResponse['data'] is Map
         ? Map<String, dynamic>.from(profileResponse['data'] as Map)
         : profileResponse;
-    final email =
-        (profile['email'] ?? FFAppState().email).toString().trim();
+    final email = (profile['email'] ?? FFAppState().email).toString().trim();
     final phone = (profile['phone'] ?? FFAppState().phone).toString().trim();
 
     if (email.isEmpty) {
@@ -341,11 +340,12 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
               data['data']?['authorization_url'] ??
               data['data']?['payment_url'])
           ?.toString();
+      final paystackAccessCode =
+          (data['access_code'] ?? data['data']?['access_code'])?.toString();
       final depositRef = data['data']?['reference'] ??
           data['data']?['transaction_reference'] ??
           data['reference'] ??
           data['transaction_reference'];
-      final callbackUrl = data['callback_url'] ?? data['data']?['callback_url'];
 
       if (paymentUrl != null) {
         final reference = depositRef?.toString();
@@ -404,11 +404,10 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
             );
           }
         } else {
-          final checkoutResult = await PaystackCheckoutSheet.show(
+          final checkoutResult = await PaystackInlineCheckout.show(
             context,
-            authorizationUrl: paymentUrl,
-            reference: reference,
-            callbackUrl: callbackUrl?.toString(),
+            accessCode: paystackAccessCode,
+            paymentUrl: paymentUrl,
           );
           if (!mounted) return;
 

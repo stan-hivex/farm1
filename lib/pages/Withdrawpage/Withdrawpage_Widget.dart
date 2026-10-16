@@ -436,8 +436,10 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
             Text('Transaction fee (1.5%): ${fee.toStringAsFixed(4)} FARM'),
             Text('Net amount: ${settlement.toStringAsFixed(4)} FARM'),
             const SizedBox(height: 8),
-            const Text(
-              'Your withdrawal is pending Paystack confirmation. Wallet funds are updated only after verification finishes.',
+            Text(
+              selectedMethod == 'CRYPTO'
+                  ? 'Your withdrawal is pending IvoryPay confirmation. Wallet funds are updated only after verification finishes.'
+                  : 'Your withdrawal is pending Paystack confirmation. Wallet funds are updated only after verification finishes.',
             ),
           ],
         ),
