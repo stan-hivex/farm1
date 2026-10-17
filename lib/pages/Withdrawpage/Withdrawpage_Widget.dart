@@ -30,7 +30,6 @@ class WithdrawpageWidget extends StatefulWidget {
 class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
   final scaffoldKey = GlobalKey<ScaffoldState>();
   final _amountCtrl = TextEditingController();
-  final _accountNameCtrl = TextEditingController();
   final _accountCtrl = TextEditingController();
   final _walletCtrl = TextEditingController();
   final _mobileCtrl = TextEditingController();
@@ -51,9 +50,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
 
   String? _selectedBank;
   String? _selectedBankCode;
-  String? _selectedMobileMoneyProvider;
+  String? _selectedMobileMoneyProvider = 'MPESA';
   List<Map<String, String>> _paystackBanks = [];
-  List<Map<String, String>> _paystackMobileMoneyProviders = [];
   bool _loadingPaystackDestinations = false;
   String? _paystackDestinationError;
 
@@ -146,7 +144,6 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
   void dispose() {
     _historyTimer?.cancel();
     _amountCtrl.dispose();
-    _accountNameCtrl.dispose();
     _accountCtrl.dispose();
     _walletCtrl.dispose();
     _mobileCtrl.dispose();
@@ -205,51 +202,36 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
     }
 
     try {
-      final responses = await Future.wait([
-        ApiService.request(
-          method: 'GET',
-          path: '/withdraw/paystack/destinations',
-        ),
-        ApiService.request(
-          method: 'GET',
-          path: '/withdraw/paystack/destinations?type=mobile_money',
-        ),
-      ]);
-      List<Map<String, String>> parseDestinations(
-        Map<String, dynamic> response,
-      ) {
-        final responseData = response['data'];
-        final raw = responseData is Map ? responseData['data'] : responseData;
-        if (raw is! List) return const [];
-        return raw
-            .whereType<Map>()
-            .map((item) => {
-                  'name': item['name']?.toString() ?? '',
-                  'code': item['code']?.toString() ?? '',
-                })
-            .where(
-                (item) => item['name']!.isNotEmpty && item['code']!.isNotEmpty)
-            .toList(growable: false);
+      final response = await ApiService.request(
+        method: 'GET',
+        path: '/withdraw/paystack/destinations?type=kepss',
+      );
+      dynamic raw = response['data'];
+      while (raw is Map && raw.containsKey('data')) {
+        raw = raw['data'];
       }
-
-      final banks = parseDestinations(responses[0]);
-      final mobileProviders = parseDestinations(responses[1])
-          .where((provider) => provider['code']!.toUpperCase() == 'MPESA')
+      if (raw is! List) {
+        throw const FormatException(
+          'The server returned an invalid bank destination list.',
+        );
+      }
+      final banks = raw
+          .whereType<Map>()
+          .map((item) => {
+                'name': item['name']?.toString() ?? '',
+                'code': item['code']?.toString() ?? '',
+              })
+          .where((item) => item['name']!.isNotEmpty && item['code']!.isNotEmpty)
           .toList(growable: false);
       if (mounted) {
         setState(() {
           _paystackBanks = banks;
-          _paystackMobileMoneyProviders = mobileProviders;
           if (_selectedBank != null &&
               !_paystackBanks.any((bank) => bank['name'] == _selectedBank)) {
             _selectedBank = null;
             _selectedBankCode = null;
           }
-          if (_selectedMobileMoneyProvider != null &&
-              !_paystackMobileMoneyProviders.any((provider) =>
-                  provider['code'] == _selectedMobileMoneyProvider)) {
-            _selectedMobileMoneyProvider = null;
-          }
+          _selectedMobileMoneyProvider = 'MPESA';
         });
       }
     } catch (error) {
@@ -354,57 +336,6 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
     ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  Future<String?> _registerPaystackRecipient() async {
-    if (selectedMethod == 'CRYPTO') return null;
-    final body = <String, dynamic>{
-      'method': _methodToBackend(selectedMethod),
-      'accountName': _accountNameCtrl.text.trim(),
-      if (selectedMethod == 'BANK') ...{
-        'accountNumber': _accountCtrl.text.trim(),
-        'bankName': _selectedBank,
-      },
-      if (selectedMethod == 'MOBILE_MONEY') ...{
-        'phoneNumber': _mobileCtrl.text.trim(),
-        'mobileMoneyProvider': _selectedMobileMoneyProvider,
-      },
-    };
-
-    final response = await http.post(
-      Uri.parse('${AppConfig.api}/withdraw/paystack/recipients'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': '******',
-      },
-      body: jsonEncode(body),
-    );
-
-    final decoded = jsonDecode(response.body);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final message = decoded is Map ? decoded['message']?.toString() : null;
-      throw Exception(message ?? 'Paystack recipient validation failed');
-    }
-
-    final recipient = decoded is Map && decoded['data'] is Map
-        ? Map<String, dynamic>.from(decoded['data'] as Map)
-        : decoded is Map
-            ? Map<String, dynamic>.from(decoded)
-            : <String, dynamic>{};
-
-    final recipientId = recipient['id']?.toString();
-    if (recipientId == null || recipientId.isEmpty) {
-      throw const FormatException(
-        'Paystack did not return a valid recipient ID.',
-      );
-    }
-
-    await ApiService.request(
-      method: 'GET',
-      path: '/withdraw/paystack/recipients/${Uri.encodeComponent(recipientId)}/validate',
-    );
-
-    return recipientId;
-  }
-
   Future<void> _showWithdrawalReceipt(Map<String, dynamic> response) async {
     final withdrawal = response['withdrawal'] is Map
         ? Map<String, dynamic>.from(response['withdrawal'] as Map)
@@ -459,11 +390,9 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       case 'BANK':
         return _selectedBank != null &&
             _selectedBankCode != null &&
-            _accountNameCtrl.text.trim().isNotEmpty &&
             _accountCtrl.text.trim().isNotEmpty;
       case 'MOBILE_MONEY':
         return _selectedMobileMoneyProvider != null &&
-            _accountNameCtrl.text.trim().isNotEmpty &&
             _mobileCtrl.text.trim().isNotEmpty;
       case 'CRYPTO':
         return selectedCryptoAsset.isNotEmpty &&
@@ -526,14 +455,12 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
               )
               .then((r) => r.toTransactionAuthenticationResult());
 
-      final recipientId = await _registerPaystackRecipient();
       final idempotencyKey = _ensureWithdrawalIdempotencyKey();
       final usedBiometric = authResult?.biometricUsed == true;
       if (usedBiometric) {
         final requestBody = {
           'amount': amount,
           'method': _methodToBackend(selectedMethod),
-          if (recipientId != null) 'recipientId': recipientId,
           'pin': null,
           'biometric_auth': true,
           'device_fingerprint': authResult?.deviceFingerprint,
@@ -541,12 +468,10 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
 
         switch (selectedMethod) {
           case 'BANK':
-            requestBody['accountName'] = _accountNameCtrl.text.trim();
             requestBody['accountNumber'] = _accountCtrl.text.trim();
             requestBody['bankName'] = _selectedBank ?? '';
             break;
           case 'MOBILE_MONEY':
-            requestBody['accountName'] = _accountNameCtrl.text.trim();
             requestBody['phoneNumber'] = _mobileCtrl.text.trim();
             requestBody['mobileMoneyProvider'] =
                 _selectedMobileMoneyProvider ?? '';
@@ -601,19 +526,16 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       final requestBody = {
         'amount': amount,
         'method': _methodToBackend(selectedMethod),
-        if (recipientId != null) 'recipientId': recipientId,
         'pin': _pinCtrl.text.trim(),
       };
 
       // Add method-specific fields
       switch (selectedMethod) {
         case 'BANK':
-          requestBody['accountName'] = _accountNameCtrl.text.trim();
           requestBody['accountNumber'] = _accountCtrl.text.trim();
           requestBody['bankName'] = _selectedBank ?? '';
           break;
         case 'MOBILE_MONEY':
-          requestBody['accountName'] = _accountNameCtrl.text.trim();
           requestBody['phoneNumber'] = _mobileCtrl.text.trim();
           requestBody['mobileMoneyProvider'] =
               _selectedMobileMoneyProvider ?? '';
@@ -681,7 +603,6 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
 
   void _clearFields() {
     _amountCtrl.clear();
-    _accountNameCtrl.clear();
     _accountCtrl.clear();
     _walletCtrl.clear();
     _mobileCtrl.clear();
@@ -689,7 +610,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
     setState(() {
       _selectedBank = null;
       _selectedBankCode = null;
-      _selectedMobileMoneyProvider = null;
+      _selectedMobileMoneyProvider = 'MPESA';
       selectedCryptoAsset = 'USDC';
       selectedCryptoNetwork = null;
     });
@@ -791,7 +712,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                   padding: const EdgeInsets.all(12),
                   child: Text(
                     destinationError ??
-                        'Paystack bank list is unavailable. Tap to retry.',
+                        'Bank list could not be loaded. Tap to retry.',
                     style: TextStyle(color: theme.secondaryText),
                   ),
                 ),
@@ -836,12 +757,6 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
               ),
             const SizedBox(height: 12),
             _inputField(
-              controller: _accountNameCtrl,
-              hint: 'Account Holder Name',
-              type: TextInputType.name,
-            ),
-            const SizedBox(height: 12),
-            _inputField(
               controller: _accountCtrl,
               hint: 'Account Number',
               type: TextInputType.number,
@@ -851,59 +766,19 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       case 'MOBILE_MONEY':
         return Column(
           children: [
-            if (_loadingPaystackDestinations)
-              const Padding(
-                padding: EdgeInsets.all(12),
-                child: CircularProgressIndicator(),
-              )
-            else if (_paystackMobileMoneyProviders.isEmpty)
-              InkWell(
-                onTap: _fetchPaystackDestinations,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    destinationError ??
-                        'Paystack mobile money is unavailable. Tap to retry.',
-                    style: TextStyle(color: theme.secondaryText),
-                  ),
-                ),
-              )
-            else
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.secondaryBackground,
-                  border: Border.all(color: theme.secondaryText.withAlpha(90)),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: DropdownButton<String>(
-                  value: _selectedMobileMoneyProvider,
-                  hint: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('Select Mobile Money Network',
-                        style: TextStyle(color: theme.secondaryText)),
-                  ),
-                  isExpanded: true,
-                  underline: const SizedBox(),
-                  items: _paystackMobileMoneyProviders.map((provider) {
-                    return DropdownMenuItem(
-                      value: provider['code'],
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(provider['name']!,
-                            style: GoogleFonts.plusJakartaSans(
-                                color: theme.primaryText)),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (code) =>
-                      setState(() => _selectedMobileMoneyProvider = code),
-                ),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: theme.secondaryBackground,
+                border: Border.all(color: theme.secondaryText.withAlpha(90)),
+                borderRadius: BorderRadius.circular(14),
               ),
-            const SizedBox(height: 12),
-            _inputField(
-              controller: _accountNameCtrl,
-              hint: 'Account Holder Name',
-              type: TextInputType.name,
+              child: Text(
+                'M-Pesa',
+                style: GoogleFonts.plusJakartaSans(
+                    color: theme.primaryText, fontWeight: FontWeight.w600),
+              ),
             ),
             const SizedBox(height: 12),
             _inputField(

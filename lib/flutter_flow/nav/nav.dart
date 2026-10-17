@@ -78,8 +78,12 @@ GoRouter createRouter(
         }
 
         final role = authState.role.toLowerCase();
+        final isLegalDocumentRoute =
+            path == LegalDocumentPageWidget.privacyPolicyRoutePath ||
+                path == LegalDocumentPageWidget.termsRoutePath;
         if (authState.isLoggedIn &&
-            (publicRoute || path == OnboardingWidget.routePath)) {
+            ((publicRoute && !isLegalDocumentRoute) ||
+                path == OnboardingWidget.routePath)) {
           if (role == 'super_admin') return SuperadminDashboardPage.routePath;
           if (role == 'admin') return '/admin';
           return DashboardWidget.routePath;
