@@ -1,3 +1,6 @@
+import '/components/tap_pay_entry.dart';
+import '/backend/api_requests/fees_api.dart';
+import '/components/fee_line.dart';
 import '/backend/services/api_service.dart';
 import '/backend/api_requests/user_api_service.dart';
 import '/backend/api_requests/payment_request_api_service.dart';
@@ -11,6 +14,7 @@ import '/services/app_session_manager.dart';
 import '/utils/transaction_peer_resolver.dart';
 import '/services/transaction_receipt_service.dart';
 import '/widgets/common/back_chevron.dart';
+import '/pages/chain_wallet/wallet_address_page.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -459,6 +463,13 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
 
   Future<void> sendFunds(
       {TransactionAuthenticationResult? preAuthResult}) async {
+    try {
+      await FeesApi.rule('transfer');
+    } catch (_) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not load the transfer fee. Try again.')));
+      return;
+    }
     if (recipientController.text.isEmpty || amountController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -994,7 +1005,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Confirm Transfer'),
         content: SizedBox(
-          height: 200,
+          height: 230,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1003,6 +1014,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                 style:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
+              FeeLine(feeKey: 'transfer', amount: amount),
               const SizedBox(height: 24),
               TextField(
                 controller: tempPin,
@@ -1803,6 +1815,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                             ],
                           ),
                         ),
+                        const TapPayEntry(),
                         Expanded(
                           child: SingleChildScrollView(
                             padding: const EdgeInsets.all(
@@ -2079,6 +2092,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                           ),
                                         ),
                                       ),
+                                      FeeLine(feeKey: 'transfer', amount: double.tryParse(amountController.text.trim()) ?? 0),
                                       const SizedBox(
                                         height: 20,
                                       ),
@@ -2437,6 +2451,25 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                       ],
                                     ),
                                   ),
+                                if (showReceive) ...[
+                                  const SizedBox(height: 16),
+                                  ListTile(
+                                    key: const ValueKey('receive-on-algorand'),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      side: BorderSide(color: FlutterFlowTheme.of(context).alternate),
+                                    ),
+                                    tileColor: FlutterFlowTheme.of(context).secondaryBackground,
+                                    leading: Icon(Icons.qr_code_2, color: FlutterFlowTheme.of(context).primaryText),
+                                    title: Text('Receive on Algorand',
+                                        style: TextStyle(fontWeight: FontWeight.bold, color: FlutterFlowTheme.of(context).primaryText)),
+                                    subtitle: Text('Your on-chain address for ALGO, USDC and FARM',
+                                        style: TextStyle(color: FlutterFlowTheme.of(context).secondaryText)),
+                                    trailing: Icon(Icons.chevron_right, color: FlutterFlowTheme.of(context).secondaryText),
+                                    onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute(builder: (_) => const WalletAddressPage())),
+                                  ),
+                                ],
                                 const SizedBox(
                                   height: 36,
                                 ),
