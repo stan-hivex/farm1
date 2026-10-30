@@ -19,6 +19,8 @@ import '/pages/forgot_pin_page/forgot_pin_page_widget.dart';
 import '/widgets/common/back_chevron.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_settings_model.dart';
+import '/pages/chain_wallet/wallet_address_page.dart';
+import '/pages/assistant/assistant_pages.dart';
 export 'profile_settings_model.dart';
 
 class ProfileSettingsWidget extends StatefulWidget {
@@ -523,7 +525,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                 child: GestureDetector(
                                   onTap: _isKycApproved
                                       ? null
-                                      : () => context.pushNamed('KYCPAGE'),
+                                      : () => context.pushNamed(
+                                          'KYCPAGE',
+                                          queryParameters: const {
+                                            'startDidit': 'true',
+                                          },
+                                        ),
                                   child: ProfileInfoTileWidget(
                                     icon: Icon(
                                       Icons.fingerprint_rounded,
@@ -870,6 +877,36 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           biometricLockTimeoutSeconds),
                                     ),
                                   ),
+                                ),
+                              ),
+                              // WALLET ADDRESS (Algorand, receive USDC)
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const WalletAddressPage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Wallet address',
+                                ),
+                              ),
+                              // MKULIMA AI ASSISTANT
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const AssistantChatPage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.smart_toy_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Mkulima assistant',
                                 ),
                               ),
                               // NOTIFICATIONS
