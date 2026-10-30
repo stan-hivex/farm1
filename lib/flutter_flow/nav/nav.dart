@@ -23,6 +23,9 @@ import '/pages/public_pay_page.dart';
 import '/pages/payment_success_page.dart';
 import '/pages/receipts/receipt_pages.dart';
 import '/index.dart';
+import '/pages/business/business_onboarding_page.dart';
+import '/pages/business/business_status_page.dart';
+import '/pages/business/ops/pay_business_page.dart';
 
 export 'package:go_router/go_router.dart';
 export 'serialization_util.dart';
@@ -310,6 +313,25 @@ GoRouter createRouter(
       builder: (context, params) => ProjectDetailsWidget(
         projectId: params.getParam('projectId', ParamType.String) ?? '',
       ),
+    ),
+    FFRoute(
+      name: BusinessOnboardingPage.routeName,
+      path: BusinessOnboardingPage.routePath,
+      builder: (context, params) => const BusinessOnboardingPage(),
+    ),
+    FFRoute(
+      name: BusinessStatusPage.routeName,
+      path: BusinessStatusPage.routePath,
+      builder: (context, params) => const BusinessStatusPage(),
+    ),
+    FFRoute(
+      name: PayBusinessPage.routeName,
+      path: PayBusinessPage.routePath,
+      builder: (context, params) =>
+          PayBusinessPage(
+            initialCode: params.getParam('code', ParamType.String),
+            initialInvoice: params.getParam('invoice', ParamType.String),
+          ),
     ),
     FFRoute(
       name: MerchantDashboardWidget.routeName,
