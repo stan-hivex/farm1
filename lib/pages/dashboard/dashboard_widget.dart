@@ -1,3 +1,4 @@
+import '/components/farm_coin_icon.dart';
 import 'dart:async';
 // Removed unused import
 import '/backend/services/api_service.dart';
@@ -14,6 +15,10 @@ import '/pages/send_receive/send_receive_widget.dart';
 import '/pages/all_transactions/all_transactions_widget.dart';
 import '/pages/growth_tracking_page/growth_tracking_page_widget.dart';
 import '/pages/merchant_dashboard/merchant_dashboard_widget.dart';
+import '/services/account_context.dart';
+import '/components/account_switcher/account_switcher_widget.dart';
+import '/pages/business/ops/pay_business_page.dart';
+import '/pages/business/business_home_view.dart';
 import '/pages/notifications/user_notifications_page_widget.dart';
 import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
@@ -24,9 +29,10 @@ import '/utils/transaction_peer_resolver.dart';
 import '/utils/transaction_history_utils.dart';
 import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/core/utils/activity_label.dart';
 import 'dashboard_model.dart';
 export 'dashboard_model.dart';
 
@@ -74,6 +80,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
     _model = createModel(context, () => DashboardModel());
     FFAppState().addListener(_handleAppStateChanged);
+    AccountContext.instance.addListener(_handleAccountModeChanged);
+    AccountContext.instance.load();
     _startPeriodicRefresh();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -81,10 +89,15 @@ class _DashboardWidgetState extends State<DashboardWidget>
     });
   }
 
+  void _handleAccountModeChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
     FFAppState().removeListener(_handleAppStateChanged);
+    AccountContext.instance.removeListener(_handleAccountModeChanged);
     WidgetsBinding.instance.removeObserver(this);
     _model.dispose();
     super.dispose();
@@ -793,7 +806,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
           ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        body: RefreshIndicator(
+        body: AccountContext.instance.isBusiness
+            ? const BusinessHomeView()
+            : RefreshIndicator(
           onRefresh: _refreshDashboard,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -803,6 +818,28 @@ class _DashboardWidgetState extends State<DashboardWidget>
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    24.0,
+                    MediaQuery.of(context).padding.top + 12.0,
+                    24.0,
+                    0.0,
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(child: AccountSwitcherWidget()),
+                      IconButton(
+                        tooltip: 'Pay a business',
+                        icon: Icon(
+                          Icons.storefront_outlined,
+                          color: FlutterFlowTheme.of(context).primaryText,
+                        ),
+                        onPressed: () =>
+                            context.pushNamed(PayBusinessPage.routeName),
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: EdgeInsetsDirectional.fromSTEB(
                     0.0,
@@ -957,13 +994,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                             ),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor:
-                                                  FlutterFlowTheme.of(
-                                                    context,
-                                                  ).primary,
+                                                  AppTheme.accent,
                                               foregroundColor:
-                                                  FlutterFlowTheme.of(
-                                                    context,
-                                                  ).secondaryBackground,
+                                                  AppTheme.onAccent,
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                     vertical: 12.0,
@@ -982,9 +1015,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                     context,
                                                   ).titleSmall.override(
                                                     fontWeight: FontWeight.w600,
-                                                    color: FlutterFlowTheme.of(
-                                                      context,
-                                                    ).secondaryBackground,
+                                                    color: AppTheme.onAccent,
                                                   ),
                                             ),
                                           ),
@@ -1239,12 +1270,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                         CrossAxisAlignment
                                                             .center,
                                                     children: [
-                                                      SvgPicture.network(
-                                                        'https://cdn.simpleicons.org/algorand/ffffff.svg',
-                                                        width: 16.0,
-                                                        height: 16.0,
-                                                        fit: BoxFit.contain,
-                                                      ),
+                                                      const FarmCoinIcon(size: 16.0),
+                                                      const SizedBox(width: 6.0),
                                                       Text(
                                                         'FARM BALANCE',
                                                         style: FlutterFlowTheme.of(context).labelSmall.override(
@@ -1299,16 +1326,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                                     FontWeight
                                                                         .w800,
                                                               ),
-                                                          color:
-                                                              Theme.of(
-                                                                    context,
-                                                                  ).brightness ==
-                                                                  Brightness
-                                                                      .dark
-                                                              ? Colors.white
-                                                              : FlutterFlowTheme.of(
-                                                                  context,
-                                                                ).onPrimary,
+                                                          // Black card in both modes: gold passes AA.
+                                                          color: AppTheme.accent,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
                                                               FontWeight.w800,
@@ -2021,7 +2040,11 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         ? '$peerUsername ($merchantName)'
                                         : peerUsername;
 
-                                    final String title = isMerchantPayment
+                                    final ActivityLabel? sysLabel =
+                                        systemActivityLabel(tx);
+                                    final String title = sysLabel != null
+                                        ? sysLabel.title
+                                        : isMerchantPayment
                                         ? (isOutgoing
                                               ? 'Sent to $peerWithMerchant'
                                               : 'Received from $peerWithMerchant')
@@ -2030,7 +2053,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                               : 'Received from $peerUsername');
 
                                     final String subtitle =
-                                        '${isMerchantPayment ? 'merchant_payment' : txType} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
+                                        '${sysLabel?.type ?? (isMerchantPayment ? 'merchant_payment' : txType)} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
 
                                     return Padding(
                                       padding: const EdgeInsets.only(
