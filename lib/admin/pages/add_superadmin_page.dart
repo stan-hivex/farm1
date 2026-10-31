@@ -1,12 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 
 import '../core/admin_config.dart';
 import '../services/admin_api_service.dart';
 import '/widgets/common/back_chevron.dart';
+import '/utils/user_error_message.dart';
 
 class AddSuperadminPage extends StatefulWidget {
   const AddSuperadminPage({super.key});
@@ -86,7 +88,7 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error.toString().replaceFirst('Exception: ', '')),
+          content: Text(userErrorMessage(error)),
           backgroundColor: Colors.red,
         ),
       );
@@ -128,7 +130,6 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
 
   @override
   Widget build(BuildContext context) {
-    const accent = Color(0xFFD4AF37);
     return Scaffold(
       backgroundColor: const Color(0xFF0B1320),
       appBar: AppBar(
@@ -196,8 +197,8 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
                 child: ElevatedButton(
                   onPressed: _submitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.black,
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: AppTheme.onAccent,
                   ),
                   child: _submitting
                       ? const SizedBox(
@@ -205,7 +206,7 @@ class _AddSuperadminPageState extends State<AddSuperadminPage> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.black,
+                            color: AppTheme.onAccent,
                           ),
                         )
                       : Text(

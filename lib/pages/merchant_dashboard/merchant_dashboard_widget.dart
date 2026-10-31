@@ -1,4 +1,5 @@
 import '/components/button/button_widget.dart';
+import '/pages/business/business_upgrade_tile.dart';
 import '/components/merchant_stat_card/merchant_stat_card_widget.dart';
 import '/components/merchant_transaction_item/merchant_transaction_item_widget.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -11,10 +12,12 @@ import '/utils/merchant_qr_utils.dart';
 import '/services/transaction_receipt_service.dart';
 
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import 'merchant_dashboard_model.dart';
+import '/utils/user_error_message.dart';
 
 class MerchantDashboardWidget extends StatefulWidget {
   const MerchantDashboardWidget({super.key});
@@ -205,7 +208,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
         await _fetchMerchantQr();
       }
     } catch (e) {
-      final message = e.toString().replaceFirst('Exception: ', '').trim();
+      final message = userErrorMessage(e);
       if (message.toLowerCase().contains('merchant account not found')) {
         setState(() {
           merchantStatus = 'not_submitted';
@@ -477,7 +480,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       setState(() {
         applyingMerchant = false;
       });
-      showError(e.toString());
+      showError(userErrorMessage(e));
     }
   }
 
@@ -502,7 +505,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       setState(() {
         regeneratingQr = false;
       });
-      showError(e.toString());
+      showError(userErrorMessage(e));
     }
   }
 
@@ -560,7 +563,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       setState(() {
         payoutLoading = false;
       });
-      showError(e.toString());
+      showError(userErrorMessage(e));
     }
   }
 
@@ -632,7 +635,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       }
     } catch (e) {
       if (mounted) {
-        showError('Failed to save QR code: ${e.toString()}');
+        showError('Failed to save QR code: ${userErrorMessage(e)}');
       }
     }
   }
@@ -648,7 +651,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
       final bytes = await _getLabeledQrBytes(qrSource);
       await QrDownloadService.instance.shareQr(bytes);
     } catch (e) {
-      showError('Failed to share QR code: ${e.toString()}');
+      showError('Failed to share QR code: ${userErrorMessage(e)}');
     }
   }
 
@@ -728,19 +731,15 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                     onPressed: applyingMerchant ? null : applyMerchant,
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
-                          Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white
-                              : Colors.black,
+                          AppTheme.accent,
                       foregroundColor:
-                          Theme.of(context).brightness == Brightness.dark
-                              ? Colors.black
-                              : Colors.white,
+                          AppTheme.onAccent,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
                     child: applyingMerchant
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const CircularProgressIndicator(color: AppTheme.onAccent)
                         : const Text('Submit Application'),
                   ),
                 ),
@@ -816,20 +815,16 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                         onPressed: payoutLoading ? null : requestPayout,
                         style: ElevatedButton.styleFrom(
                           backgroundColor:
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.white
-                                  : Colors.black,
+                              AppTheme.accent,
                           foregroundColor:
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.black
-                                  : Colors.white,
+                              AppTheme.onAccent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         child: payoutLoading
                             ? const CircularProgressIndicator(
-                                color: Colors.white)
+                                color: AppTheme.onAccent)
                             : const Text('Submit Payout Request'),
                       ),
                     ),
@@ -983,18 +978,17 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                             child: ElevatedButton(
                               onPressed: needsApplication
                                   ? openApplyMerchantModal
-                                  : () => context.pushNamed('KYCPAGE'),
+                                  : () => context.pushNamed(
+                                          'KYCPAGE',
+                                          queryParameters: const {
+                                            'startDidit': 'true',
+                                          },
+                                        ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor:
-                                    Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? Colors.white
-                                        : Colors.black,
+                                    AppTheme.accent,
                                 foregroundColor:
-                                    Theme.of(context).brightness ==
-                                            Brightness.dark
-                                        ? Colors.black
-                                        : Colors.white,
+                                    AppTheme.onAccent,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(18),
                                 ),
@@ -1117,6 +1111,10 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                       ),
                     ),
                   ),
+                ),
+                const Padding(
+                  padding: EdgeInsetsDirectional.fromSTEB(0, 16, 0, 0),
+                  child: BusinessUpgradeTile(),
                 ),
                 Padding(
                   padding: EdgeInsetsDirectional.fromSTEB(0, 24, 0, 24),

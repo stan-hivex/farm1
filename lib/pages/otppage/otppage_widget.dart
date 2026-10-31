@@ -14,11 +14,13 @@ import '/services/biometric_enrollment_prompt.dart';
 import '/pages/superadmin/superadmin_dashboard_page.dart';
 
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 
 import 'otppage_model.dart';
+import '/utils/user_error_message.dart';
 export 'otppage_model.dart';
 
 class OtppageWidget extends StatefulWidget {
@@ -494,11 +496,11 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         _isCompletingVerification = false;
         _isVerifying = false;
         _statusTitle = 'Verification failed';
-        _statusMessage = e.toString();
+        _statusMessage = userErrorMessage(e);
         _showManualOtpField = true;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verification failed: $e')),
+        SnackBar(content: Text('Verification failed: ${userErrorMessage(e)}')),
       );
     }
   }
@@ -785,10 +787,10 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                     child: ElevatedButton(
                       onPressed: _model.isLoading ? null : _verifyManualCode,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black,
-                        disabledForegroundColor: Colors.white,
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: AppTheme.onAccent,
+                        disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.5),
+                        disabledForegroundColor: AppTheme.onAccent.withValues(alpha: 0.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -796,7 +798,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                       child: Text(
                         _model.isLoading ? 'Verifying...' : 'Verify Code',
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.onAccent,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
@@ -815,10 +817,10 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                     child: ElevatedButton(
                       onPressed: _isVerifying ? null : _resendCode,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black,
-                        disabledForegroundColor: Colors.white,
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: AppTheme.onAccent,
+                        disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.5),
+                        disabledForegroundColor: AppTheme.onAccent.withValues(alpha: 0.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -826,7 +828,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                       child: const Text(
                         'Try Again',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.onAccent,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
 
 import '/backend/services/api_service.dart';
@@ -10,6 +11,7 @@ import '/utils/transaction_peer_resolver.dart';
 import '/utils/transaction_history_utils.dart';
 import '/widgets/common/back_chevron.dart';
 import 'all_transactions_model.dart';
+import '/utils/user_error_message.dart';
 
 export 'all_transactions_model.dart';
 
@@ -89,7 +91,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save receipts: $error')),
+        SnackBar(content: Text('Could not save receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -102,7 +104,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share receipts: $error')),
+        SnackBar(content: Text('Could not share receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -144,7 +146,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = userErrorMessage(e);
         _loading = false;
       });
     }
@@ -587,11 +589,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      selectedColor: Theme.of(context).primaryColor,
+      selectedColor: AppTheme.accent,
       backgroundColor: Theme.of(context).colorScheme.surface,
       labelStyle: TextStyle(
         color: selected
-            ? Theme.of(context).colorScheme.onPrimary
+            ? AppTheme.onAccent
             : Theme.of(context).textTheme.bodyMedium?.color,
       ),
       shape: const StadiumBorder(),
@@ -607,11 +609,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      selectedColor: Theme.of(context).primaryColor,
+      selectedColor: AppTheme.accent,
       backgroundColor: Theme.of(context).colorScheme.surface,
       labelStyle: TextStyle(
         color: selected
-            ? Theme.of(context).colorScheme.onPrimary
+            ? AppTheme.onAccent
             : Theme.of(context).textTheme.bodyMedium?.color,
       ),
       shape: const StadiumBorder(),

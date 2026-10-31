@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert' as convert;
 
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/widgets/revenue_overview_chart.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +25,7 @@ import 'package:flutter/services.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/services/transaction_receipt_service.dart';
+import '/utils/user_error_message.dart';
 
 class SuperadminDashboardPage extends StatefulWidget {
   const SuperadminDashboardPage({super.key});
@@ -205,7 +207,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     } catch (e, st) {
       debugPrint('[SuperadminDashboardPage] _loadDashboardData failed: $e');
       debugPrint(st.toString());
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      setState(() => _error = userErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
       // Refresh superadmin wallet info when dashboard refresh completes
@@ -301,7 +303,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  'Failed to load exchange rates: ${e.toString().replaceAll('Exception: ', '')}')),
+                  'Failed to load exchange rates: ${userErrorMessage(e)}')),
         );
       }
     } finally {
@@ -370,7 +372,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  'Error saving exchange rates: ${e.toString().replaceAll('Exception: ', '')}'),
+                  'Error saving exchange rates: ${userErrorMessage(e)}'),
               backgroundColor: Colors.red),
         );
       }
@@ -445,7 +447,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                       fontWeight: FontWeight.w700,
                       fontSize: 15)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: accent,
+  foregroundColor: AppTheme.onAccent,
+                backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -478,7 +481,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
   Widget build(BuildContext context) {
     final bgColor = const Color(0xFF0B1320);
     final cardColor = const Color(0xFF111B2A);
-    final accent = const Color(0xFFD4AF37);
+    const accent = AppTheme.accent;
     final muted = Colors.white70;
 
     if (_loading) {
@@ -517,11 +520,12 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _loadDashboardData,
-                style: ElevatedButton.styleFrom(backgroundColor: accent),
+                style: ElevatedButton.styleFrom(
+  foregroundColor: AppTheme.onAccent,backgroundColor: AppTheme.accent),
                 child: Text(
                   'Retry',
                   style: GoogleFonts.plusJakartaSans(
-                    color: Colors.black,
+                    color: AppTheme.onAccent,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -844,7 +848,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: accent,
+  foregroundColor: AppTheme.onAccent,
+                backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -865,7 +870,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                       fontWeight: FontWeight.w700,
                       fontSize: 15)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: accent,
+  foregroundColor: AppTheme.onAccent,
+                backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -885,7 +891,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                       fontWeight: FontWeight.w700,
                       fontSize: 15)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: accent.withValues(alpha: 0.9),
+  foregroundColor: AppTheme.onAccent,
+                backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -904,7 +911,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                       fontWeight: FontWeight.w700,
                       fontSize: 15)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: accent.withValues(alpha: 0.8),
+  foregroundColor: AppTheme.onAccent,
+                backgroundColor: AppTheme.accent,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
               ),
@@ -1458,11 +1466,12 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
               children: [
                 ElevatedButton(
                   onPressed: _savingExchangeRates ? null : _saveExchangeRates,
-                  style: ElevatedButton.styleFrom(backgroundColor: accent),
+                  style: ElevatedButton.styleFrom(
+  foregroundColor: AppTheme.onAccent,backgroundColor: AppTheme.accent),
                   child: Text(
                     _savingExchangeRates ? 'Saving...' : 'Save Rates',
                     style: GoogleFonts.plusJakartaSans(
-                      color: Colors.black,
+                      color: AppTheme.onAccent,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1569,7 +1578,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  'Error saving conversion rate: ${e.toString().replaceAll('Exception: ', '')}'),
+                  'Error saving conversion rate: ${userErrorMessage(e)}'),
               backgroundColor: Colors.red),
         );
       }
@@ -1618,11 +1627,12 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
               children: [
                 ElevatedButton(
                   onPressed: _savingCurrencyRate ? null : _saveCurrencyRate,
-                  style: ElevatedButton.styleFrom(backgroundColor: accent),
+                  style: ElevatedButton.styleFrom(
+  foregroundColor: AppTheme.onAccent,backgroundColor: AppTheme.accent),
                   child: Text(
                     _savingCurrencyRate ? 'Saving...' : 'Save Conversion Rate',
                     style: GoogleFonts.plusJakartaSans(
-                      color: Colors.black,
+                      color: AppTheme.onAccent,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

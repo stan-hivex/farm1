@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
 import '/services/transaction_receipt_service.dart';
 import '/widgets/common/transaction_receipt_selection_bar.dart';
+import '/utils/user_error_message.dart';
 
 class WithdrawalsManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -125,7 +127,7 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share receipts: $error')),
+        SnackBar(content: Text('Could not share receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -141,7 +143,7 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save receipts: $error')),
+        SnackBar(content: Text('Could not save receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -388,7 +390,7 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
   Widget build(BuildContext context) {
     final bgColor = Colors.white;
     final cardColor = Colors.white;
-    final accent = const Color(0xFFEAF2FF);
+    final accent = AppTheme.accentOn(bgColor);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -854,15 +856,13 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
                           color: _statusFilter == s
-                              ? Colors.white
+                              ? AppTheme.onAccent
                               : Colors.black)),
                   selected: _statusFilter == s,
-                  selectedColor:
-                      _statusFilter == s ? Colors.black : Colors.white,
-                  backgroundColor:
-                      _statusFilter == s ? Colors.black : Colors.white,
+                  selectedColor: AppTheme.accent,
+                  backgroundColor: Colors.white,
                   side: BorderSide(
-                      color: _statusFilter == s ? Colors.black : Colors.black54,
+                      color: _statusFilter == s ? AppTheme.accent : Colors.black54,
                       width: 1),
                   onSelected: (_) {
                     setState(() {

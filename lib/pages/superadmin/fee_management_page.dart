@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/theme_extensions.dart';
 import '/admin/services/admin_api_service.dart';
 import '/admin/services/admin_page_refresh_coordinator.dart';
+import '/utils/user_error_message.dart';
 
 class FeeManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -17,7 +19,7 @@ class _FeeManagementPageState extends State<FeeManagementPage>
     with AdminPageRefreshMixin<FeeManagementPage> {
   final _bgColor = Colors.white;
   final _cardColor = Colors.white;
-  final _accent = const Color(0xFFEAF2FF);
+  final _accent = AppTheme.accentOn(Colors.white);
 
   List<dynamic> _fees = [];
   bool _loading = true;
@@ -53,7 +55,7 @@ class _FeeManagementPageState extends State<FeeManagementPage>
       });
     } catch (e) {
       if (mounted && _fees.isEmpty) {
-        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+        setState(() => _error = userErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -88,15 +90,22 @@ class _FeeManagementPageState extends State<FeeManagementPage>
   }
 
   String _feeLabel(dynamic fee) {
-    return fee['name']?.toString() ??
-        fee['fee_code']?.toString() ??
+    return fee['label']?.toString() ??
+        fee['name']?.toString() ??
+        fee['transaction_type']?.toString() ??
         'Fee setting';
   }
 
   String _feeDescription(dynamic fee) {
-    return fee['description']?.toString() ??
-        fee['note']?.toString() ??
-        'Update the fee value for this configuration.';
+    final key = fee['transaction_type']?.toString();
+    final payer = fee['payer']?.toString();
+    final desc = fee['description']?.toString() ??
+        'Update the fee percent for this configuration.';
+    return [
+      desc,
+      if (key != null) 'Key: $key',
+      if (payer != null) 'Paid by: $payer',
+    ].join(' · ');
   }
 
   String _feeValue(dynamic fee) {
@@ -125,7 +134,7 @@ class _FeeManagementPageState extends State<FeeManagementPage>
       }
       _snack('Fee updated ✓', context.successColor);
     } catch (e) {
-      _snack(e.toString().replaceAll('Exception: ', ''), context.errorColor);
+      _snack(userErrorMessage(e), context.errorColor);
     } finally {
       if (mounted) setState(() => _saving[feeId] = false);
     }
@@ -268,7 +277,7 @@ class _FeeManagementPageState extends State<FeeManagementPage>
                                     style: GoogleFonts.plusJakartaSans(
                                         color: context.onSurface),
                                     decoration: InputDecoration(
-                                      hintText: 'Fee value',
+                                      hintText: 'Percent (0–100)',
                                       hintStyle: GoogleFonts.plusJakartaSans(
                                           color: context.onSurface
                                               .withOpacity(0.38)),
@@ -297,7 +306,8 @@ class _FeeManagementPageState extends State<FeeManagementPage>
                                   height: 48,
                                   child: ElevatedButton(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: _accent,
+  foregroundColor: AppTheme.onAccent,
+                                      backgroundColor: AppTheme.accent,
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(14)),
@@ -309,15 +319,13 @@ class _FeeManagementPageState extends State<FeeManagementPage>
                                             width: 18,
                                             height: 18,
                                             child: CircularProgressIndicator(
-                                                color: context.onBackground
-                                                    .withOpacity(0.87),
+                                                color: AppTheme.onAccent,
                                                 strokeWidth: 2),
                                           )
                                         : Text('Save',
                                             style: GoogleFonts.plusJakartaSans(
                                                 fontWeight: FontWeight.bold,
-                                                color: context.onBackground
-                                                    .withOpacity(0.87))),
+                                                color: AppTheme.onAccent)),
                                   ),
                                 ),
                               ]),

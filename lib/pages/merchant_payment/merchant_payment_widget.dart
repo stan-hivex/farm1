@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/backend/services/api_service.dart';
 import '/services/transaction_authentication_service.dart';
@@ -8,6 +9,7 @@ import '/services/app_session_manager.dart';
 import '/widgets/common/back_chevron.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/widgets/searchable_crypto_picker.dart';
+import '/utils/user_error_message.dart';
 
 class MerchantPaymentWidget extends StatefulWidget {
   const MerchantPaymentWidget({
@@ -73,7 +75,7 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        error = 'Could not load merchant QR details: $e';
+        error = 'Could not load merchant QR details: ${userErrorMessage(e)}';
         _loadingQrPayload = false;
       });
     }
@@ -107,7 +109,7 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
           );
         }
       } catch (error) {
-        _showSnack('Could not load NOWPayments currencies: $error');
+        _showSnack('Could not load NOWPayments currencies: ${userErrorMessage(error)}');
         return;
       }
     }
@@ -216,7 +218,7 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
         throw StateError('Could not open the payment provider checkout');
       }
     } catch (e) {
-      if (mounted) _showSnack('Could not start payment: $e');
+      if (mounted) _showSnack('Could not start payment: ${userErrorMessage(e)}');
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
@@ -352,7 +354,7 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        error = e.toString();
+        error = userErrorMessage(e);
       });
       _showSnack('common.transaction_failed'.tr());
     } finally {
@@ -374,8 +376,6 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = FlutterFlowTheme.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
         leading: const BackChevron(),
@@ -494,13 +494,14 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
                   onPressed:
                       _loadingQrPayload ? null : _promptBiometricForPinField,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.white : theme.primary,
+  foregroundColor: AppTheme.onAccent,
+                    backgroundColor: AppTheme.accent,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
                   ),
                   child: Text('Continue',
                       style: theme.titleMedium.copyWith(
-                          color: isDark ? Colors.black : Colors.white,
+                          color: AppTheme.onAccent,
                           fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -524,20 +525,17 @@ class _MerchantPaymentWidgetState extends State<MerchantPaymentWidget> {
                   onPressed:
                       isLoading || _loadingQrPayload ? null : _submitPayment,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? Colors.white : theme.primary,
+  foregroundColor: AppTheme.onAccent,
+                    backgroundColor: AppTheme.accent,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
                   ),
                   child: isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const CircularProgressIndicator(color: AppTheme.onAccent)
                       : Builder(builder: (context) {
-                          final isDark =
-                              Theme.of(context).brightness == Brightness.dark;
-                          final textColor =
-                              isDark ? Colors.black : Colors.white;
                           return Text('Pay Merchant',
                               style: theme.titleMedium.copyWith(
-                                  color: textColor,
+                                  color: AppTheme.onAccent,
                                   fontWeight: FontWeight.bold));
                         }),
                 ),

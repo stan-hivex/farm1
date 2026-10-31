@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import '/components/farm_coin_icon.dart';
+import '../../core/app_theme.dart';
+import '/backend/api_requests/fees_api.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '/backend/services/api_service.dart';
@@ -17,6 +20,7 @@ import '/services/transaction_authorization_service.dart';
 import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_history_utils.dart';
 import '/widgets/searchable_crypto_picker.dart';
+import '/utils/user_error_message.dart';
 
 class WithdrawpageWidget extends StatefulWidget {
   const WithdrawpageWidget({super.key});
@@ -68,12 +72,19 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
   bool _loadingCryptoMinimum = false;
   String? _cryptoMinimumError;
 
-  // Fee rates per method
-  final Map<String, double> _fees = {
-    'BANK': 0.015,
-    'MOBILE_MONEY': 0.015,
-    'CRYPTO': 0.015,
-  };
+  // Live withdrawal fee from the backend fee schedule (same rate for every method).
+  FeeRule? _feeRule;
+  String? _feeError;
+
+  Future<void> _fetchFee() async {
+    setState(() => _feeError = null);
+    try {
+      final r = await FeesApi.rule('withdrawal');
+      if (mounted) setState(() => _feeRule = r);
+    } catch (_) {
+      if (mounted) setState(() => _feeError = 'Could not load the withdrawal fee. Tap to retry.');
+    }
+  }
 
   final Map<String, Map<String, double?>> _withdrawLimits = {
     'BANK': {'min': 4999, 'max': 999999},
@@ -82,11 +93,11 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
   };
 
   double get amount => double.tryParse(_amountCtrl.text.trim()) ?? 0;
-  double get feeRate => _fees[selectedMethod] ?? 0.015;
+  double get feeRate => (_feeRule?.percent ?? 0) / 100;
   double get _amountInFarm => selectedMethod == 'CRYPTO'
       ? (_cryptoFarmUsdRate == null ? 0 : amount / _cryptoFarmUsdRate!)
       : amount;
-  double get fee => _amountInFarm * feeRate;
+  double get fee => _feeRule?.feeFor(_amountInFarm, dp: 8) ?? 0;
   double get settlement => _amountInFarm - fee;
 
   Map<String, double?> get _activeWithdrawLimits =>
@@ -145,6 +156,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
   @override
   void initState() {
     super.initState();
+    _fetchFee();
     _fetchWallet();
     _fetchHistory();
     _fetchPaystackDestinations();
@@ -260,7 +272,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
           _selectedBank = null;
           _selectedBankCode = null;
           _paystackDestinationError =
-              'Could not load Paystack bank destinations: $error';
+              'Could not load Paystack bank destinations: ${userErrorMessage(error)}';
         });
       }
     } finally {
@@ -327,7 +339,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       if (!mounted) return;
       setState(() {
         _cryptoNetworkOptions.clear();
-        _cryptoNetworkErrors[lookupKey] = error.toString();
+        _cryptoNetworkErrors[lookupKey] = userErrorMessage(error);
         selectedCryptoNetwork = null;
       });
     } finally {
@@ -372,7 +384,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _cryptoMinimumError = error.toString());
+      setState(() => _cryptoMinimumError = userErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loadingCryptoMinimum = false);
     }
@@ -461,7 +473,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
         _snack('Selected receipts saved to gallery');
       }
     } catch (error) {
-      if (mounted) _snack('Could not save receipts: $error');
+      if (mounted) _snack('Could not save receipts: ${userErrorMessage(error)}');
     }
   }
 
@@ -504,7 +516,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
             Text(
               'Total deduction: ${selectedMethod == 'CRYPTO' ? 'USD ${amount.toStringAsFixed(2)} (${_amountInFarm.toStringAsFixed(4)} FARM)' : '${amount.toStringAsFixed(4)} FARM'}',
             ),
-            Text('Transaction fee (1.5%): ${fee.toStringAsFixed(4)} FARM'),
+            Text('Transaction fee (${_feeRule?.percentLabel ?? '—'}): ${fee.toStringAsFixed(4)} FARM'),
             Text('Net amount: ${settlement.toStringAsFixed(4)} FARM'),
             const SizedBox(height: 8),
             Text(
@@ -559,6 +571,11 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
     TransactionAuthenticationResult? preAuthResult,
   }) async {
     if (isLoading) return;
+    if (_feeRule == null) {
+      _snack(_feeError ?? 'Loading the withdrawal fee…');
+      if (_feeError != null) _fetchFee();
+      return;
+    }
 
     if (!_hasValidWithdrawAmount) {
       _snack(_withdrawValidationMessage);
@@ -1158,14 +1175,14 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(
+                              Row(mainAxisSize: MainAxisSize.min, children: [const FarmCoinIcon(size: 28), const SizedBox(width: 10), Flexible(child: Text(
                                 '${walletBalance.toStringAsFixed(4)} FARM',
                                 style: GoogleFonts.plusJakartaSans(
-                                  color: Colors.white,
+                                  color: AppTheme.accent,
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
                                 ),
-                              ),
+                              ))]),
                             ],
                           ),
                   ),
@@ -1337,9 +1354,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       child: ElevatedButton(
                         onPressed: _promptBiometricForPinField,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? const Color(0xFF1F1F1F)
-                              : Colors.black,
+  foregroundColor: AppTheme.onAccent,
+                          backgroundColor: AppTheme.accent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1347,7 +1363,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                         child: Text(
                           'Continue',
                           style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
+                            color: AppTheme.onAccent,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -1378,10 +1394,16 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                               : '${amount.toStringAsFixed(4)} FARM',
                         ),
                         const SizedBox(height: 12),
-                        _feeRow(
-                          'Fee (${(feeRate * 100).toStringAsFixed(1)}%)',
-                          '${fee.toStringAsFixed(4)} FARM',
-                        ),
+                        if (_feeRule == null)
+                          InkWell(
+                            onTap: _feeError != null ? _fetchFee : null,
+                            child: _feeRow('Fee', _feeError != null ? 'Unavailable, tap to retry' : 'Loading…'),
+                          )
+                        else
+                          _feeRow(
+                            'Fee (${_feeRule!.percentLabel})',
+                            '${fee.toStringAsFixed(4)} FARM',
+                          ),
                         const Divider(height: 24),
                         _feeRow(
                           'You Receive',
@@ -1400,9 +1422,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       height: 58,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? const Color(0xFF1F1F1F)
-                              : Colors.black,
+  foregroundColor: AppTheme.onAccent,
+                          backgroundColor: AppTheme.accent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1412,12 +1433,12 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                             : _createWithdraw,
                         child: isLoading
                             ? const CircularProgressIndicator(
-                                color: Colors.white,
+                                color: AppTheme.onAccent,
                               )
                             : Text(
                                 'Withdraw Funds',
                                 style: GoogleFonts.plusJakartaSans(
-                                  color: Colors.white,
+                                  color: AppTheme.onAccent,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),
