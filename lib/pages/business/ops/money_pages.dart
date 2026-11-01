@@ -7,39 +7,162 @@ import '/backend/api_requests/chain_wallet_api.dart';
 import '/pages/chain_wallet/wallet_address_page.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
-class BusinessWalletPage extends StatelessWidget {
+class BusinessWalletPage extends StatefulWidget {
   const BusinessWalletPage({super.key});
+  @override
+  State<BusinessWalletPage> createState() => _BusinessWalletPageState();
+}
+
+class _BusinessWalletPageState extends State<BusinessWalletPage> {
+  Key _key = UniqueKey();
+
+  Future<void> _moveToPersonal(Map<String, dynamic> w) async {
+    final ctrl = TextEditingController();
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Move to personal'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+          decoration: bizInput(c, 'Amount (FARM)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, double.tryParse(ctrl.text)),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (amount == null || amount <= 0 || !mounted) return;
+    final pin = await confirmWithPin(context,
+        title: 'Move to personal',
+        message: 'Move ${money(amount)} from your business wallet to your personal wallet? No fee.');
+    if (pin == null || !mounted) return;
+    final ok = await runBusy(context, () async {
+      await BusinessOpsApi.moveToPersonal(amount, pin);
+      return true;
+    }, success: 'Moved to your personal wallet');
+    if (ok == true && mounted) setState(() => _key = UniqueKey());
+  }
+
   @override
   Widget build(BuildContext context) => BizScaffold(
         title: 'Business wallet',
         body: BizAsync<Map<String, dynamic>>(
+          key: _key,
           load: BusinessOpsApi.wallet,
-          builder: (c, w, _) => ListView(padding: const EdgeInsets.all(20), children: [
-            BizCard(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Available', style: TextStyle(color: mutedColor(c))),
-                Row(children: [
-                  if ('${w['currency'] ?? 'FARM'}' == 'FARM') ...[const FarmCoinIcon(size: 28), const SizedBox(width: 10)],
-                  Flexible(child: Text(money(w['available_balance'], '${w['currency'] ?? 'FARM'}'),
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: goldOn(c)))),
+          builder: (c, w, _) {
+            final separate = w['separate_from_personal'] == true;
+            return ListView(padding: const EdgeInsets.all(20), children: [
+              BizCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Business balance available', style: TextStyle(color: mutedColor(c))),
+                  Row(children: [
+                    if ('${w['currency'] ?? 'FARM'}' == 'FARM') ...[const FarmCoinIcon(size: 28), const SizedBox(width: 10)],
+                    Flexible(child: Text(money(w['available_balance'], '${w['currency'] ?? 'FARM'}'),
+                      style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: goldOn(c)))),
+                  ]),
+                  const SizedBox(height: 12),
+                  KeyValue('Total balance', money(w['balance'])),
+                  KeyValue('Locked in escrow', money(w['locked_balance'])),
+                  if (w['is_frozen'] == true) const KeyValue('Status', 'Frozen — contact support'),
+                  if (w['can_move_to_personal'] == true) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => _moveToPersonal(w),
+                        icon: const Icon(Icons.swap_horiz_rounded),
+                        label: const Text('Move to personal'),
+                      ),
+                    ),
+                  ],
                 ]),
+              ),
+              const SizedBox(height: 12),
+              // The on-chain address belongs to the owner's personal wallet,
+              // so it's only shown while the business still settles there.
+              if (!separate) ...[
+                const _AlgorandAddressCard(),
                 const SizedBox(height: 12),
-                KeyValue('Total balance', money(w['balance'])),
-                KeyValue('Locked in escrow', money(w['locked_balance'])),
-                if (w['is_frozen'] == true) const KeyValue('Status', 'Frozen — contact support'),
-              ]),
-            ),
-            const SizedBox(height: 12),
-            const _AlgorandAddressCard(),
-            const SizedBox(height: 12),
-            Text(
-              'Your business wallet is the settlement wallet of the account owner. '
-              'Payments from links and invoices land here.',
-              style: TextStyle(color: mutedColor(c), height: 1.5),
-            ),
-          ]),
+              ] else ...[
+                _BusinessChainCard(account: w['chain_account'] is Map ? Map<String, dynamic>.from(w['chain_account'] as Map) : null),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                separate
+                    ? 'This is your business (merchant) wallet, separate from your personal wallet. '
+                        'QR payments, invoices, payment links and escrow releases land here. '
+                        'Payouts are paid from it, and moving money to personal is free.'
+                    : 'Your business wallet is the settlement wallet of the account owner. '
+                        'Payments from links and invoices land here.',
+                style: TextStyle(color: mutedColor(c), height: 1.5),
+              ),
+            ]);
+          },
         ),
       );
+}
+
+/// The business wallet's own custodial Algorand account (not the owner's personal one).
+class _BusinessChainCard extends StatelessWidget {
+  const _BusinessChainCard({required this.account});
+  final Map<String, dynamic>? account;
+  @override
+  Widget build(BuildContext c) {
+    final a = account;
+    if (a == null) {
+      return BizCard(
+        child: Text('Business Algorand account not available yet. It appears here once on-chain is switched on.',
+            style: TextStyle(color: mutedColor(c))),
+      );
+    }
+    final ready = a['ready'] == true;
+    final addr = '${a['address']}';
+    return BizCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Receive on Algorand (business)', style: TextStyle(fontWeight: FontWeight.w700, color: fgColor(c))),
+        const SizedBox(height: 4),
+        Text('Your business FARM is held on-chain in this account, separate from your personal one.',
+            style: TextStyle(fontSize: 12, color: mutedColor(c))),
+        const SizedBox(height: 8),
+        if (ready)
+          Center(
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(6),
+              child: QrImageView(data: addr, size: 120, backgroundColor: Colors.white),
+            ),
+          ),
+        const SizedBox(height: 6),
+        SelectableText(addr, style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: fgColor(c))),
+        Text(
+          ready
+              ? a['usdc_ready'] == true
+                  ? 'Receive FARM, USDC or ALGO here on Algorand (${a['network'] ?? ''}); it is credited to your business balance. Only send on Algorand; other networks or tokens may be lost. USDC and ALGO convert to FARM at the live rate; FARM is credited 1:1.'
+                  : 'Receive FARM or ALGO here on Algorand (${a['network'] ?? ''}); it is credited to your business balance. USDC is being set up: do not send USDC yet. Only send on Algorand; other networks or tokens may be lost.'
+              : 'Setting up this account. Do not send funds yet.',
+          style: TextStyle(fontSize: 11, color: mutedColor(c)),
+        ),
+        TextButton.icon(
+          onPressed: ready
+              ? () async {
+                  await Clipboard.setData(ClipboardData(text: addr));
+                  if (c.mounted) bizSnack(c, 'Address copied');
+                }
+              : null,
+          icon: Icon(Icons.copy, size: 16, color: fgColor(c)),
+          label: Text('Copy', style: TextStyle(color: fgColor(c))),
+        ),
+      ]),
+    );
+  }
 }
 
 /// The owner's on-chain receiving address (ALGO, USDC, FARM on Algorand).
