@@ -233,6 +233,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.7"
+  cryptography:
+    dependency: "direct main"
+    description:
+      name: cryptography
+      sha256: "3eda3029d34ec9095a27a198ac9785630fe525c0eb6a49f3d575272f8e792ef0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.9.0"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -1394,6 +1402,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  smart_auth:
+    dependency: "direct main"
+    description:
+      name: smart_auth
+      sha256: a536423c50d71e9a311d16027346634d0deadd07dafc5b5606b46719cf6fb2b6
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
   socket_io_client:
     dependency: "direct main"
     description:

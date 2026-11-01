@@ -1,6 +1,7 @@
 import '/pages/security/sessions_page.dart';
 import '/pages/security/change_password_page.dart';
 import '/pages/verify_email_page/verify_email_page_widget.dart';
+import '/pages/devices/trusted_devices_page.dart';
 import 'dart:async';
 
 import '/backend/services/api_service.dart';
@@ -680,6 +681,47 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                                 ),
                                               ),
                                           ],
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: context.background,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // TRUSTED DEVICES
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const TrustedDevicesPage(),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: context.primaryColor,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.devices_outlined,
+                                        color: context.background,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Trusted devices',
+                                        style: TextStyle(
+                                          color: context.background,
                                         ),
                                       ),
                                       Icon(
