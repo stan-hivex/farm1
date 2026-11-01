@@ -13,7 +13,10 @@ import 'deposits_management_page.dart';
 import 'withdrawals_management_page.dart';
 import 'notifications_management_page.dart';
 import 'merchant_kyb_management_page.dart';
+import 'business_review_page.dart';
 import 'payouts_page.dart';
+import 'travel_review_page.dart';
+import 'monitoring_pages.dart';
 import '../services/admin_api_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
@@ -96,6 +99,11 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _NavItem(icon: Icons.campaign_rounded, label: 'Notifications'),
     _NavItem(icon: Icons.support_agent_rounded, label: 'Live Support'),
     _NavItem(icon: Icons.badge_rounded, label: 'Merchant KYB'),
+    _NavItem(icon: Icons.business_rounded, label: 'Business KYB'),
+    _NavItem(icon: Icons.flight_rounded, label: 'Travel review'),
+    _NavItem(icon: Icons.agriculture_rounded, label: 'Projects'),
+    _NavItem(icon: Icons.token_rounded, label: 'Tokenization'),
+    _NavItem(icon: Icons.monitor_heart_rounded, label: 'Payments monitor'),
   ];
 
   void _goToDashboard() {
@@ -116,6 +124,11 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
         NotificationsManagementPage(onGoBack: _goToDashboard),
         SupportInboxPage(onGoBack: _goToDashboard),
         MerchantKybManagementPage(onGoBack: _goToDashboard),
+        BusinessReviewPage(onGoBack: _goToDashboard),
+        TravelReviewPage(onGoBack: _goToDashboard),
+        ProjectsReviewPage(onGoBack: _goToDashboard),
+        TokenizationReviewPage(onGoBack: _goToDashboard),
+        PaymentsMonitorPage(onGoBack: _goToDashboard),
       ];
 
   Widget _buildCurrentPage() {
@@ -213,23 +226,21 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? context.onSurface.withOpacity(0.12)
-                          : Colors.transparent,
+                      color: selected ? AppTheme.accent : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         Icon(item.icon,
                             color: selected
-                                ? context.onSurface
+                                ? AppTheme.onAccent
                                 : context.onSurface.withOpacity(0.38),
                             size: 20),
                         const SizedBox(width: 12),
                         Text(item.label,
                             style: GoogleFonts.plusJakartaSans(
                               color: selected
-                                  ? context.onSurface
+                                  ? AppTheme.onAccent
                                   : context.onSurface.withOpacity(0.54),
                               fontWeight: selected
                                   ? FontWeight.w600
@@ -372,9 +383,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFFEAF2FF)
-                          : Colors.transparent,
+                      color: selected ? AppTheme.accent : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
@@ -384,7 +393,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                           item.icon,
                           size: 18,
                           color: selected
-                              ? const Color(0xFF0D47A1)
+                              ? AppTheme.onAccent
                               : context.onSurface.withOpacity(0.64),
                         ),
                         const SizedBox(height: 4),
@@ -398,7 +407,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                             fontWeight:
                                 selected ? FontWeight.w700 : FontWeight.w500,
                             color: selected
-                                ? const Color(0xFF0D47A1)
+                                ? AppTheme.onAccent
                                 : context.onSurface.withOpacity(0.7),
                           ),
                         ),
