@@ -38,7 +38,13 @@ void main() async {
   // Configuration comes from --dart-define / --dart-define-from-file=.env
   // (see .env.example). Initialise dotenv empty so any lookup is safe; no
   // .env asset is bundled into the app.
-  dotenv.loadFromString(isOptional: true);
+  try {
+    // isOptional: a missing or empty .env falls back to production defaults.
+    await dotenv.load(isOptional: true);
+    debugPrint('Environment loaded (.env optional)');
+  } catch (e) {
+    debugPrint('Could not load .env (it may be missing): $e');
+  }
 
   // Global Flutter framework error handler
   FlutterError.onError = (FlutterErrorDetails details) {
