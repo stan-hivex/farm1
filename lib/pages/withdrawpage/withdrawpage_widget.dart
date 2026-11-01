@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import '/components/farm_coin_icon.dart';
+import '../../core/app_theme.dart';
 import '/backend/api_requests/fees_api.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -1172,14 +1174,14 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              Text(
+                              Row(mainAxisSize: MainAxisSize.min, children: [const FarmCoinIcon(size: 28), const SizedBox(width: 10), Flexible(child: Text(
                                 '${walletBalance.toStringAsFixed(4)} FARM',
                                 style: GoogleFonts.plusJakartaSans(
-                                  color: Colors.white,
+                                  color: AppTheme.accent,
                                   fontSize: 28,
                                   fontWeight: FontWeight.bold,
                                 ),
-                              ),
+                              ))]),
                             ],
                           ),
                   ),
@@ -1351,9 +1353,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       child: ElevatedButton(
                         onPressed: _promptBiometricForPinField,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? const Color(0xFF1F1F1F)
-                              : Colors.black,
+  foregroundColor: AppTheme.onAccent,
+                          backgroundColor: AppTheme.accent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1361,7 +1362,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                         child: Text(
                           'Continue',
                           style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
+                            color: AppTheme.onAccent,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
@@ -1420,9 +1421,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                       height: 58,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? const Color(0xFF1F1F1F)
-                              : Colors.black,
+  foregroundColor: AppTheme.onAccent,
+                          backgroundColor: AppTheme.accent,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -1432,12 +1432,12 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                             : _createWithdraw,
                         child: isLoading
                             ? const CircularProgressIndicator(
-                                color: Colors.white,
+                                color: AppTheme.onAccent,
                               )
                             : Text(
                                 'Withdraw Funds',
                                 style: GoogleFonts.plusJakartaSans(
-                                  color: Colors.white,
+                                  color: AppTheme.onAccent,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
                                 ),

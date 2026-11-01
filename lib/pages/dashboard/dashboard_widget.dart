@@ -29,6 +29,7 @@ import '/utils/transaction_peer_resolver.dart';
 import '/utils/transaction_history_utils.dart';
 import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/utils/activity_label.dart';
@@ -993,13 +994,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                             ),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor:
-                                                  FlutterFlowTheme.of(
-                                                    context,
-                                                  ).primary,
+                                                  AppTheme.accent,
                                               foregroundColor:
-                                                  FlutterFlowTheme.of(
-                                                    context,
-                                                  ).secondaryBackground,
+                                                  AppTheme.onAccent,
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                     vertical: 12.0,
@@ -1018,9 +1015,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                     context,
                                                   ).titleSmall.override(
                                                     fontWeight: FontWeight.w600,
-                                                    color: FlutterFlowTheme.of(
-                                                      context,
-                                                    ).secondaryBackground,
+                                                    color: AppTheme.onAccent,
                                                   ),
                                             ),
                                           ),
@@ -1331,16 +1326,8 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                                     FontWeight
                                                                         .w800,
                                                               ),
-                                                          color:
-                                                              Theme.of(
-                                                                    context,
-                                                                  ).brightness ==
-                                                                  Brightness
-                                                                      .dark
-                                                              ? Colors.white
-                                                              : FlutterFlowTheme.of(
-                                                                  context,
-                                                                ).onPrimary,
+                                                          // Black card in both modes: gold passes AA.
+                                                          color: AppTheme.accent,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
                                                               FontWeight.w800,

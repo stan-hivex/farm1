@@ -21,7 +21,7 @@ class BusinessWalletPage extends StatelessWidget {
                 Row(children: [
                   if ('${w['currency'] ?? 'FARM'}' == 'FARM') ...[const FarmCoinIcon(size: 28), const SizedBox(width: 10)],
                   Flexible(child: Text(money(w['available_balance'], '${w['currency'] ?? 'FARM'}'),
-                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: fgColor(c)))),
+                    style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: goldOn(c)))),
                 ]),
                 const SizedBox(height: 12),
                 KeyValue('Total balance', money(w['balance'])),

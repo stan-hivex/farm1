@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '/components/farm_coin_icon.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/backend/services/api_service.dart';
 // Removed unused import
@@ -921,14 +923,14 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Text(
+                          Row(mainAxisSize: MainAxisSize.min, children: [const FarmCoinIcon(size: 28), const SizedBox(width: 10), Flexible(child: Text(
                             '${walletBalance.toStringAsFixed(4)} FARM',
                             style: GoogleFonts.plusJakartaSans(
-                              color: Colors.white,
+                              color: AppTheme.accent,
                               fontSize: 26,
                               fontWeight: FontWeight.bold,
                             ),
-                          ),
+                          ))]),
                         ],
                       ),
               ),
@@ -1164,9 +1166,8 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                 height: 56,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark
-                        ? const Color(0xFF1F1F1F)
-                        : Colors.black,
+  foregroundColor: AppTheme.onAccent,
+                    backgroundColor: AppTheme.accent,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -1175,11 +1176,11 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                       ? null
                       : _createDeposit,
                   child: isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
+                      ? const CircularProgressIndicator(color: AppTheme.onAccent)
                       : Text(
                           'Deposit Funds',
                           style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
+                            color: AppTheme.onAccent,
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),

@@ -1,6 +1,7 @@
 import '/components/fee_line.dart';
 import '/backend/api_requests/fees_api.dart';
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/backend/api_requests/investments_api.dart';
 import '/pages/business/ops/ops_ui.dart';
@@ -33,9 +34,9 @@ class _MarketplaceBodyState extends State<MarketplaceBody> {
                 child: ChoiceChip(
                   label: Text(s == 'all' ? 'All' : sectorLabels[s]!),
                   selected: _sector == s,
-                  selectedColor: fgColor(context),
+                  selectedColor: AppTheme.accent,
                   labelStyle: TextStyle(
-                      color: _sector == s ? Theme.of(context).scaffoldBackgroundColor : fgColor(context)),
+                      color: _sector == s ? AppTheme.onAccent : fgColor(context)),
                   onSelected: (_) {
                     setState(() => _sector = s);
                     _key.currentState?.reload();
@@ -373,7 +374,8 @@ class PortfolioPage extends StatelessWidget {
               isScrollable: true,
               labelColor: fgColor(context),
               unselectedLabelColor: mutedColor(context),
-              indicatorColor: fgColor(context),
+              indicatorColor: AppTheme.accent,
+              indicatorWeight: 3,
               tabs: const [Tab(text: 'Holdings'), Tab(text: 'History'), Tab(text: 'Documents'), Tab(text: 'Updates'), Tab(text: 'Tokens')],
             ),
             Expanded(
@@ -389,7 +391,7 @@ class PortfolioPage extends StatelessWidget {
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('Total invested', style: TextStyle(color: mutedColor(c))),
                         Text(money(d['total_invested']),
-                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: fgColor(c))),
+                            style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: goldOn(c))),
                         Text('Amount you put in. This is not a valuation or a promised return.',
                             style: TextStyle(fontSize: 12, color: mutedColor(c))),
                       ]),
