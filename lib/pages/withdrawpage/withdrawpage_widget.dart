@@ -20,6 +20,7 @@ import '/services/transaction_authorization_service.dart';
 import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_history_utils.dart';
 import '/widgets/searchable_crypto_picker.dart';
+import '/utils/user_error_message.dart';
 
 class WithdrawpageWidget extends StatefulWidget {
   const WithdrawpageWidget({super.key});
@@ -282,7 +283,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
           _selectedBank = null;
           _selectedBankCode = null;
           _paystackDestinationError =
-              'Could not load Paystack bank destinations: $error';
+              'Could not load Paystack bank destinations: ${userErrorMessage(error)}';
         });
       }
     } finally {
@@ -349,7 +350,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       if (!mounted) return;
       setState(() {
         _cryptoNetworkOptions.clear();
-        _cryptoNetworkErrors[lookupKey] = error.toString();
+        _cryptoNetworkErrors[lookupKey] = userErrorMessage(error);
         selectedCryptoNetwork = null;
       });
     } finally {
@@ -394,7 +395,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _cryptoMinimumError = error.toString());
+      setState(() => _cryptoMinimumError = userErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loadingCryptoMinimum = false);
     }
@@ -483,7 +484,7 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
         _snack('Selected receipts saved to gallery');
       }
     } catch (error) {
-      if (mounted) _snack('Could not save receipts: $error');
+      if (mounted) _snack('Could not save receipts: ${userErrorMessage(error)}');
     }
   }
 

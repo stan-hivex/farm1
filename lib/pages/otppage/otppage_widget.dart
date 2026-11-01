@@ -21,6 +21,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 
 import 'otppage_model.dart';
+import '/utils/user_error_message.dart';
 export 'otppage_model.dart';
 
 class OtppageWidget extends StatefulWidget {
@@ -538,12 +539,12 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         _isCompletingVerification = false;
         _isVerifying = false;
         _statusTitle = 'Verification failed';
-        _statusMessage = e.toString();
+        _statusMessage = userErrorMessage(e);
         _showManualOtpField = true;
         _revealManualField();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verification failed: $e')),
+        SnackBar(content: Text('Verification failed: ${userErrorMessage(e)}')),
       );
     }
   }
