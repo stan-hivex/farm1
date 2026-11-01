@@ -1,3 +1,5 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import '/pages/mkulima/mkulima_pages.dart';
 import '/pages/security/sessions_page.dart';
 import '/pages/security/change_password_page.dart';
 import '/pages/verify_email_page/verify_email_page_widget.dart';
@@ -275,8 +277,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                               (profileImage.isNotEmpty)
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(100),
-                                      child: Image.network(
-                                        profileImage,
+                                      child: CachedNetworkImage(
+                                        imageUrl: profileImage,
                                         width: 80,
                                         height: 80,
                                         fit: BoxFit.cover,
