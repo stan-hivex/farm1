@@ -153,7 +153,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
-      unawaited(_refreshDashboard());
+      unawaited(_refreshDashboard(forceAuthRefresh: true));
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
@@ -191,7 +191,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     });
   }
 
-  Future<void> _refreshDashboard() async {
+  Future<void> _refreshDashboard({bool forceAuthRefresh = false}) async {
     if (!mounted ||
         !FFAppState().isLoggedIn ||
         FFAppState().accessToken.isEmpty) {
@@ -204,6 +204,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
         profileTimeoutSeconds: 5,
         walletTimeoutSeconds: 5,
         transactionsTimeoutSeconds: 5,
+        forceAuthRefresh: forceAuthRefresh,
       );
     } catch (e) {
       debugPrint('Dashboard refresh failed: $e');

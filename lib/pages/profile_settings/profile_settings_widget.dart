@@ -132,7 +132,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      fetchProfile();
+      unawaited(fetchProfile(forceAuthRefresh: true));
       fetchSecuritySettings();
     }
   }
@@ -152,7 +152,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     });
   }
 
-  Future<void> fetchProfile() async {
+  Future<void> fetchProfile({bool forceAuthRefresh = false}) async {
     if (!mounted) return;
     setState(() {
       isProfileLoading = true;
@@ -163,6 +163,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
         profileTimeoutSeconds: 5,
         walletTimeoutSeconds: 5,
         transactionsTimeoutSeconds: 4,
+        forceAuthRefresh: forceAuthRefresh,
       );
 
       if (!mounted) return;

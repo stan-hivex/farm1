@@ -349,10 +349,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[APP] Resumed - session preserved');
+      debugPrint('[APP] Resumed - forcing a fresh auth/data sync');
       _startPeriodicRefresh();
-      _refreshAppState();
-      _handleResumeLock();
+      unawaited(_refreshAppState(forceAuthRefresh: true));
+      unawaited(_handleResumeLock());
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
@@ -402,13 +402,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _refreshAppState() async {
+  Future<void> _refreshAppState({bool forceAuthRefresh = false}) async {
     if (!mounted || !FFAppState().isLoggedIn) {
       return;
     }
 
     try {
-      await AppSessionManager().refreshAppData();
+      await AppSessionManager().refreshAppData(
+        forceAuthRefresh: forceAuthRefresh,
+      );
     } catch (e) {
       debugPrint('App resume coordinated refresh failed: $e');
     }
