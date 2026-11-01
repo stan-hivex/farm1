@@ -5,6 +5,7 @@ import '../../core/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/backend/api_requests/investments_api.dart';
 import '/pages/business/ops/ops_ui.dart';
+import 'project_funds_page.dart';
 
 String _label(Map<String, String> m, dynamic k) => m['$k'] ?? '${k ?? '—'}';
 
@@ -201,6 +202,13 @@ class ProjectDetailPage extends StatelessWidget {
               section('Risks', p['risk_factors']),
               section('Team', p['team']),
               MilestoneList(p),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                    onPressed: () => pushPage(c, ProjectFundsPage(projectId: id)),
+                    icon: const Icon(Icons.timeline_rounded, size: 18),
+                    label: Text('Funds timeline', style: TextStyle(color: fgColor(c)))),
+              ),
               if (docs.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text('Documents', style: TextStyle(fontWeight: FontWeight.w700, color: fgColor(c))),
@@ -495,26 +503,177 @@ class MilestoneList extends StatelessWidget {
 
 
 /// Project tokens held for the investor in FARM custody (Algorand TestNet).
-class TokensTab extends StatelessWidget {
+class TokensTab extends StatefulWidget {
   const TokensTab({super.key});
   @override
+  State<TokensTab> createState() => _TokensTabState();
+}
+
+class _TokensTabState extends State<TokensTab> {
+  final _key = GlobalKey<BizAsyncState<List<Map<String, dynamic>>>>();
+
+  num _n(dynamic v) => num.tryParse('${v ?? 0}') ?? 0;
+
+  Future<void> _sell(Map a, Map sb) async {
+    final sellable = _n(a['sellable_units']).toInt();
+    final max = sellable < _n(sb['available']).floor() ? sellable : _n(sb['available']).floor();
+    final ctl = TextEditingController(text: '$max');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Sell back tokens'),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('You can sell ${sb['available']} FARM more (${sb['percent']}% of the ${sb['invested']} FARM you invested). Price: 1 FARM per token.',
+              style: const TextStyle(fontSize: 13)),
+          const SizedBox(height: 8),
+          TextField(controller: ctl, keyboardType: TextInputType.number, decoration: bizInput(ctx, 'Tokens to sell (max $max)')),
+          const SizedBox(height: 6),
+          Text('Paid from the project\'s 15% buyback fund after FARM approves.', style: TextStyle(fontSize: 11, color: mutedColor(ctx))),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Request')),
+        ],
+      ),
+    );
+    final units = int.tryParse(ctl.text.trim()) ?? 0;
+    ctl.dispose();
+    if (ok != true || !mounted) return;
+    if (units < 1 || units > max) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enter 1 to $max tokens')));
+      return;
+    }
+    final r = await runBusy(context, () => InvestmentsApi.sellBack('${a['id']}', units), success: 'Sent to FARM for approval.');
+    if (r != null) _key.currentState?.reload();
+  }
+
+  Future<void> _send(Map a) async {
+    final max = _n(a['transferable_units']).toInt();
+    final who = TextEditingController();
+    final ctl = TextEditingController();
+    final pin = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Send tokens'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            TextField(controller: who, decoration: bizInput(ctx, 'Recipient username or phone')),
+            const SizedBox(height: 8),
+            TextField(controller: ctl, keyboardType: TextInputType.number, decoration: bizInput(ctx, 'Tokens to send (max $max)')),
+            const SizedBox(height: 8),
+            TextField(controller: pin, obscureText: true, keyboardType: TextInputType.number, decoration: bizInput(ctx, 'Transaction PIN')),
+            const SizedBox(height: 6),
+            Text('No transfer fee. The recipient gets any future holder income on these tokens, but sent tokens cannot be sold back by them.',
+                style: TextStyle(fontSize: 11, color: mutedColor(ctx))),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send')),
+        ],
+      ),
+    );
+    final to = who.text.trim(), p = pin.text.trim();
+    final units = int.tryParse(ctl.text.trim()) ?? 0;
+    who.dispose();
+    ctl.dispose();
+    pin.dispose();
+    if (ok != true || !mounted) return;
+    if (to.isEmpty || p.isEmpty || units < 1 || units > max) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enter a recipient, your PIN and 1 to $max tokens')));
+      return;
+    }
+    final r = await runBusy(context, () => InvestmentsApi.sendTokens('${a['id']}', to, units, p), success: 'Tokens sent.');
+    if (r != null) _key.currentState?.reload();
+  }
+
+  Widget _incomeLink(BuildContext c) => BizTile(
+        leading: Icons.payments_outlined,
+        title: 'Income from your tokens',
+        subtitle: 'Profit and rental payouts',
+        onTap: () => pushPage(c, const TokenIncomePage()),
+      );
+
+  @override
   Widget build(BuildContext context) => BizAsync<List<Map<String, dynamic>>>(
+        key: _key,
         load: InvestmentsApi.myTokens,
         isEmpty: (l) => l.isEmpty,
         emptyIcon: Icons.token_outlined,
         emptyTitle: 'No tokens yet',
-        emptyMessage: 'When a project you backed is tokenized on Algorand, your units appear here. FARM holds them for you.',
+        emptyMessage: 'When you invest in a tokenized project you get 1 token per FARM. They show here as owed until delivered to your wallet.',
         builder: (c, l, _) => ListView(padding: const EdgeInsets.all(16), children: [
+          _incomeLink(c),
           for (final a in l)
             Builder(builder: (_) {
               final t = (a['token'] as Map?) ?? const {};
-              return BizTile(
+              final st = '${a['status'] ?? 'held'}';
+              final url = a['tx_url'] ?? t['explorer_url'];
+              final tile = BizTile(
                 leading: Icons.token_outlined,
                 title: '${(a['project'] as Map?)?['project_name'] ?? 'Project'}',
-                subtitle: '${a['units']} ${t['unit_name'] ?? ''} · ASA ${t['asset_id'] ?? '—'} · ${t['network'] ?? ''} · FARM custody',
-                onTap: t['explorer_url'] != null ? () => openDoc(c, '${t['explorer_url']}') : null,
+                subtitle: '${a['units']} ${t['unit_name'] ?? ''} · ASA ${t['asset_id'] ?? '—'} · ${t['network'] ?? ''}\n'
+                    '${allocationStatusLabels[st] ?? st}',
+                trailing: StatusChip(st == 'delivered' ? 'Delivered' : st == 'owed' || st == 'sending' ? 'Owed' : (allocationStatusLabels[st] ?? st).split(' ').first,
+                    filled: st == 'delivered'),
+                onTap: url != null ? () => openDoc(c, '$url') : null,
               );
+              final sb = a['sell_back'] as Map?;
+              final showSell = sb != null && sb['open'] == true;
+              final canSend = a['can_send'] == true;
+              if (!showSell && !canSend) return tile;
+              final canSell = showSell && _n(sb['available']) >= 1 && _n(a['sellable_units']) >= 1;
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                tile,
+                Padding(
+                  padding: const EdgeInsets.only(left: 12, right: 12, bottom: 8),
+                  child: Row(children: [
+                    Expanded(
+                        child: Text(
+                            showSell
+                                ? 'You can sell ${sb['available']} FARM more (${sb['percent']}% of invested)'
+                                : a['source'] == 'transfer'
+                                    ? 'Received by transfer · no sell-back'
+                                    : '',
+                            style: TextStyle(fontSize: 12, color: mutedColor(c)))),
+                    if (canSend)
+                      TextButton.icon(
+                          onPressed: () => _send(a), icon: const Icon(Icons.send_outlined, size: 18), label: const Text('Send')),
+                    if (showSell)
+                      TextButton.icon(
+                          onPressed: canSell ? () => _sell(a, sb) : null,
+                          icon: const Icon(Icons.sell_outlined, size: 18),
+                          label: const Text('Sell back')),
+                  ]),
+                ),
+              ]);
             }),
         ]),
+      );
+}
+
+
+/// Holder: profit / rental payouts received on project tokens.
+class TokenIncomePage extends StatelessWidget {
+  const TokenIncomePage({super.key});
+  @override
+  Widget build(BuildContext context) => BizScaffold(
+        title: 'Token income',
+        body: BizAsync<List<Map<String, dynamic>>>(
+          load: InvestmentsApi.tokenIncome,
+          isEmpty: (l) => l.isEmpty,
+          emptyIcon: Icons.payments_outlined,
+          emptyTitle: 'No income yet',
+          emptyMessage: 'When a project shares profit or rental income, holders are paid in FARM by how many tokens they hold.',
+          builder: (c, l, _) => ListView(padding: const EdgeInsets.all(16), children: [
+            for (final p in l)
+              BizTile(
+                leading: Icons.payments_outlined,
+                title: '+${p['amount']} FARM · ${p['project_name'] ?? 'Project'}',
+                subtitle: '${p['kind'] == 'rental' ? 'Rental' : 'Profit'} income on ${p['units']} tokens\n${'${p['paid_at'] ?? ''}'.split('T').first}',
+              ),
+          ]),
+        ),
       );
 }

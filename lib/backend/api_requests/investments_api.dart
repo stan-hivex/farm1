@@ -68,8 +68,43 @@ class InvestmentsApi {
   // Phase 5: Algorand tokenization (backend decides everything; disabled until configured)
   static Future<List<Map<String, dynamic>>> myTokens() async => _l(await _call('GET', '/investments/tokens'));
   static Future<Map<String, dynamic>> projectToken(String id) async => await _call('GET', '/business/projects/$id/tokenization');
-  static Future<Map<String, dynamic>> requestToken(String id, String assetName, String unitName) async =>
-      _d(await _call('POST', '/business/projects/$id/tokenization', {'asset_name': assetName, 'unit_name': unitName}));
+  /// mode 'on_invest' = minted at listing, delivered to investors as they invest.
+  static Future<Map<String, dynamic>> requestToken(String id, String assetName, String unitName, {String? mode}) async =>
+      _d(await _call('POST', '/business/projects/$id/tokenization',
+          {'asset_name': assetName, 'unit_name': unitName, 'accept_buyback_commitment': true, if (mode != null) 'mode': mode}));
+  /// Send tokens to another FARM user (username or phone). No transfer fee.
+  static Future<Map<String, dynamic>> sendTokens(String allocationId, String recipient, int units, String pin) async =>
+      await _call('POST', '/investments/tokens/$allocationId/send', {'recipient_identifier': recipient, 'units': units, 'pin': pin});
+  static Future<List<Map<String, dynamic>>> tokenIncome() async => _l(await _call('GET', '/investments/tokens/income'));
+  static Future<List<Map<String, dynamic>>> tokenTransfers() async => _l(await _call('GET', '/investments/tokens/transfers'));
+  static Future<List<Map<String, dynamic>>> projectDistributions(String id) async =>
+      _l(await _call('GET', '/business/projects/$id/distributions'));
+  /// Pay token holders profit or rental income in FARM. Needs FARM approval.
+  static Future<Map<String, dynamic>> requestDistribution(String id, num amount, String kind, String description) async =>
+      await _call('POST', '/business/projects/$id/distributions',
+          {'amount': amount, 'kind': kind, if (description.isNotEmpty) 'description': description});
+  // Project funds flow (server enforces caps, pause, recipients and fees).
+  static Future<Map<String, dynamic>> fundsTimeline(String id, {bool owner = false}) async => _d(await _call(
+      'GET', owner ? '/business/projects/$id/funds-timeline' : '/marketplace/projects/$id/funds-timeline'));
+  /// Pay another FARM business's invoice (number) or payment link (code) from project funds.
+  static Future<Map<String, dynamic>> spendProjectFunds(String id,
+          {required String kind, required String ref, required String pin, String? tag, String? note, required String key}) async =>
+      await _call('POST', '/business/projects/$id/spend', {
+        'kind': kind,
+        'ref': ref,
+        'pin': pin,
+        'idempotency_key': key,
+        if (tag != null && tag.isNotEmpty) 'tag': tag,
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
+  static Future<Map<String, dynamic>> depositReturns(String id, num amount, String pin, {String? note}) async =>
+      await _call('POST', '/business/projects/$id/returns',
+          {'amount': amount, 'pin': pin, if (note != null && note.isNotEmpty) 'note': note});
+  static Future<Map<String, dynamic>> setFundsSettings(String id, Map<String, dynamic> body) async =>
+      await _call('PATCH', '/business/projects/$id/funds-settings', body);
+  /// Sell tokens back to FARM (1 FARM each) from the project's 15% buyback fund. Needs admin approval.
+  static Future<Map<String, dynamic>> sellBack(String allocationId, int units) async =>
+      await _call('POST', '/investments/tokens/$allocationId/sell-back', {'units': units});
   static Future<Map<String, dynamic>> setMilestones(String id, List<Map<String, dynamic>> items) async =>
       _d(await _call('PATCH', '/business/projects/$id/milestones', {'milestones': items}));
   static Future<Map<String, dynamic>> requestMilestone(String id, String mid,
@@ -139,4 +174,19 @@ const tokenStatusLabels = {
   'created': 'Created',
   'failed': 'Failed (FARM will retry)',
   'rejected': 'Rejected',
+};
+
+/// Per-investor token allocation status (tokenize-as-you-invest).
+const allocationStatusLabels = {
+  'held': 'Held by FARM',
+  'owed': 'Owed · sent when your wallet is ready',
+  'sending': 'Sending to your wallet',
+  'delivered': 'In your wallet',
+  'clawback_pending': 'Being returned (project cancelled)',
+  'clawing': 'Being returned (project cancelled)',
+  'clawed_back': 'Returned (project cancelled)',
+  'cancelled': 'Cancelled',
+  'sold_back': 'Sold back to FARM',
+  'incoming': 'Arriving in your wallet',
+  'transferred': 'Sent to another user',
 };

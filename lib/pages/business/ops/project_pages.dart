@@ -4,6 +4,7 @@ import '/backend/api_requests/investments_api.dart';
 import '/backend/services/api_service.dart';
 import '/pages/investments/investment_pages.dart' show openDoc, MilestoneList;
 import 'ops_ui.dart';
+import '/pages/investments/project_funds_page.dart';
 
 String _lbl(Map<String, String> m, dynamic k) => m['$k'] ?? '${k ?? '—'}';
 
@@ -178,6 +179,17 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
           _tf('duration_months', 'Duration (months)', number: true),
           Text('Do not promise returns. FARM does not display or guarantee returns.',
               style: TextStyle(fontSize: 12, color: mutedColor(context))),
+          const SizedBox(height: 8),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Icon(Icons.token_rounded, size: 16, color: Color(0xFFD4AF37)),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                  'Tokenize: after saving, open the project and tap "Tokenize project" before it is listed. '
+                  'Supply = funding target; investors get 1 token per FARM as they invest, once FARM approves.',
+                  style: TextStyle(fontSize: 12, color: mutedColor(context))),
+            ),
+          ]),
         ]),
       ),
       Step(
@@ -422,7 +434,7 @@ class _BusinessProjectDetailPageState extends State<BusinessProjectDetailPage> {
                   child: const Text('Submit for review'),
                 ),
               ],
-              if (['funded', 'closed'].contains(status)) TokenizationCard(projectId: widget.id),
+              if (!['rejected', 'cancelled'].contains(status)) TokenizationCard(projectId: widget.id, projectStatus: status, targetAmount: p['target_amount']),
               if (canUpdate)
                 ElevatedButton(style: primaryButtonStyle(c), onPressed: _postUpdate, child: const Text('Post update to investors')),
               if (reviews.isNotEmpty) ...[
@@ -561,39 +573,96 @@ class _MilestoneEditorPageState extends State<MilestoneEditorPage> {
 
 /// Request tokenization of a funded project. FARM approves and creates the ASA.
 class TokenizationCard extends StatefulWidget {
-  const TokenizationCard({super.key, required this.projectId});
+  const TokenizationCard({super.key, required this.projectId, this.projectStatus = 'funded', this.targetAmount});
   final String projectId;
+  final String projectStatus;
+  final dynamic targetAmount;
   @override
   State<TokenizationCard> createState() => _TokenizationCardState();
 }
 
+const _preListing = ['draft', 'more_info_required', 'submitted', 'approved'];
+
 class _TokenizationCardState extends State<TokenizationCard> {
   final _key = GlobalKey<BizAsyncState<Map<String, dynamic>>>();
 
-  Future<void> _request() async {
+  bool get funded => ['funded', 'closed'].contains(widget.projectStatus);
+  bool get preListing => _preListing.contains(widget.projectStatus);
+
+  Future<void> _request({required bool onInvest}) async {
     final n = TextEditingController();
     final u = TextEditingController();
+    var agreed = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Request tokenization'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: n, maxLength: 32, decoration: bizInput(ctx, 'Token name')),
-          TextField(controller: u, maxLength: 8, decoration: bizInput(ctx, 'Unit name (e.g. SOLAR)')),
-        ]),
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+        title: const Text('Tokenize project'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            TextField(controller: n, maxLength: 32, decoration: bizInput(ctx, 'Token name (e.g. Solar Farm Shares)')),
+            TextField(
+                controller: u,
+                maxLength: 8,
+                textCapitalization: TextCapitalization.characters,
+                decoration: bizInput(ctx, 'Symbol, 1-8 letters/digits (e.g. SOLAR)')),
+            KeyValue('Price per token', '1 FARM'),
+            KeyValue('Total supply',
+                onInvest ? '${widget.targetAmount ?? 'Funding target'} (= funding target)' : '1 token per FARM invested'),
+            const SizedBox(height: 6),
+            Text(
+                onInvest
+                    ? 'FARM creates the token when it approves and lists the project. Each investor then gets 1 token per FARM as they invest.'
+                    : 'Supply is counted from investments when FARM approves. Nothing is minted until approved.',
+                style: TextStyle(fontSize: 12, color: mutedColor(ctx))),
+            const SizedBox(height: 6),
+            CheckboxListTile(
+              value: agreed,
+              onChanged: (v) => setD(() => agreed = v == true),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('I agree to the 15% buyback commitment', style: TextStyle(fontSize: 13)),
+              subtitle: Text(
+                  'FARM holds back 15% of what this project raises as a buyback fund. Each investor can sell back up to 15% of their own investment at 1 FARM per token. Investors only pay the 3% investment fee.',
+                  style: TextStyle(fontSize: 11, color: mutedColor(ctx))),
+            ),
+          ]),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Request')),
+          TextButton(onPressed: agreed ? () => Navigator.pop(ctx, true) : null, child: const Text('Request')),
         ],
-      ),
+      )),
     );
     final name = n.text.trim(), unit = u.text.trim();
     n.dispose();
     u.dispose();
     if (ok != true || name.isEmpty || unit.isEmpty || !mounted) return;
-    final r = await runBusy(context, () => InvestmentsApi.requestToken(widget.projectId, name, unit),
+    final r = await runBusy(
+        context, () => InvestmentsApi.requestToken(widget.projectId, name, unit, mode: onInvest ? 'on_invest' : null),
         success: 'Requested. FARM will review it.');
     if (r != null) _key.currentState?.reload();
+  }
+
+  Widget _progress(BuildContext c, Map<String, dynamic> t, Map p) {
+    int n(dynamic v) => int.tryParse('${v ?? 0}') ?? 0;
+    final total = n(p['total_units']);
+    final alloc = n(p['allocated_units']);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 6),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: LinearProgressIndicator(
+          value: total > 0 ? (alloc / total).clamp(0, 1).toDouble() : 0,
+          minHeight: 6,
+          color: const Color(0xFFD4AF37),
+          backgroundColor: mutedColor(c).withValues(alpha: 0.2),
+        ),
+      ),
+      const SizedBox(height: 6),
+      KeyValue('Sold', '$alloc of $total ${t['unit_name']}'),
+      KeyValue('Delivered · Owed', '${p['delivered_units']} · ${p['owed_units']}'),
+      if (t['unsold_units'] != null) KeyValue('Unsold (kept by issuer)', '${t['unsold_units']}'),
+    ]);
   }
 
   @override
@@ -601,37 +670,160 @@ class _TokenizationCardState extends State<TokenizationCard> {
         padding: const EdgeInsets.only(bottom: 12),
         child: BizCard(
           child: SizedBox(
-            height: 150,
+            height: preListing ? 170 : 300,
             child: BizAsync<Map<String, dynamic>>(
               key: _key,
               load: () => InvestmentsApi.projectToken(widget.projectId),
               builder: (c, r, _) {
                 final t = r['data'] is Map ? Map<String, dynamic>.from(r['data'] as Map) : null;
+                final onInvestOn = r['on_invest_enabled'] == true;
+                final canOnInvest = preListing && onInvestOn;
+                final canPost = funded && r['enabled'] == true;
+                final none = t == null || t['status'] == 'rejected';
+                final p = r['progress'] is Map ? r['progress'] as Map : null;
                 return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('Tokenization (Algorand TestNet)', style: TextStyle(fontWeight: FontWeight.w700, color: fgColor(c))),
                   const SizedBox(height: 6),
-                  if (t == null || t['status'] == 'rejected') ...[
+                  if (none) ...[
                     Text(
-                        r['enabled'] == true
-                            ? (t?['notes'] != null ? 'Previous request rejected: ${t!['notes']}' : 'Represent investor holdings as an Algorand asset.')
-                            : 'Tokenization is not available yet.',
+                        t?['notes'] != null && (canOnInvest || canPost)
+                            ? 'Previous request rejected: ${t!['notes']}'
+                            : canOnInvest
+                                ? 'Tokenize now: investors get 1 token per FARM as they invest.'
+                                : canPost
+                                    ? 'Turn investor holdings into an Algorand token.'
+                                    : preListing || funded
+                                        ? 'Tokenization is not switched on yet.'
+                                        : 'Tokenization must be requested before listing (or after funding).',
                         style: TextStyle(color: mutedColor(c))),
                     const Spacer(),
-                    if (r['enabled'] == true)
-                      OutlinedButton(style: secondaryButtonStyle(c), onPressed: _request, child: const Text('Request tokenization')),
+                    OutlinedButton.icon(
+                        style: secondaryButtonStyle(c),
+                        onPressed: canOnInvest
+                            ? () => _request(onInvest: true)
+                            : canPost
+                                ? () => _request(onInvest: false)
+                                : null,
+                        icon: const Icon(Icons.token_rounded, size: 18),
+                        label: const Text('Tokenize project')),
                   ] else ...[
                     KeyValue('Status', tokenStatusLabels['${t['status']}'] ?? '${t['status']}'),
                     KeyValue('Token', '${t['asset_name']} (${t['unit_name']})'),
+                    if (t['mode'] == 'on_invest' && t['status'] != 'created')
+                      Text('Created when FARM lists the project.', style: TextStyle(fontSize: 12, color: mutedColor(c))),
                     if (t['asset_id'] != null) KeyValue('Asset ID', '${t['asset_id']}'),
-                    if (t['explorer_url'] != null)
-                      TextButton(
-                          onPressed: () => openDoc(c, '${t['explorer_url']}'),
-                          child: Text('View on explorer', style: TextStyle(color: fgColor(c)))),
+                    if (t['mode'] == 'on_invest' && t['status'] == 'created' && p != null) _progress(c, t, p),
+                    Wrap(spacing: 4, children: [
+                      if (t['explorer_url'] != null)
+                        TextButton(
+                            onPressed: () => openDoc(c, '${t['explorer_url']}'),
+                            child: Text('View on explorer', style: TextStyle(color: fgColor(c)))),
+                      if (t['status'] == 'created')
+                        TextButton.icon(
+                            onPressed: () => pushPage(c, HolderIncomePage(projectId: widget.projectId)),
+                            icon: const Icon(Icons.payments_outlined, size: 18),
+                            label: const Text('Pay token holders')),
+                      TextButton.icon(
+                          onPressed: () => pushPage(c, ProjectFundsPage(projectId: widget.projectId, owner: true)),
+                          icon: const Icon(Icons.account_balance_outlined, size: 18),
+                          label: const Text('Project funds')),
+                    ]),
                   ],
                 ]);
               },
             ),
           ),
+        ),
+      );
+}
+
+
+/// Business: pay profit / rental income to the project's current token holders.
+class HolderIncomePage extends StatefulWidget {
+  const HolderIncomePage({super.key, required this.projectId});
+  final String projectId;
+  @override
+  State<HolderIncomePage> createState() => _HolderIncomePageState();
+}
+
+class _HolderIncomePageState extends State<HolderIncomePage> {
+  final _key = GlobalKey<BizAsyncState<List<Map<String, dynamic>>>>();
+
+  Future<void> _new() async {
+    final amt = TextEditingController();
+    final desc = TextEditingController();
+    var kind = 'profit';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('Pay token holders'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'profit', label: Text('Profit')),
+                  ButtonSegment(value: 'rental', label: Text('Rental')),
+                ],
+                selected: {kind},
+                onSelectionChanged: (v) => setD(() => kind = v.first),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                  controller: amt,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: bizInput(ctx, 'Amount in FARM')),
+              TextField(controller: desc, maxLength: 500, decoration: bizInput(ctx, 'Note for holders (optional)')),
+              Text(
+                  'Paid from your FARM wallet after FARM approves. FARM keeps a 2% fee; holders split the rest by how many tokens they have at payout time.',
+                  style: TextStyle(fontSize: 12, color: mutedColor(ctx))),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Request')),
+          ],
+        ),
+      ),
+    );
+    final amount = num.tryParse(amt.text.trim());
+    final note = desc.text.trim();
+    amt.dispose();
+    desc.dispose();
+    if (ok != true || !mounted) return;
+    if (amount == null || amount < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter at least 1 FARM')));
+      return;
+    }
+    final r = await runBusy(context, () => InvestmentsApi.requestDistribution(widget.projectId, amount, kind, note),
+        success: 'Sent to FARM for approval.');
+    if (r != null) _key.currentState?.reload();
+  }
+
+  @override
+  Widget build(BuildContext context) => BizScaffold(
+        title: 'Token holder income',
+        fab: BizFab(label: 'Pay holders', onPressed: _new),
+        body: BizAsync<List<Map<String, dynamic>>>(
+          key: _key,
+          load: () => InvestmentsApi.projectDistributions(widget.projectId),
+          isEmpty: (l) => l.isEmpty,
+          emptyIcon: Icons.payments_outlined,
+          emptyTitle: 'No payouts yet',
+          emptyMessage: 'Share profit or rental income with everyone who holds this project\'s tokens.',
+          builder: (c, l, _) => ListView(padding: const EdgeInsets.all(16), children: [
+            for (final d in l)
+              BizTile(
+                leading: Icons.payments_outlined,
+                title: '${d['amount']} FARM · ${d['kind'] == 'rental' ? 'Rental' : 'Profit'}',
+                subtitle: [
+                  if (d['holders'] != null) '${d['holders']} holders · paid ${d['paid_amount']} FARM',
+                  if (d['notes'] != null) '${d['notes']}',
+                  if (d['error'] != null && d['status'] == 'failed') '${d['error']}',
+                ].join('\n'),
+                trailing: StatusChip('${d['status']}', filled: d['status'] == 'paid'),
+              ),
+          ]),
         ),
       );
 }
