@@ -1,3 +1,6 @@
+import '/backend/api_requests/nfc_pay_api.dart';
+import '/pages/tap_pay/tap_pay_pages.dart';
+import '/components/fee_line.dart';
 import '/backend/services/api_service.dart';
 import '/components/action_circle/action_circle_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
@@ -202,6 +205,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
                       const SizedBox(height: 16),
                       TextField(
                         controller: amountController,
+                        onChanged: (_) => setState(() {}),
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
@@ -210,6 +214,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
                           prefixText: 'FARM ',
                         ),
                       ),
+                      FeeLine(feeKey: 'transfer', amount: double.tryParse(amountController.text.trim()) ?? 0),
                       const SizedBox(height: 12),
                       if (pinEntryEnabled || !isBiometricChecking)
                         TextField(
@@ -461,6 +466,15 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
 
   Future<void> validateQr(String qrPayload) async {
     if (isProcessing) return;
+    // Tap-to-pay request shown as QR (iOS / NFC off): review + PIN on its own screen.
+    final tapToken = NfcPayApi.extractToken(qrPayload);
+    if (tapToken != null) {
+      isProcessing = true;
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => TapPayPage(initialToken: tapToken)));
+      isProcessing = false;
+      return;
+    }
 
     isProcessing = true;
 
