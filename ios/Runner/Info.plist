@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NFCReaderUsageDescription</key>
+	<string>Read FARM tap-to-pay requests from another phone.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -21,7 +23,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Allow camera access to take photos or record videos for support enquiries.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Allow microphone access to record videos for support enquiries.</string>
+	<string>Allow microphone access to record videos for support enquiries and voice messages to Mkulima.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save QR codes to your Photos library so you can access them from the Photos app.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

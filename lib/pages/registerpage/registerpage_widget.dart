@@ -7,7 +7,10 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:flutter/material.dart';
+import '/components/brand_logo.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/pages/loginpage/loginpage_widget.dart' show kDefaultLoginCountry;
 import 'registerpage_model.dart';
 export 'registerpage_model.dart';
 
@@ -52,9 +55,9 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
   final TextEditingController referralController = TextEditingController();
 
-  String _selectedCountry = 'United States';
-  String _selectedCountryIsoCode = 'US';
-  String _selectedCountryCode = '+1';
+  String _selectedCountry = kDefaultLoginCountry['name']!;
+  String _selectedCountryIsoCode = kDefaultLoginCountry['iso']!;
+  String _selectedCountryCode = kDefaultLoginCountry['code']!;
   _RegistrationAvailability _usernameAvailability =
       _RegistrationAvailability.idle;
   _RegistrationAvailability _phoneAvailability = _RegistrationAvailability.idle;
@@ -420,62 +423,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                 children: [
                   Column(
                     children: [
-                      Container(
-                        width: 64.0,
-                        height: 64.0,
-                        decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).primaryText,
-                          borderRadius: BorderRadius.circular(16.0),
-                        ),
-                        alignment: const AlignmentDirectional(0.0, 0.0),
-                        child: SizedBox(
-                          width: 40.0,
-                          height: 50.0,
-                          child: Stack(
-                            alignment: const AlignmentDirectional(-1.0, -1.0),
-                            children: [
-                              Align(
-                                alignment: const AlignmentDirectional(0.0, 0.0),
-                                child: Container(
-                                  width: 6.0,
-                                  height: 50.0,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                    borderRadius: BorderRadius.circular(2.0),
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(-1.0, -0.6),
-                                child: Container(
-                                  width: 24.0,
-                                  height: 6.0,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                    borderRadius: BorderRadius.circular(2.0),
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(-1.0, 0.0),
-                                child: Container(
-                                  width: 18.0,
-                                  height: 6.0,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                    borderRadius: BorderRadius.circular(2.0),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const BrandLogo(size: 64.0),
                       const SizedBox(height: 16.0),
                       Text(
                         'FARM',
@@ -956,15 +904,13 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         0.0,
                         0.0,
                       ),
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF1F1F1F)
-                          : FlutterFlowTheme.of(context).primary,
+                      color: AppTheme.accent,
                       textStyle:
                           FlutterFlowTheme.of(context).titleSmall.override(
                                 font: GoogleFonts.interTight(
                                   fontWeight: FontWeight.w600,
                                 ),
-                                color: Colors.white,
+                                color: AppTheme.onAccent,
                                 letterSpacing: 0.0,
                                 fontWeight: FontWeight.w600,
                               ),
