@@ -26,7 +26,7 @@ import '/services/transaction_authorization_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/utils/transaction_peer_resolver.dart';
-import '/utils/transaction_history_utils.dart';
+import '/utils/personal_activity.dart';
 import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
 import '/pages/mkulima/mkulima_pages.dart';
@@ -99,7 +99,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     if (OfflineCache.has('recentTransactions') ||
         app.recentTransactions.isNotEmpty) {
       transactions =
-          app.recentTransactions.where(isVisibleTransactionHistoryItem).toList();
+          app.recentTransactions.where(isPersonalActivity).toList();
       isTransactionsLoading = false;
     }
     final growth = ApiService.getCached(_growthPath);
@@ -167,7 +167,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       kesEquivalent = FFAppState().kesEquivalent;
       profileImageUrl = FFAppState().profileImageUrl;
       transactions = FFAppState().recentTransactions
-          .where(isVisibleTransactionHistoryItem)
+          .where(isPersonalActivity)
           .toList();
       unreadNotificationsCount = FFAppState().unreadNotificationCount;
       isBalanceLoading = false;
@@ -217,7 +217,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       kesEquivalent = FFAppState().kesEquivalent;
       profileImageUrl = FFAppState().profileImageUrl;
       transactions = FFAppState().recentTransactions
-          .where(isVisibleTransactionHistoryItem)
+          .where(isPersonalActivity)
           .toList();
       final wallet = ApiService.getCached('/wallet');
       if (wallet != null) _applyBusinessWallet(wallet);
@@ -307,7 +307,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       final items = response['data'] as List? ?? [];
       if (!mounted) return;
       setState(() {
-        transactions = items.where(isVisibleTransactionHistoryItem).toList();
+        transactions = items.where(isPersonalActivity).toList();
         isTransactionsLoading = false;
       });
     } catch (e) {

@@ -112,6 +112,17 @@ class _BusinessWalletPageState extends State<BusinessWalletPage> {
 }
 
 /// The business wallet's own custodial Algorand account (not the owner's personal one).
+String? _balanceLine(Map<String, dynamic> a, String asset) {
+  final direct = a['${asset}_balance'] ?? a['${asset}Balance'];
+  if (direct != null && '$direct'.isNotEmpty) return '$direct';
+  final balances = a['balances'];
+  if (balances is Map && balances[asset] != null) return '${balances[asset]}';
+  if (balances is Map && balances[asset.toUpperCase()] != null) {
+    return '${balances[asset.toUpperCase()]}';
+  }
+  return null;
+}
+
 class _BusinessChainCard extends StatelessWidget {
   const _BusinessChainCard({required this.account});
   final Map<String, dynamic>? account;
@@ -143,11 +154,14 @@ class _BusinessChainCard extends StatelessWidget {
           ),
         const SizedBox(height: 6),
         SelectableText(addr, style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: fgColor(c))),
+        if (ready && _balanceLine(a, 'usdc') != null) KeyValue('USDC', _balanceLine(a, 'usdc')!),
+        if (ready && _balanceLine(a, 'algo') != null) KeyValue('ALGO', _balanceLine(a, 'algo')!),
         Text(
           ready
-              ? a['usdc_ready'] == true
-                  ? 'Receive FARM, USDC or ALGO here on Algorand (${a['network'] ?? ''}); it is credited to your business balance. Only send on Algorand; other networks or tokens may be lost. USDC and ALGO convert to FARM at the live rate; FARM is credited 1:1.'
-                  : 'Receive FARM or ALGO here on Algorand (${a['network'] ?? ''}); it is credited to your business balance. USDC is being set up: do not send USDC yet. Only send on Algorand; other networks or tokens may be lost.'
+              ? 'Receive ALGO, USDC and FARM to this address on the Algorand network only (${a['network'] ?? ''}). '
+                  'They are credited to your business balance. Tokens sent from other networks may be lost.'
+                  '${a['usdc_asa_id'] != null ? ' USDC asset ${a['usdc_asa_id']}.' : ''} '
+                  'ALGO and USDC convert to FARM at the live rate; FARM is credited 1:1.'
               : 'Setting up this account. Do not send funds yet.',
           style: TextStyle(fontSize: 11, color: mutedColor(c)),
         ),

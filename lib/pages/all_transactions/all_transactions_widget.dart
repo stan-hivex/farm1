@@ -8,7 +8,7 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_peer_resolver.dart';
-import '/utils/transaction_history_utils.dart';
+import '/utils/personal_activity.dart';
 import '/widgets/common/back_chevron.dart';
 import 'all_transactions_model.dart';
 import '/utils/user_error_message.dart';
@@ -135,7 +135,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
           : <Map<String, dynamic>>[];
 
       final filtered = items
-          .where(isVisibleTransactionHistoryItem)
+          .where(isPersonalActivity)
           .where(_matchesFilters)
           .toList();
       if (!mounted) return;
