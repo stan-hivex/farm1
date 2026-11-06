@@ -2132,18 +2132,20 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
                                     final ActivityLabel? sysLabel =
                                         systemActivityLabel(tx);
-                                    final String title = sysLabel != null
-                                        ? sysLabel.title
-                                        : isMerchantPayment
-                                        ? (isOutgoing
-                                              ? 'Sent to $peerWithMerchant'
-                                              : 'Received from $peerWithMerchant')
-                                        : (isOutgoing
-                                              ? 'Sent to $peerUsername'
-                                              : 'Received from $peerUsername');
+                                    final String? qrTitle = merchantQrTitle(tx);
+                                    final String title = qrTitle ??
+                                        (sysLabel != null
+                                            ? sysLabel.title
+                                            : isMerchantPayment
+                                                ? (isOutgoing
+                                                    ? 'Sent to $peerWithMerchant'
+                                                    : 'Received from $peerWithMerchant')
+                                                : (isOutgoing
+                                                    ? 'Sent to $peerUsername'
+                                                    : 'Received from $peerUsername'));
 
                                     final String subtitle =
-                                        '${sysLabel?.type ?? (isMerchantPayment ? 'merchant_payment' : txType)} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
+                                        '${qrTitle ?? sysLabel?.type ?? (isMerchantPayment ? 'merchant_payment' : txType)} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
 
                                     return Padding(
                                       padding: const EdgeInsets.only(

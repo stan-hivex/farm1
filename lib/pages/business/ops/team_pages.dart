@@ -52,10 +52,15 @@ class _TeamState extends State<TeamPage> {
     final pin = await confirmWithPin(context,
         title: 'Confirm', message: 'Give $ident the ${businessRoleLabels[role]} role on your business?');
     if (pin == null || !mounted) return;
+    final phoneInvite = teamIdentifierIsPhone(ident);
     final ok = await runBusy(context, () async {
-      await BusinessOpsApi.addMember(ident, role, pin);
+      if (phoneInvite) {
+        await BusinessOpsApi.invite(normalizeTeamPhone(ident), role, pin);
+      } else {
+        await BusinessOpsApi.addMember(ident, role, pin);
+      }
       return true;
-    }, success: 'Invitation sent');
+    }, success: phoneInvite ? 'Invitation sent' : 'Team member added');
     if (ok == true) _key.currentState?.reload();
   }
 
@@ -100,7 +105,13 @@ class _TeamState extends State<TeamPage> {
         body: BizAsync<TeamSnapshot>(
           key: _key,
           load: () async {
-            final snap = parseTeamResponse(await BusinessOpsApi.team());
+            final response = await BusinessOpsApi.team();
+            List<Map<String, dynamic>> incoming = const [];
+            try {
+              incoming = BusinessOpsApi.list(await BusinessOpsApi.myInvites());
+            } catch (_) {}
+            response['incoming'] = incoming;
+            final snap = parseTeamResponse(response);
             if (mounted && snap.assignableRoles.join() != _assignable.join()) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 if (mounted) setState(() => _assignable = snap.assignableRoles);
@@ -115,6 +126,38 @@ class _TeamState extends State<TeamPage> {
               Text('People on this business, the role each one has, and pending invites.',
                   style: TextStyle(color: mutedColor(c))),
               const SizedBox(height: 12),
+              if (snap.incoming.isNotEmpty) ...[
+                Text('Invitations for you', style: TextStyle(fontWeight: FontWeight.w700, color: fgColor(c))),
+                for (final inv in snap.incoming)
+                  BizTile(
+                    leading: Icons.mark_email_unread_outlined,
+                    title: '${(inv['business'] as Map?)?['name'] ?? inv['phone'] ?? 'Invitation'}',
+                    subtitle: businessRoleLabels['${inv['role']}'] ?? '${inv['role']}',
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      TextButton(
+                        onPressed: () async {
+                          final ok = await runBusy(c, () async {
+                            await BusinessOpsApi.declineInvite('${inv['id']}');
+                            return true;
+                          }, success: 'Invitation declined');
+                          if (ok == true) _key.currentState?.reload();
+                        },
+                        child: const Text('Decline'),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          final ok = await runBusy(c, () async {
+                            await BusinessOpsApi.acceptInvite('${inv['id']}');
+                            return true;
+                          }, success: 'You joined the team');
+                          if (ok == true) _key.currentState?.reload();
+                        },
+                        child: const Text('Accept'),
+                      ),
+                    ]),
+                  ),
+                const SizedBox(height: 12),
+              ],
               for (final m in members)
                 BizTile(
                   leading: Icons.person_outline,
@@ -129,9 +172,20 @@ class _TeamState extends State<TeamPage> {
                 for (final inv in snap.invites)
                   BizTile(
                     leading: Icons.mail_outline,
-                    title: '${inv['identifier'] ?? inv['phone'] ?? inv['email'] ?? inv['username'] ?? 'Invite'}',
+                    title: '${inv['phone'] ?? inv['identifier'] ?? 'Invite'}',
                     subtitle: businessRoleLabels['${inv['role']}'] ?? '${inv['role'] ?? 'Pending'}',
-                    trailing: const StatusChip('Pending'),
+                    trailing: _assignable.isEmpty
+                        ? const StatusChip('Pending')
+                        : TextButton(
+                            onPressed: () async {
+                              final ok = await runBusy(c, () async {
+                                await BusinessOpsApi.revokeInvite('${inv['id']}');
+                                return true;
+                              }, success: 'Invitation revoked');
+                              if (ok == true) _key.currentState?.reload();
+                            },
+                            child: const Text('Revoke'),
+                          ),
                   ),
               ],
               if (members.length <= 1 && snap.invites.isEmpty)

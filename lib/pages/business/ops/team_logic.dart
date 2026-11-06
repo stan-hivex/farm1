@@ -7,14 +7,30 @@ class TeamSnapshot {
   const TeamSnapshot({
     required this.members,
     required this.invites,
+    required this.incoming,
     required this.assignableRoles,
     required this.myRole,
   });
 
   final List<Map<String, dynamic>> members;
   final List<Map<String, dynamic>> invites;
+  final List<Map<String, dynamic>> incoming;
   final List<String> assignableRoles;
   final String myRole;
+}
+
+/// A phone goes to `POST /business/team/invites`. Username or email is added
+/// immediately with `POST /business/team`.
+bool teamIdentifierIsPhone(String raw) {
+  final value = raw.trim();
+  if (value.contains('@') || value.contains(' ')) return false;
+  return RegExp(r'^\+?\d{8,15}$').hasMatch(value.replaceAll(RegExp(r'[\s-]'), ''));
+}
+
+String normalizeTeamPhone(String raw) {
+  var digits = raw.trim().replaceAll(RegExp(r'[^\d+]'), '');
+  if (!digits.startsWith('+')) digits = '+$digits';
+  return digits;
 }
 
 const teamAssignableByRole = <String, List<String>>{
@@ -42,6 +58,10 @@ TeamSnapshot parseTeamResponse(Map<String, dynamic> response) {
       invites = rawInvites.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
     }
   }
+  final topInvites = response['invites'];
+  if (invites.isEmpty && topInvites is List) {
+    invites = topInvites.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
   final metaInvites = meta['invites'] ?? meta['pending_invites'];
   if (invites.isEmpty && metaInvites is List) {
     invites = metaInvites.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
@@ -54,9 +74,14 @@ TeamSnapshot parseTeamResponse(Map<String, dynamic> response) {
   if (assignable.isEmpty) {
     assignable = List<String>.from(teamAssignableByRole[myRole] ?? const []);
   }
+  final incomingRaw = response['incoming'];
+  final incoming = incomingRaw is List
+      ? incomingRaw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+      : const <Map<String, dynamic>>[];
   return TeamSnapshot(
     members: members,
     invites: invites,
+    incoming: incoming,
     assignableRoles: assignable,
     myRole: myRole,
   );

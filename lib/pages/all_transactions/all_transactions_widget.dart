@@ -393,6 +393,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                           : payerUsername;
                       final isMerchantPayment =
                           type.toLowerCase() == 'merchant_payment';
+                      final displayType = merchantQrTitle(tx) ?? type;
                       final amountText =
                           '${isOutgoing ? '-' : '+'}${double.tryParse(amount.toString())?.toStringAsFixed(2) ?? amount} FARM';
                       final dateText = _formatDate(tx['created_at'] ??
@@ -461,7 +462,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              type,
+                                              displayType,
                                               style: theme.titleSmall.copyWith(
                                                 fontWeight: FontWeight.w700,
                                               ),

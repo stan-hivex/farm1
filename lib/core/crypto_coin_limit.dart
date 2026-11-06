@@ -86,8 +86,8 @@ CoinLimit? parseCoinLimit(Object? raw, {String? currency}) {
       .toLowerCase();
   final limit = CoinLimit(
     currency: code,
-    minAmount: _firstNum(map, ['minAmount', 'minimumAmount', 'min_amount', 'min']),
-    maxAmount: _firstNum(map, ['maxAmount', 'maximumAmount', 'max_amount', 'max']),
+    minAmount: _firstNum(map, ['min_amount', 'minAmount', 'minimumAmount', 'min']),
+    maxAmount: _firstNum(map, ['max_amount', 'maxAmount', 'maximumAmount', 'max']),
     minUsd: _firstNum(map, ['minUsd', 'minimumUsd', 'min_usd', 'minimum_usd']),
     maxUsd: _firstNum(map, ['maxUsd', 'maximumUsd', 'max_usd', 'maximum_usd']),
   );
@@ -108,6 +108,7 @@ List<CoinLimit> parseCoinLimitList(Object? raw) {
       final inner = Map<String, dynamic>.from(data);
       final innerList = inner['coins'] ?? inner['limits'];
       if (innerList is List) return parseCoinLimitList(innerList);
+      if (innerList is Map) return _limitsFromCoinMap(innerList);
       final one = parseCoinLimit(inner);
       return one == null ? const [] : [one];
     }
@@ -118,6 +119,18 @@ List<CoinLimit> parseCoinLimitList(Object? raw) {
     return raw.map(parseCoinLimit).whereType<CoinLimit>().toList();
   }
   return const [];
+}
+
+List<CoinLimit> _limitsFromCoinMap(Map<dynamic, dynamic> raw) {
+  final out = <CoinLimit>[];
+  raw.forEach((key, value) {
+    if (value is! Map) return;
+    final row = Map<String, dynamic>.from(value);
+    row.putIfAbsent('currency', () => '$key');
+    final one = parseCoinLimit(row, currency: '$key');
+    if (one != null) out.add(one);
+  });
+  return out;
 }
 
 CoinLimit? limitFor(List<CoinLimit> limits, String currency) {
@@ -175,9 +188,8 @@ Future<CoinLimit?> _firstLimit(List<String> paths, String currency) async {
 Future<CoinLimit> fetchDepositCoinLimit(String currency) async {
   final code = currency.trim().toLowerCase();
   final limit = await _firstLimit([
-    '/wallet/deposit/crypto/limits?currency=${Uri.encodeQueryComponent(code)}',
     '/wallet/deposit/crypto/limits/${Uri.encodeQueryComponent(code)}',
-    '/wallet/deposit/crypto/minimum/${Uri.encodeQueryComponent(code)}',
+    '/wallet/deposit/crypto/limits',
   ], code);
   if (limit == null || !limit.hasAnyBound) {
     throw const FormatException('Deposit limits for this coin were not returned.');
@@ -190,10 +202,7 @@ Future<CoinLimit> fetchDepositCoinLimit(String currency) async {
 Future<CoinLimit> fetchWithdrawCoinLimit(String currency) async {
   final code = currency.trim().toLowerCase();
   final limit = await _firstLimit([
-    '/withdraw/crypto/limits?currency=${Uri.encodeQueryComponent(code)}',
     '/withdraw/crypto/limits/${Uri.encodeQueryComponent(code)}',
-    '/withdraw/crypto/minimum?currency=${Uri.encodeQueryComponent(code)}',
-    '/withdraw/crypto/minimum',
   ], code);
   if (limit == null || !limit.hasAnyBound) {
     throw const FormatException('Withdrawal limits for this coin were not returned.');

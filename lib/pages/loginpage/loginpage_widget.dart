@@ -253,9 +253,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                   'Unlock FARM with biometrics instead of an SMS code.',
             );
             if (unlocked) {
-              final renewed = await BiometricReauth.exchange(
-                pendingLoginId: pendingLoginId,
-              );
+              final renewed = await BiometricReauth.exchange();
               if (renewed != null && mounted) {
                 await _finalizeSuccessfulLogin(renewed);
                 return;

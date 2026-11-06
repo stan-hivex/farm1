@@ -113,8 +113,8 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       final minUsd = _cryptoMinUsd;
       final maxUsd = _cryptoMaxUsdLimit;
       return _coinLimit != null &&
-          minUsd != null &&
-          amount >= minUsd &&
+          amount > 0 &&
+          (minUsd == null || amount >= minUsd) &&
           (maxUsd == null || amount <= maxUsd) &&
           (_cryptoFarmUsdRate == null || _amountInFarm <= walletBalance);
     }
@@ -136,11 +136,11 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
       if (_cryptoMinimumError != null) {
         return 'Could not load ${selectedCryptoAsset.toUpperCase()} limits: $_cryptoMinimumError';
       }
-      if (_coinLimit == null || _cryptoMinUsd == null) {
+      if (_coinLimit == null) {
         return 'Limits for ${selectedCryptoAsset.toUpperCase()} were not returned.';
       }
-      if (amount <= 0) return '';
-      if (amount < _cryptoMinUsd!) {
+      if (amount <= 0) return _coinLimit!.rangeLabel;
+      if (_cryptoMinUsd != null && amount < _cryptoMinUsd!) {
         return 'Minimum ${selectedCryptoAsset.toUpperCase()} withdrawal is USD ${_cryptoMinUsd!.toStringAsFixed(2)}';
       }
       if (_cryptoMaxUsdLimit != null && amount > _cryptoMaxUsdLimit!) {
@@ -1243,7 +1243,9 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                           children: [
                             Text(
                               selectedMethod == 'CRYPTO'
-                                  ? 'Min: USD ${(_cryptoMinUsd ?? 0).toStringAsFixed(2)}'
+                                  ? (_coinLimit?.minAmount != null
+                                      ? 'Min: ${_coinLimit!.minAmount} ${selectedCryptoAsset.toUpperCase()}'
+                                      : 'Min: USD ${(_cryptoMinUsd ?? 0).toStringAsFixed(2)}')
                                   : 'Min: FARM ${_formatAmount(_activeWithdrawMin)}',
                               style: GoogleFonts.plusJakartaSans(
                                 color: theme.secondaryText,
@@ -1252,9 +1254,11 @@ class _WithdrawpageWidgetState extends State<WithdrawpageWidget> {
                             ),
                             Text(
                               selectedMethod == 'CRYPTO'
-                                  ? (_cryptoMaxUsdLimit == null
-                                      ? 'Max: not set for this coin'
-                                      : 'Max: USD ${_cryptoMaxUsdLimit!.toStringAsFixed(2)}')
+                                  ? (_coinLimit?.maxAmount != null
+                                      ? 'Max: ${_coinLimit!.maxAmount} ${selectedCryptoAsset.toUpperCase()}'
+                                      : _cryptoMaxUsdLimit == null
+                                          ? 'Max: not set for this coin'
+                                          : 'Max: USD ${_cryptoMaxUsdLimit!.toStringAsFixed(2)}')
                                   : _activeWithdrawMax == null
                                       ? 'Max: FARM no limit'
                                       : 'Max: FARM ${_formatAmount(_activeWithdrawMax!)}',

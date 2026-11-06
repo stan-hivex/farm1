@@ -1,97 +1,90 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import '/app_state.dart';
-import '/core/app_config.dart';
+import '/backend/services/api_service.dart';
 import '/services/auth/device_identity.dart';
 import '/services/auth/session_store_service.dart';
-import '/services/device_fingerprint_service.dart';
 import '/services/secure_storage_service.dart';
 
-/// Asks the backend for a new session after a local biometric unlock.
+/// Session renewal from `GET /auth/session/config` and
+/// `POST /auth/session/biometric`.
 ///
-/// `POST /auth/biometric-reauth` is the session-refresh path that replaces an
-/// SMS code. A missing route (404/405) leaves the stored session untouched.
+/// The body is `{ device, refresh_token? }`. `device` is the same signed
+/// challenge proof used at login. No SMS code is sent. A disabled or missing
+/// route leaves the stored session untouched.
 class BiometricReauth {
-  static http.Client client = http.Client();
+  static Future<bool> get isEnabled async {
+    try {
+      final response = await ApiService.request(
+        method: 'GET',
+        path: '/auth/session/config',
+        requiresAuth: false,
+      );
+      final data = response['data'] is Map
+          ? Map<String, dynamic>.from(response['data'] as Map)
+          : response;
+      return data['biometric_reauth'] == true;
+    } catch (e) {
+      debugPrint('[BiometricReauth] session config unavailable: $e');
+      return false;
+    }
+  }
 
   /// Returns a login-shaped map when the server issued tokens, otherwise null.
-  static Future<Map<String, dynamic>?> exchange({
-    String? pendingLoginId,
-    String? refreshToken,
-  }) async {
+  static Future<Map<String, dynamic>?> exchange({String? refreshToken}) async {
+    if (!await isEnabled) return null;
+    final device = await DeviceIdentity.instance.loginProof();
+    if (device == null) return null;
     final refresh = (refreshToken ?? FFAppState().refreshToken).trim();
-    final pending = pendingLoginId?.trim() ?? '';
-    if (refresh.isEmpty && pending.isEmpty) return null;
 
-    String? deviceId;
+    Map<String, dynamic> response;
     try {
-      deviceId = await DeviceIdentity.instance.deviceId();
-    } catch (_) {
-      deviceId = null;
-    }
-    String fingerprint = '';
-    try {
-      fingerprint = await DeviceFingerprintService.getDeviceFingerprint();
-    } catch (_) {
-      fingerprint = '';
-    }
-    if (fingerprint.isEmpty) return null;
-
-    http.Response response;
-    try {
-      response = await client
-          .post(
-            Uri.parse('${AppConfig.api}/auth/biometric-reauth'),
-            headers: const {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'device_fingerprint': fingerprint,
-              if (deviceId != null && deviceId.isNotEmpty) 'device_id': deviceId,
-              if (refresh.isNotEmpty) 'refresh_token': refresh,
-              if (pending.isNotEmpty) 'pending_login_id': pending,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
+      response = await ApiService.request(
+        method: 'POST',
+        path: '/auth/session/biometric',
+        requiresAuth: false,
+        body: {
+          'device': device,
+          if (refresh.isNotEmpty) 'refresh_token': refresh,
+        },
+      );
+    } on ApiServiceException catch (e) {
+      debugPrint('[BiometricReauth] rejected ${e.statusCode}');
+      return null;
     } catch (e) {
       debugPrint('[BiometricReauth] request failed: $e');
       return null;
     }
 
-    if (response.statusCode == 404 || response.statusCode == 405) {
-      debugPrint('[BiometricReauth] endpoint not deployed yet');
-      return null;
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      debugPrint('[BiometricReauth] rejected ${response.statusCode}');
-      return null;
-    }
-
-    Map<String, dynamic> body = {};
-    try {
-      final decoded = jsonDecode(response.body);
-      if (decoded is Map) body = Map<String, dynamic>.from(decoded);
-    } catch (_) {
-      return null;
-    }
-    final payload = body['data'] is Map
-        ? Map<String, dynamic>.from(body['data'] as Map)
-        : body;
+    final payload = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : response;
     final access = (payload['access_token'] ?? '').toString();
     final nextRefresh = (payload['refresh_token'] ?? '').toString();
     if (access.isEmpty) return null;
 
     final effectiveRefresh = nextRefresh.isNotEmpty ? nextRefresh : refresh;
+    final user = payload['user'] is Map
+        ? Map<String, dynamic>.from(payload['user'] as Map)
+        : null;
     FFAppState().accessToken = access;
     if (effectiveRefresh.isNotEmpty) {
       FFAppState().refreshToken = effectiveRefresh;
     }
     FFAppState().isLoggedIn = true;
     FFAppState().needsBiometricReauth = false;
+    if (user != null) {
+      final id = user['id']?.toString() ?? '';
+      if (id.isNotEmpty) FFAppState().userId = id;
+      final role = user['role']?.toString().toLowerCase() ?? '';
+      if (role.isNotEmpty) FFAppState().role = role;
+      final name = user['first_name']?.toString() ?? '';
+      if (name.isNotEmpty) FFAppState().firstName = name;
+      final username = user['username']?.toString() ?? '';
+      if (username.isNotEmpty) FFAppState().userName = username;
+      final phone = user['phone']?.toString() ?? '';
+      if (phone.isNotEmpty) FFAppState().phone = phone;
+    }
     await SecureStorageService.writeAccessToken(access);
     if (effectiveRefresh.isNotEmpty) {
       await SecureStorageService.writeRefreshToken(effectiveRefresh);
@@ -114,7 +107,8 @@ class BiometricReauth {
         'access_token': access,
         'refresh_token': effectiveRefresh,
         'requiresPhoneVerification': false,
-        if (payload['user'] != null) 'user': payload['user'],
+        'reauth': payload['reauth'] ?? 'biometric',
+        if (user != null) 'user': user,
       },
     };
   }

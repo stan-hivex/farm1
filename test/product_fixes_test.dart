@@ -17,16 +17,15 @@ void main() {
     expect(isos.length, kAfricanPhoneCountries.length);
   });
 
-  test('merchant QR credits stay off the personal activity list', () {
-    expect(
-      isPersonalActivity({
-        'status': 'completed',
-        'transaction_type': 'merchant_payment',
-        'is_outgoing': false,
-        'description': 'Public QR merchant payment',
-      }),
-      isFalse,
-    );
+  test('merchant QR credits stay on the personal activity list', () {
+    const qr = {
+      'status': 'completed',
+      'transaction_type': 'merchant_payment',
+      'is_outgoing': false,
+      'description': 'Public QR merchant payment',
+    };
+    expect(isPersonalActivity(qr), isTrue);
+    expect(merchantQrTitle(qr), 'Merchant QR');
     expect(
       isPersonalActivity({
         'status': 'completed',
@@ -64,14 +63,27 @@ void main() {
 
     final list = parseCoinLimitList({
       'data': {
-        'coins': [
-          {'currency': 'btc', 'min_usd': 10, 'max_usd': 500},
-          {'coin': 'eth', 'min': 0.01, 'max': 5},
-        ],
+        'coins': {
+          'btc': {'min': 0.0002, 'max': 1.5},
+          'usdttrc20': {'max': 50000},
+        },
       },
     });
-    expect(limitFor(list, 'BTC')!.minUsd, 10);
-    expect(limitFor(list, 'eth')!.maxAmount, 5);
+    expect(limitFor(list, 'BTC')!.minAmount, 0.0002);
+    expect(limitFor(list, 'btc')!.maxAmount, 1.5);
+    expect(limitFor(list, 'usdttrc20')!.maxAmount, 50000);
+    final bounds = parseCoinLimit({
+      'data': {
+        'currency': 'usdc',
+        'min_amount': 1,
+        'max_amount': 20000,
+        'minimumAmount': 0.5,
+        'minimumUsd': 2,
+      },
+    });
+    expect(bounds!.minAmount, 1);
+    expect(bounds.maxAmount, 20000);
+    expect(bounds.minUsd, 2);
     expect(parseCoinLimit({'data': {}}), isNull);
   });
 
@@ -100,6 +112,19 @@ void main() {
     });
     expect(snap.members, hasLength(2));
     expect(snap.invites.single['role'], 'operations');
+    final listed = parseTeamResponse({
+      'data': [
+        {'id': null, 'role': 'owner', 'user': {'full_name': 'Asha'}},
+      ],
+      'invites': [
+        {'id': 'inv1', 'phone': '+254700000001', 'role': 'finance', 'status': 'pending'},
+      ],
+      'meta': {'my_role': 'owner', 'assignable_roles': ['admin', 'finance']},
+    });
+    expect(listed.invites.single['phone'], '+254700000001');
+    expect(teamIdentifierIsPhone('+254700000001'), isTrue);
+    expect(teamIdentifierIsPhone('lee@farm.app'), isFalse);
+    expect(normalizeTeamPhone('254700000001'), '+254700000001');
     expect(snap.assignableRoles, contains('admin'));
     expect(snap.assignableRoles, isNot(contains('owner')));
   });

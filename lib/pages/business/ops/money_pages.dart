@@ -156,12 +156,20 @@ class _BusinessChainCard extends StatelessWidget {
         SelectableText(addr, style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: fgColor(c))),
         if (ready && _balanceLine(a, 'usdc') != null) KeyValue('USDC', _balanceLine(a, 'usdc')!),
         if (ready && _balanceLine(a, 'algo') != null) KeyValue('ALGO', _balanceLine(a, 'algo')!),
+        if (a['usdc_status'] != null) KeyValue('USDC', '${a['usdc_status']}'),
+        for (final asset in ((a['assets'] as List?) ?? const []).whereType<Map>())
+          KeyValue(
+            '${asset['symbol'] ?? 'Asset'}',
+            '${asset['status'] ?? ''}${asset['asa_id'] != null ? ' · ${asset['asa_id']}' : ''}',
+          ),
         Text(
           ready
-              ? 'Receive ALGO, USDC and FARM to this address on the Algorand network only (${a['network'] ?? ''}). '
-                  'They are credited to your business balance. Tokens sent from other networks may be lost.'
-                  '${a['usdc_asa_id'] != null ? ' USDC asset ${a['usdc_asa_id']}.' : ''} '
-                  'ALGO and USDC convert to FARM at the live rate; FARM is credited 1:1.'
+              ? (a['usdc_ready'] == true || a['usdc_status'] == 'ready'
+                  ? 'Receive ALGO, USDC and FARM at this address on Algorand (${a['network'] ?? ''}). '
+                      'USDC is ready${a['usdc_asa_id'] != null ? ' (asset ${a['usdc_asa_id']})' : ''}. '
+                      'Only send on Algorand.'
+                  : 'Receive FARM at this address on Algorand (${a['network'] ?? ''}). '
+                      'USDC opt-in is ${a['usdc_status'] ?? 'pending'}.')
               : 'Setting up this account. Do not send funds yet.',
           style: TextStyle(fontSize: 11, color: mutedColor(c)),
         ),
