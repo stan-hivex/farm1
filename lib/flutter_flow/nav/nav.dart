@@ -26,6 +26,7 @@ import '/index.dart';
 import '/pages/business/business_onboarding_page.dart';
 import '/pages/business/business_status_page.dart';
 import '/pages/business/ops/pay_business_page.dart';
+import '/utils/farmpay_checkout.dart';
 import '/pages/tap_pay/tap_pay_pages.dart';
 
 export 'package:go_router/go_router.dart';
@@ -94,6 +95,10 @@ GoRouter createRouter(
     final authState = FFAppState();
     final path = state.uri.path;
     if (path == '/pay/success') return null;
+    final documentCheckout = classifyFarmpayPath(path);
+    final documentLocation =
+        documentCheckout == null ? null : farmpayAppLocation(documentCheckout);
+    if (documentLocation != null) return documentLocation;
     final appPaymentLocation = _merchantPaymentLocationFromAppLink(state);
     if (appPaymentLocation != null) return appPaymentLocation;
     if (path.startsWith('/pay/')) return null;
