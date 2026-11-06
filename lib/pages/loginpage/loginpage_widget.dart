@@ -4,6 +4,8 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:flutter/material.dart';
+import '/components/brand_logo.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'loginpage_model.dart';
 export 'loginpage_model.dart';
@@ -25,6 +27,13 @@ import '/pages/otppage/otppage_widget.dart';
 /// spacing and typography  Important:  * Design should feel like a secure
 /// banking app * Professional and trustworthy UI * Keep layout simple and
 /// elegant TAKE TIME AND DO IT IN DETAIL
+const Map<String, String> kDefaultLoginCountry = {
+  'name': 'Kenya',
+  'iso': 'KE',
+  'code': '+254',
+  'flag': '🇰🇪',
+};
+
 class LoginpageWidget extends StatefulWidget {
   const LoginpageWidget({super.key});
 
@@ -45,12 +54,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
   bool isLoading = false;
   bool _biometricAvailable = false;
   String _biometricButtonLabel = 'Login with Biometric';
-  Map<String, String> _selectedCountry = {
-    'name': 'Algeria',
-    'iso': 'DZ',
-    'code': '+213',
-    'flag': '🇩🇿',
-  };
+  // Kenya is the primary market; users can still pick any country.
+  Map<String, String> _selectedCountry = Map.of(kDefaultLoginCountry);
 
   final List<Map<String, String>> _africanCountries = [
     {'name': 'Algeria', 'iso': 'DZ', 'code': '+213', 'flag': '🇩🇿'},
@@ -479,57 +484,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 72.0,
-                      height: 72.0,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).primaryText,
-                        borderRadius: BorderRadius.circular(24.0),
-                      ),
-                      alignment: const AlignmentDirectional(0.0, 0.0),
-                      child: SizedBox(
-                        width: 40.0,
-                        height: 50.0,
-                        child: Stack(
-                          alignment: const AlignmentDirectional(-1.0, -1.0),
-                          children: [
-                            Align(
-                              alignment: const AlignmentDirectional(0.0, 0.0),
-                              child: Container(
-                                width: 6.0,
-                                height: 50.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                  borderRadius: BorderRadius.circular(2.0),
-                                ),
-                              ),
-                            ),
-                            Align(
-                              alignment: const AlignmentDirectional(-1.0, -0.6),
-                              child: Container(
-                                width: 24.0,
-                                height: 6.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                  borderRadius: BorderRadius.circular(2.0),
-                                ),
-                              ),
-                            ),
-                            Align(
-                              alignment: const AlignmentDirectional(-1.0, 0.0),
-                              child: Container(
-                                width: 18.0,
-                                height: 6.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                  borderRadius: BorderRadius.circular(2.0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    const BrandLogo(size: 72.0),
                     const SizedBox(height: 16.0),
                     Text(
                       'FARM',
@@ -802,12 +757,10 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         width: double.infinity,
                         height: 56.0,
                         padding: const EdgeInsets.symmetric(vertical: 0.0),
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF1F1F1F)
-                            : FlutterFlowTheme.of(context).primary,
+                        color: AppTheme.accent,
                         textStyle:
                             FlutterFlowTheme.of(context).titleSmall.override(
-                                  color: Colors.white,
+                                  color: AppTheme.onAccent,
                                   fontWeight: FontWeight.w600,
                                 ),
                         borderSide: const BorderSide(
