@@ -913,7 +913,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Row(mainAxisSize: MainAxisSize.min, children: [const FarmCoinIcon(size: 28), const SizedBox(width: 10), Flexible(child: Text(
+                          Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [const FarmCoinIcon(size: 26, color: AppTheme.accent), const SizedBox(width: 8), Flexible(child: Text(
                             '${walletBalance.toStringAsFixed(4)} FARM',
                             style: GoogleFonts.plusJakartaSans(
                               color: AppTheme.accent,

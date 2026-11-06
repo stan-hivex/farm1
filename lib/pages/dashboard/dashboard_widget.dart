@@ -1337,7 +1337,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                         CrossAxisAlignment
                                                             .center,
                                                     children: [
-                                                      const FarmCoinIcon(size: 16.0),
+                                                      FarmCoinIcon(
+                                                        size: 14,
+                                                        color: Theme.of(context).brightness == Brightness.dark
+                                                            ? Colors.white70
+                                                            : FlutterFlowTheme.of(context).onPrimary70,
+                                                      ),
                                                       const SizedBox(width: 6.0),
                                                       Text(
                                                         'FARM BALANCE',
@@ -1376,7 +1381,15 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       ),
                                                     ].divide(const SizedBox(width: 4.0)),
                                                   ),
-                                                  Text(
+                                                  Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                                    children: [
+                                                      if (!isBalanceLoading) ...[
+                                                        const FarmCoinIcon(size: 32, color: AppTheme.accent),
+                                                        const SizedBox(width: 8),
+                                                      ],
+                                                      Flexible(
+                                                        child: Text(
                                                     isBalanceLoading
                                                         ? 'Loading...'
                                                         : walletBalance
@@ -1400,6 +1413,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                               FontWeight.w800,
                                                           lineHeight: 1.2,
                                                         ),
+                                                  ),
+                                                      ),
+                                                    ],
                                                   ),
                                                   if (!isBalanceLoading &&
                                                       businessBalance != null)
