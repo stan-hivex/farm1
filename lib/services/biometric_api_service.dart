@@ -7,9 +7,22 @@ import '/app_state.dart';
 class BiometricApiService {
   static final http.Client _client = http.Client();
 
+  /// POST /api/v1/security/biometrics. `pin` is required to turn biometrics on.
+  static Map<String, dynamic> enableBiometricsBody({
+    required String deviceFingerprint,
+    required String pin,
+    String biometricType = 'fingerprint',
+  }) =>
+      {
+        'deviceFingerprint': deviceFingerprint,
+        'biometricType': biometricType,
+        'pin': pin,
+      };
+
   /// Register a device for biometrics. Returns backend device id on success.
   static Future<String> enableBiometrics({
     required String deviceFingerprint,
+    required String pin,
     String biometricType = 'fingerprint',
   }) async {
     final uri = Uri.parse('${AppConfig.api}/security/biometrics');
@@ -23,16 +36,13 @@ class BiometricApiService {
       if (token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
 
-    // Logging per requirements
-    debugPrint('deviceFingerprint: $deviceFingerprint');
-    debugPrint('deviceFingerprint.runtimeType: ${deviceFingerprint.runtimeType}');
+    debugPrint('deviceFingerprint length: ${deviceFingerprint.length}');
 
-    final bodyMap = {
-      'deviceFingerprint': deviceFingerprint,
-      'biometricType': biometricType,
-    };
-
-    debugPrint('request body: $bodyMap');
+    final bodyMap = enableBiometricsBody(
+      deviceFingerprint: deviceFingerprint,
+      pin: pin,
+      biometricType: biometricType,
+    );
 
     final body = jsonEncode(bodyMap);
 
@@ -43,29 +53,35 @@ class BiometricApiService {
     debugPrint('headers: ${res.headers}');
 
     if (res.statusCode != 200 && res.statusCode != 201) {
-      String message = res.body;
-      try {
-        final decoded = jsonDecode(res.body);
-        if (decoded is Map && decoded['message'] is String) {
-          message = decoded['message'];
-        }
-      } catch (_) {}
-      throw Exception('HTTP ${res.statusCode}: $message\n${res.body}');
+      throw Exception(_errorMessage(res.body, res.statusCode));
     }
 
-    try {
-      final decoded = jsonDecode(res.body) as Map<String, dynamic>;
-      // Accept either device_id or deviceId in responses
-      if (decoded.containsKey('device_id')) {
-        return decoded['device_id'].toString();
-      }
-      if (decoded.containsKey('deviceId')) {
-        return decoded['deviceId'].toString();
-      }
-      throw Exception('enableBiometrics: missing device_id in response');
-    } catch (e) {
-      rethrow;
+    final decoded = jsonDecode(res.body);
+    final root = decoded is Map && decoded['data'] is Map
+        ? Map<String, dynamic>.from(decoded['data'] as Map)
+        : decoded is Map
+            ? Map<String, dynamic>.from(decoded)
+            : <String, dynamic>{};
+    final id = root['device_id'] ?? root['deviceId'];
+    if (id == null || '$id'.isEmpty) {
+      throw Exception('Biometrics could not be turned on.');
     }
+    return id.toString();
+  }
+
+  static String _errorMessage(String body, int status) {
+    try {
+      final decoded = jsonDecode(body);
+      final message = decoded is Map ? decoded['message'] : null;
+      if (message is String && message.trim().isNotEmpty) return message.trim();
+      if (message is List && message.isNotEmpty) {
+        return message.map((e) => '$e').join(' ');
+      }
+    } catch (_) {}
+    if (status == 400 || status == 401 || status == 403) {
+      return 'That PIN is not correct.';
+    }
+    return 'Biometrics could not be turned on.';
   }
 
   /// Disable biometrics for the current device id.
