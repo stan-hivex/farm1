@@ -4,7 +4,9 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/services/notification_feedback_service.dart';
 import '/services/notification_service.dart';
 import '/widgets/common/back_chevron.dart';
+import '/services/offline_cache.dart';
 import '/utils/user_error_message.dart';
+import 'notification_feed.dart';
 
 class UserNotificationsPageWidget extends StatefulWidget {
   const UserNotificationsPageWidget({super.key});
@@ -31,9 +33,34 @@ class _UserNotificationsPageWidgetState
   @override
   void initState() {
     super.initState();
+    final cached = OfflineCache.read('notifications');
+    if (cached is List && cached.isNotEmpty) {
+      notifications = [
+        for (final item in cached)
+          if (item is Map) Map<String, dynamic>.from(item),
+      ];
+      groupedNotifications = _group(notifications);
+      isLoading = false;
+      _hasLoadedNotificationsBefore = true;
+    }
     loadNotifications();
     NotificationService.notificationReceived
         .addListener(_onNotificationReceived);
+  }
+
+  List<Map<String, dynamic>> _group(List<Map<String, dynamic>> visibleItems) {
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    for (final item in visibleItems) {
+      final key = _notificationGroupKey(item);
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+    return grouped.entries
+        .map((entry) => {
+              'key': entry.key,
+              'label': _notificationGroupLabel(entry.key),
+              'items': entry.value,
+            })
+        .toList();
   }
 
   Future<void> loadNotifications() async {
@@ -49,24 +76,17 @@ class _UserNotificationsPageWidgetState
     try {
       final items = <Map<String, dynamic>>[];
       var page = 1;
-      while (true) {
+      const maxPages = 3;
+      while (page <= maxPages) {
         final response = await ApiService.getNotifications(
           page: page,
-          limit: 100,
+          limit: 50,
         );
-        final rawNotifications = response['data'];
-        if (rawNotifications is! List) break;
-        items.addAll(
-          rawNotifications.map((item) => item is Map<String, dynamic>
-              ? item
-              : Map<String, dynamic>.from(item as Map)),
-        );
-
-        final meta = response['meta'];
-        final lastPage = meta is Map
-            ? int.tryParse(meta['last_page']?.toString() ?? '') ?? page
-            : page;
-        if (page >= lastPage || rawNotifications.isEmpty) break;
+        final batch = notificationItems(response);
+        items.addAll(batch);
+        if (batch.length < 50 || page >= notificationLastPage(response, page)) {
+          break;
+        }
         page++;
       }
       final parsed = items.cast<Map<String, dynamic>>();
@@ -93,31 +113,26 @@ class _UserNotificationsPageWidgetState
       _previousNotificationIds = newNotificationIds;
       _hasLoadedNotificationsBefore = true;
 
-      final grouped = <String, List<Map<String, dynamic>>>{};
-      for (final item in visibleItems) {
-        final key = _notificationGroupKey(item);
-        grouped.putIfAbsent(key, () => []).add(item);
-      }
-      final groupedList = grouped.entries
-          .map((entry) => {
-                'key': entry.key,
-                'label': _notificationGroupLabel(entry.key),
-                'items': entry.value,
-              })
-          .toList();
+      final groupedList = _group(visibleItems);
+      OfflineCache.write('notifications', visibleItems);
 
       setState(() {
         notifications = visibleItems;
         groupedNotifications = groupedList;
         unreadCount = unread;
         isLoading = false;
+        errorMessage = null;
       });
       if (hasNewNotifications) {
         NotificationFeedbackService.trigger();
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        errorMessage = 'Unable to fetch notifications.';
+        errorMessage = notificationFailureMessage(
+          e,
+          hasCache: notifications.isNotEmpty,
+        );
         isLoading = false;
       });
     }
@@ -666,25 +681,39 @@ class _UserNotificationsPageWidgetState
       ),
       body: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: isLoading && notifications.isEmpty
-            ? Center(child: CircularProgressIndicator())
+        child: RefreshIndicator(
+          onRefresh: loadNotifications,
+          child: isLoading && notifications.isEmpty
+            ? ListView(children: const [
+                SizedBox(height: 120),
+                Center(child: CircularProgressIndicator()),
+              ])
             : errorMessage != null && notifications.isEmpty
-                ? Center(
-                    child: Text(
+                ? ListView(children: [
+                    const SizedBox(height: 80),
+                    Text(
                       errorMessage!,
+                      textAlign: TextAlign.center,
                       style: FlutterFlowTheme.of(context).bodyMedium,
                     ),
-                  )
+                    const SizedBox(height: 16),
+                    Center(
+                      child: TextButton(
+                        onPressed: loadNotifications,
+                        child: const Text('Try again'),
+                      ),
+                    ),
+                  ])
                 : notifications.isEmpty
-                    ? Center(
-                        child: Text(
+                    ? ListView(children: [
+                        const SizedBox(height: 80),
+                        Text(
                           'No notifications yet.',
+                          textAlign: TextAlign.center,
                           style: FlutterFlowTheme.of(context).bodyMedium,
                         ),
-                      )
-                    : RefreshIndicator(
-                        onRefresh: loadNotifications,
-                        child: ListView.separated(
+                      ])
+                    : ListView.separated(
                           separatorBuilder: (_, __) =>
                               const SizedBox(height: 12),
                           itemCount: groupedNotifications.length,

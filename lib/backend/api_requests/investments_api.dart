@@ -155,7 +155,9 @@ const documentKindLabels = {
 
 const projectStatusLabels = {
   'draft': 'Draft',
-  'submitted': 'Under review',
+  'submitted': 'Submitted',
+  'under_review': 'Under review',
+  'in_review': 'Under review',
   'more_info_required': 'More info needed',
   'approved': 'Approved',
   'rejected': 'Rejected',

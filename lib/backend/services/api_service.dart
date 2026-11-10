@@ -262,6 +262,7 @@ class ApiService {
 
   // Central method — all requests go through here
   static final Map<String, Map<String, dynamic>> _cache = {};
+  static final Map<String, Future<Map<String, dynamic>>> _inflightGets = {};
 
   static Future<Map<String, dynamic>> _request({
     required String method,
@@ -271,7 +272,33 @@ class ApiService {
     bool isRetry = false,
     int timeoutSeconds = 20,
     bool useUnversionedApi = false,
+    bool coalesce = true,
   }) async {
+    final verb = method.toUpperCase();
+    // Deposit, Send and the dashboard refresh often ask for the same GET at
+    // the same time. One in-flight call serves all of them.
+    if (verb == 'GET' && coalesce && !isRetry) {
+      final pending = _inflightGets[path];
+      if (pending != null) return pending;
+      final future = _request(
+        method: method,
+        path: path,
+        body: body,
+        requiresAuth: requiresAuth,
+        isRetry: isRetry,
+        timeoutSeconds: timeoutSeconds,
+        useUnversionedApi: useUnversionedApi,
+        coalesce: false,
+      );
+      _inflightGets[path] = future;
+      try {
+        return await future;
+      } finally {
+        if (identical(_inflightGets[path], future)) {
+          _inflightGets.remove(path);
+        }
+      }
+    }
     final apiBase = useUnversionedApi
         ? AppConfig.api.replaceFirst(RegExp(r'/api/v\d+$'), '/api')
         : AppConfig.api;

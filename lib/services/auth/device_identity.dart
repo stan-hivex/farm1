@@ -22,7 +22,10 @@ class DeviceIdentity {
   static const _kSeed = 'farm_device_ed25519_seed_v1';
 
   static const _storage = FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: false,
+    ),
     iOptions: IOSOptions(
       accessibility: KeychainAccessibility.first_unlock_this_device,
     ),

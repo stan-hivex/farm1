@@ -340,13 +340,38 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
   }
 
   Future<void> fetchWallet() async {
+    final cached = ApiService.getCached('/wallet');
+    if (cached != null) {
+      final walletData =
+          Map<String, dynamic>.from(cached['data'] ?? cached);
+      setState(() {
+        balance = _parseNumericValue(
+          walletData['available_balance'] ??
+              walletData['balance'] ??
+              walletData['wallet_balance'],
+        );
+        isLoading = false;
+      });
+    }
     try {
       final walletResp = await ApiService.getWallet();
-      final txResp = await ApiService.getTransactions();
+      Map<String, dynamic>? txResp;
+      try {
+        txResp = await ApiService.getTransactions(page: 1, limit: 10);
+      } on ApiServiceException catch (e) {
+        if (e.statusCode != 429) rethrow;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message)),
+          );
+        }
+      }
 
       final walletData =
           Map<String, dynamic>.from(walletResp['data'] ?? walletResp);
-      final txs = List<dynamic>.from(txResp['data'] ?? txResp);
+      final txs = txResp == null
+          ? transactions
+          : List<dynamic>.from(txResp['data'] ?? txResp);
 
       setState(() {
         balance = _parseNumericValue(
