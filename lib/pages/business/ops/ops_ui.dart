@@ -1,6 +1,6 @@
 import '/services/offline_cache.dart';
+import '/services/payment_confirm.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '../business_ui.dart';
 
@@ -346,43 +346,17 @@ Future<bool> confirmAction(BuildContext c,
   return r ?? false;
 }
 
-/// Confirmation with transaction PIN. Returns the PIN, or null if cancelled.
+/// PIN confirm for routes that do not accept biometric authorization.
+/// Biometric-capable payments should call [confirmPayment] directly.
 Future<String?> confirmWithPin(BuildContext c,
     {required String title, required String message}) async {
-  final ctrl = TextEditingController();
-  final r = await showDialog<String>(
-    context: c,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(message),
-        const SizedBox(height: 16),
-        TextField(
-          controller: ctrl,
-          autofocus: true,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: bizInput(ctx, 'Transaction PIN'),
-        ),
-      ]),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: mutedColor(ctx)))),
-        TextButton(
-            onPressed: () {
-              if (ctrl.text.length >= 4) Navigator.pop(ctx, ctrl.text);
-            },
-            child: Text('Confirm',
-                style: TextStyle(
-                    color: fgColor(ctx), fontWeight: FontWeight.w700))),
-      ],
-    ),
+  final result = await confirmPayment(
+    c,
+    title: title,
+    message: message,
+    biometricSupported: false,
   );
-  ctrl.dispose();
-  return r;
+  return result?.pin;
 }
 
 /// Runs [action] with a blocking spinner and reports errors.

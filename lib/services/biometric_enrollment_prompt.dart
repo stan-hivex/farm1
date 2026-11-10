@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '/app_state.dart';
 import '/services/biometric_lock_service.dart';
+import '/services/payment_confirm.dart';
 
 class BiometricEnrollmentPrompt {
   static bool _isShowing = false;
@@ -33,7 +34,7 @@ class BiometricEnrollmentPrompt {
       if (!context.mounted) return;
       if (enableBiometrics == true && !appState.biometricsEnabled) {
         try {
-          final enabled = await biometricService.enableBiometrics();
+          final enabled = await turnOnPaymentBiometrics(context);
           if (enabled && context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Biometrics enabled')),

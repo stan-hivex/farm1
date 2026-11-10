@@ -14,6 +14,7 @@ import '/services/app_session_manager.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/services/biometric_lock_service.dart';
+import '/services/payment_confirm.dart';
 import '/pages/settings/delete_account_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -835,8 +836,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                       BiometricLockService();
                                   try {
                                     if (value) {
-                                      final ok = await biometricLockService
-                                          .enableBiometrics();
+                                      final ok = await turnOnPaymentBiometrics(context);
                                       if (ok) {
                                         setState(() {
                                           biometricsEnabled = true;
