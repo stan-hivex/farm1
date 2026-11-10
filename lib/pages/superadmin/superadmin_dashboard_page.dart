@@ -13,6 +13,8 @@ import '/pages/loginpage/loginpage_widget.dart';
 import '/pages/superadmin/add_admin_page.dart';
 import '/admin/pages/add_superadmin_page.dart';
 import '/pages/superadmin/superadmin_wallet_page.dart';
+import '/pages/superadmin/fee_revenue.dart';
+import '/pages/superadmin/fee_revenue_card.dart';
 import '/pages/settings/support_help_center_page.dart';
 import '/admin/pages/user_management_page.dart';
 import '/admin/pages/admin_management_page.dart';
@@ -43,6 +45,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     with WidgetsBindingObserver {
   Map<String, dynamic>? _dashboardData;
   Map<String, dynamic>? _superadminWallet;
+  String _feePeriod = 'all';
   List<Map<String, dynamic>> _revenueSeries = <Map<String, dynamic>>[];
   bool _loading = true;
   String? _error;
@@ -579,7 +582,14 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                   accent: accent,
                 ),
                 const SizedBox(height: 28),
-                _buildKYCEarnings(data, cardColor, accent, muted),
+                FeeRevenueCard(
+                  report: feeReportFor(_dashboardData, _superadminWallet),
+                  period: _feePeriod,
+                  onPeriod: (value) => setState(() => _feePeriod = value),
+                  cardColor: cardColor,
+                  accent: accent,
+                  muted: muted,
+                ),
                 const SizedBox(height: 28),
                 _buildSystemHealth(data, cardColor, accent, muted),
                 const SizedBox(height: 28),
@@ -1063,180 +1073,6 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  static const _streamColors = <Color>[
-    Color(0xFF4ADE80),
-    Color(0xFF60A5FA),
-    Color(0xFFC084FC),
-    Color(0xFFFB923C),
-    Color(0xFF2DD4BF),
-    Color(0xFFF472B6),
-    Color(0xFFFACC15),
-  ];
-
-  Widget _buildKYCEarnings(
-      Map<String, dynamic> data, Color cardColor, Color accent, Color muted) {
-    double amount(String key) {
-      final value = data[key];
-      if (value is num) return value.toDouble();
-      return double.tryParse(value?.toString() ?? '') ?? 0;
-    }
-
-    int count(String key, [String? fallbackKey]) {
-      final value =
-          data[key] ?? (fallbackKey == null ? null : data[fallbackKey]);
-      if (value is num) return value.toInt();
-      return int.tryParse(value?.toString() ?? '') ?? 0;
-    }
-
-    final creationEarnings = amount('escrow_creation_earnings');
-    final releaseEarnings = amount('escrow_release_earnings');
-    final withdrawEarnings = amount('withdraw_fee_earnings');
-    final merchantEarnings = amount('merchant_sales_fee_earnings');
-    final creationCount = count('escrow_creation_count');
-    final releaseCount = count('escrow_release_count');
-    final withdrawCount = count('withdraw_transaction_count', 'withdraw_count');
-    final merchantSalesCount = count('merchant_sales_count');
-    final streams = (data['revenue_streams'] is List)
-        ? (data['revenue_streams'] as List)
-            .whereType<Map>()
-            .map((m) => Map<String, dynamic>.from(m))
-            .toList()
-        : const <Map<String, dynamic>>[];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Platform Revenue',
-          style: GoogleFonts.plusJakartaSans(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white10),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'All platform fee sources',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white70,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      Icons.analytics_rounded,
-                      color: accent,
-                      size: 28,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              if (streams.isNotEmpty) ...[
-                for (var i = 0; i < streams.length; i++) ...[
-                  _earningsBreakdownCard(
-                    '${streams[i]['label'] ?? streams[i]['type']}',
-                    '${formatFarmAmount(streams[i]['total'])} FARM',
-                    'From ${streams[i]['count'] ?? 0} transactions',
-                    _streamColors[i % _streamColors.length],
-                    cardColor,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                Container(
-                  padding: const EdgeInsets.only(top: 12),
-                  decoration: const BoxDecoration(
-                      border: Border(top: BorderSide(color: Colors.white24))),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text('Total (${streams.length} streams)',
-                            style: GoogleFonts.plusJakartaSans(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                      Text('${formatFarmAmount(data['total_revenue'])} FARM',
-                          style: GoogleFonts.plusJakartaSans(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800)),
-                    ],
-                  ),
-                ),
-              ] else ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: _earningsBreakdownCard(
-                      'Creation Fee',
-                      '${creationEarnings.toStringAsFixed(2)} FARM',
-                      'From $creationCount escrow creations',
-                      Colors.green,
-                      cardColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _earningsBreakdownCard(
-                      'Release Fee',
-                      '${releaseEarnings.toStringAsFixed(2)} FARM',
-                      'From $releaseCount escrow releases',
-                      Colors.blue,
-                      cardColor,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _earningsBreakdownCard(
-                'Withdraw Fee',
-                '${withdrawEarnings.toStringAsFixed(2)} FARM',
-                'From $withdrawCount withdraws',
-                Colors.purple,
-                cardColor,
-              ),
-              const SizedBox(height: 12),
-              _earningsBreakdownCard(
-                'Merchant Revenue',
-                '${merchantEarnings.toStringAsFixed(2)} FARM',
-                'From $merchantSalesCount merchant sales',
-                Colors.orange,
-                cardColor,
-              ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildSuperadminFees(Map<String, dynamic>? wallet, Color cardColor,
       Color accent, Color muted) {
     final balance = wallet == null
@@ -1245,12 +1081,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     final displayBalance = (balance is num)
         ? (balance).toDouble()
         : double.tryParse(balance.toString()) ?? 0.0;
-    final merchantRevenue = wallet?['merchant_sales_revenue'] is num
-        ? (wallet!['merchant_sales_revenue'] as num).toDouble()
-        : double.tryParse(
-                wallet?['merchant_sales_revenue']?.toString() ?? '') ??
-            0.0;
-    final merchantSalesCount = wallet?['merchant_sales_count'] ?? 0;
+    final collected = feeReportFor(_dashboardData, wallet);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1289,7 +1120,8 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Column(
+                Expanded(
+                  child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -1319,7 +1151,9 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Merchant revenue: ${merchantRevenue.toStringAsFixed(2)} FARM ($merchantSalesCount sales)',
+                      collected.fees.isEmpty
+                          ? 'Fee totals appear on the revenue list below.'
+                          : '${formatFarmAmount(collected.totalFor('all'))} FARM collected across ${collected.fees.length} fee types',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.plusJakartaSans(
@@ -1328,6 +1162,7 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
                       ),
                     ),
                   ],
+                ),
                 ),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1349,62 +1184,6 @@ class _SuperadminDashboardPageState extends State<SuperadminDashboardPage>
     );
   }
 
-  Widget _earningsBreakdownCard(String title, String amount, String description,
-      Color colorAccent, Color cardColor) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorAccent.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: colorAccent,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.plusJakartaSans(
-                    color: Colors.white70,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            amount,
-            style: GoogleFonts.plusJakartaSans(
-              color: colorAccent,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white70,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   List<Map<String, dynamic>> _systemChecks(Map<String, dynamic> data) {
     final raw = data['system_checks'];

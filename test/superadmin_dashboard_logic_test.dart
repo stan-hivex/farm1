@@ -10,7 +10,8 @@ void main() {
     expect(RegExp(r"'9\d\.\d%'").hasMatch(src), isFalse);
     expect(src.contains("system_health'] ?? 98"), isFalse);
     expect(src.contains('system_checks'), isTrue);
-    expect(src.contains('revenue_streams'), isTrue);
+    expect(src.contains('FeeRevenueCard'), isTrue);
+    expect(src.contains('feeReportFor'), isTrue);
     expect(src.contains('/admin/currency-rates/current'), isTrue);
   });
 
