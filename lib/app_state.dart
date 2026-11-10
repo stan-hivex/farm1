@@ -163,6 +163,9 @@ class FFAppState extends ChangeNotifier {
         : ThemeMode.light;
     if (_role.isEmpty || !_isLoggedIn) {
       _biometricsEnabled = false;
+    } else if (_biometricsEnabled) {
+      // Cold start with biometrics on unlocks locally. It does not go to SMS.
+      _needsBiometricReauth = true;
     }
 
     // Diagnostic auth restore log

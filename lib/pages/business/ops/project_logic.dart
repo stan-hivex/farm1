@@ -9,3 +9,34 @@ bool projectIsFilled(Map<dynamic, dynamic> project) {
 }
 
 const submitForTokenizationLabel = 'Submit for tokenization';
+
+/// Drafts and projects sent back for more information can be submitted.
+bool projectCanSubmitForTokenization(String status) {
+  return status.isEmpty ||
+      status == 'draft' ||
+      status == 'more_info_required';
+}
+
+/// What the business sees. `submitted` is not the same as `under review`.
+String projectLifecycleLabel(String status) {
+  switch (status) {
+    case '':
+    case 'draft':
+      return 'Draft';
+    case 'submitted':
+      return 'Submitted';
+    case 'under_review':
+    case 'in_review':
+      return 'Under review';
+    case 'approved':
+      return 'Approved';
+    case 'listed':
+      return 'Listed';
+    case 'rejected':
+      return 'Rejected';
+    case 'more_info_required':
+      return 'More info needed';
+    default:
+      return status.replaceAll('_', ' ');
+  }
+}

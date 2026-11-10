@@ -153,7 +153,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
-      unawaited(_refreshDashboard(forceAuthRefresh: true));
+      unawaited(_refreshDashboard(includeExtras: false));
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
@@ -181,52 +181,76 @@ class _DashboardWidgetState extends State<DashboardWidget>
       return;
     }
 
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 90), (_) {
       if (!mounted ||
           !FFAppState().isLoggedIn ||
           FFAppState().accessToken.isEmpty) {
         return;
       }
-      unawaited(_refreshDashboard());
+      unawaited(_refreshDashboard(includeExtras: false));
     });
   }
 
-  Future<void> _refreshDashboard({bool forceAuthRefresh = false}) async {
+  bool _refreshInFlight = false;
+  DateTime? _lastNavAt;
+
+  void _openOnce(VoidCallback go) {
+    final now = DateTime.now();
+    if (_lastNavAt != null &&
+        now.difference(_lastNavAt!) < const Duration(milliseconds: 800)) {
+      return;
+    }
+    _lastNavAt = now;
+    go();
+  }
+
+  Future<void> _refreshDashboard({
+    bool forceAuthRefresh = false,
+    bool includeExtras = true,
+  }) async {
+    if (_refreshInFlight) return;
     if (!mounted ||
         !FFAppState().isLoggedIn ||
         FFAppState().accessToken.isEmpty) {
       return;
     }
+    _refreshInFlight = true;
 
     if (mounted && !isBalanceLoading) setState(() => _refreshing = true);
     try {
-      await AppSessionManager().syncNow(
-        profileTimeoutSeconds: 5,
-        walletTimeoutSeconds: 5,
-        transactionsTimeoutSeconds: 5,
-        forceAuthRefresh: forceAuthRefresh,
-      );
-    } catch (e) {
-      debugPrint('Dashboard refresh failed: $e');
+      try {
+        await AppSessionManager().syncNow(
+          profileTimeoutSeconds: 5,
+          walletTimeoutSeconds: 5,
+          transactionsTimeoutSeconds: 5,
+          forceAuthRefresh: forceAuthRefresh,
+        );
+      } catch (e) {
+        debugPrint('Dashboard refresh failed: $e');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        walletBalance = FFAppState().walletBalance;
+        kesEquivalent = FFAppState().kesEquivalent;
+        profileImageUrl = FFAppState().profileImageUrl;
+        transactions = FFAppState().recentTransactions
+            .where(isPersonalActivity)
+            .toList();
+        final wallet = ApiService.getCached('/wallet');
+        if (wallet != null) _applyBusinessWallet(wallet);
+        isBalanceLoading = false;
+        isTransactionsLoading = false;
+      });
+
+      if (includeExtras) {
+        await Future.wait([fetchGrowthHistory(), loadNotifications()]);
+      }
+    } finally {
+      _refreshInFlight = false;
+      if (mounted) setState(() => _refreshing = false);
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      walletBalance = FFAppState().walletBalance;
-      kesEquivalent = FFAppState().kesEquivalent;
-      profileImageUrl = FFAppState().profileImageUrl;
-      transactions = FFAppState().recentTransactions
-          .where(isPersonalActivity)
-          .toList();
-      final wallet = ApiService.getCached('/wallet');
-      if (wallet != null) _applyBusinessWallet(wallet);
-      isBalanceLoading = false;
-      isTransactionsLoading = false;
-    });
-
-    await Future.wait([fetchGrowthHistory(), loadNotifications()]);
-    if (mounted) setState(() => _refreshing = false);
   }
 
   Future<void> logoutUser() async {
@@ -1593,14 +1617,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       icon: Icons
                                                           .arrow_downward_rounded,
                                                       label: 'Deposit',
-                                                      onTap: () => _guardKycAccess(
+                                                      onTap: () => _openOnce(() => _guardKycAccess(
                                                         feature: 'deposit',
                                                         onAllowed: () =>
                                                             context.pushNamed(
                                                               DepositpageWidget
                                                                   .routeName,
                                                             ),
-                                                      ),
+                                                      )),
                                                     ),
                                                     buildActionButton(
                                                       color: buttonColor,
@@ -1655,12 +1679,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         CrossAxisAlignment.center,
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _guardKycAccess(
+                                        onTap: () => _openOnce(() => _guardKycAccess(
                                           feature: 'send & receive',
                                           onAllowed: () => context.pushNamed(
                                             SendReceiveWidget.routeName,
                                           ),
-                                        ),
+                                        )),
                                         child: wrapWithModel(
                                           model: _model.quickActionModel1,
                                           updateCallback: () =>

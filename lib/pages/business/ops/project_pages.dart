@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'project_photos.dart';
 import '/backend/api_requests/investments_api.dart';
 import '/backend/services/api_service.dart';
 import 'project_logic.dart';
@@ -113,43 +113,116 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
   }
 
   Future<void> _uploadCover() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (file == null || !mounted) return;
-    final bytes = await file.readAsBytes();
-    final urls = await runBusy(
-      context,
-      () => ApiService.uploadImages(
-        files: [bytes],
-        filenames: [file.name],
-        mimeTypes: [file.mimeType ?? 'image/jpeg'],
-      ),
-    );
-    if (urls != null && urls.isNotEmpty && mounted) {
-      setState(() => _t['banner_image']!.text = '${urls.first}');
+    try {
+      final file = await pickProjectPhoto();
+      if (file == null || !mounted) return;
+      setState(() => _photoMessage = 'Preparing cover photo…');
+      final raw = await file.readAsBytes();
+      final cropped = prepareProjectImage(raw, cover: true);
+      if (!mounted) return;
+      final use = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Cover photo'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Image.memory(cropped, fit: BoxFit.cover),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text('Cropped to a wide cover. You can pick another photo if this is not the one.'),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Choose another')),
+            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Use photo')),
+          ],
+        ),
+      );
+      if (use != true || !mounted) {
+        setState(() => _photoMessage = null);
+        return;
+      }
+      setState(() => _photoMessage = 'Uploading cover photo…');
+      final urls = await ApiService.uploadImages(
+        files: [cropped],
+        filenames: ['${file.name.replaceAll(RegExp(r'\.\w+$'), '')}.jpg'],
+        mimeTypes: ['image/jpeg'],
+      );
+      if (!mounted) return;
+      setState(() {
+        _t['banner_image']!.text = urls.first;
+        _photoMessage = 'Cover photo uploaded.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _photoMessage = null);
+      bizSnack(context, friendlyError(e));
     }
   }
 
-  Future<void> _save() async {
+  String? _photoMessage;
+
+  Future<Map<String, dynamic>?> _save({bool pop = true}) async {
     final b = _body();
     if (b['project_name'] == null || (b['project_name'] as String).length < 3) {
       setState(() => _step = 0);
-      return bizSnack(context, 'Add a project name');
+      bizSnack(context, 'Add a project name');
+      return null;
     }
     if (b['target_amount'] == null) {
       setState(() => _step = 1);
-      return bizSnack(context, 'Add a funding target');
+      bizSnack(context, 'Add a funding target');
+      return null;
     }
     final id = widget.existing?['id'];
     final r = await runBusy(
         context, () => id == null ? InvestmentsApi.createProject(b) : InvestmentsApi.updateProject('$id', b),
-        success: 'Saved as draft');
-    if (r != null && mounted) {
+        success: pop ? 'Saved as draft' : null);
+    if (r != null && mounted && pop) {
       if (id == null) {
         Navigator.pop(context);
         pushPage(context, BusinessProjectDetailPage(id: '${r['id']}'));
       } else {
         Navigator.pop(context, true);
       }
+    }
+    return r == null ? null : Map<String, dynamic>.from(r);
+  }
+
+  Future<void> _submitForTokenization() async {
+    final draft = _body();
+    if (!projectIsFilled(draft)) {
+      bizSnack(context, 'Add a project name, a funding target, and a summary first.');
+      return;
+    }
+    final saved = await _save(pop: false);
+    if (saved == null || !mounted) return;
+    final id = '${saved['id'] ?? widget.existing?['id'] ?? ''}';
+    if (id.isEmpty) return;
+    final requested = await showTokenizationRequest(
+      context,
+      projectId: id,
+      targetAmount: draft['target_amount'],
+    );
+    if (!requested || !mounted) {
+      if (widget.existing == null && mounted) {
+        Navigator.pop(context);
+        pushPage(context, BusinessProjectDetailPage(id: id));
+      }
+      return;
+    }
+    final submitted = await runBusy(
+      context,
+      () => InvestmentsApi.submitProject(id),
+      success: 'Submitted. FARM will review it before it is listed.',
+    );
+    if (!mounted) return;
+    Navigator.pop(context, true);
+    if (submitted != null && widget.existing == null) {
+      pushPage(context, BusinessProjectDetailPage(id: id));
     }
   }
 
@@ -189,12 +262,30 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
           _tf('banner_image', 'Cover image link (https)'),
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
+            child: ElevatedButton.icon(
+              style: primaryButtonStyle(context),
               onPressed: _uploadCover,
-              icon: Icon(Icons.add_a_photo_outlined, color: fgColor(context)),
-              label: Text('Upload cover photo', style: TextStyle(color: fgColor(context))),
+              icon: const Icon(Icons.add_a_photo_outlined),
+              label: const Text('Upload cover photo'),
             ),
           ),
+          if (_photoMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(_photoMessage!, style: TextStyle(fontSize: 12, color: mutedColor(context))),
+            ),
+          if (_t['banner_image']!.text.startsWith('https'))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(_t['banner_image']!.text, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                ),
+              ),
+            ),
         ]),
       ),
       Step(
@@ -242,13 +333,23 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
         onStepCancel: _step > 0 ? () => setState(() => _step--) : null,
         controlsBuilder: (c, d) => Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Row(children: [
-            ElevatedButton(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (projectCanSubmitForTokenization('${widget.existing?['status'] ?? 'draft'}'))
+              ElevatedButton.icon(
                 style: primaryButtonStyle(c),
-                onPressed: d.onStepContinue,
-                child: Text(_step == steps.length - 1 ? 'Save draft' : 'Next')),
-            const SizedBox(width: 10),
-            if (_step > 0) OutlinedButton(style: secondaryButtonStyle(c), onPressed: d.onStepCancel, child: const Text('Back')),
+                onPressed: _submitForTokenization,
+                icon: const Icon(Icons.token_rounded),
+                label: const Text(submitForTokenizationLabel),
+              ),
+            const SizedBox(height: 8),
+            Row(children: [
+              ElevatedButton(
+                  style: primaryButtonStyle(c),
+                  onPressed: d.onStepContinue,
+                  child: Text(_step == steps.length - 1 ? 'Save draft' : 'Next')),
+              const SizedBox(width: 10),
+              if (_step > 0) OutlinedButton(style: secondaryButtonStyle(c), onPressed: d.onStepCancel, child: const Text('Back')),
+            ]),
           ]),
         ),
       ),
@@ -267,26 +368,38 @@ class _BusinessProjectDetailPageState extends State<BusinessProjectDetailPage> {
   final _key = GlobalKey<BizAsyncState<Map<String, dynamic>>>();
   Future<void> _reload() async => _key.currentState?.reload();
 
+  String? _photoMessage;
+
   Future<void> _addPhotos() async {
-    final picked = await ImagePicker().pickMultiImage(imageQuality: 85);
-    if (picked.isEmpty || !mounted) return;
-    final files = picked.take(5).toList();
-    final r = await runBusy(context, () async {
-      final bytes = <Uint8List>[];
-      final names = <String>[];
-      final types = <String>[];
-      for (final f in files) {
-        bytes.add(await f.readAsBytes());
-        names.add(f.name);
-        types.add(f.mimeType ?? 'image/jpeg');
-      }
-      final urls = await ApiService.uploadImages(files: bytes, filenames: names, mimeTypes: types);
-      for (var i = 0; i < urls.length; i++) {
-        await InvestmentsApi.addDocument(widget.id, kind: 'other', title: names[i], url: urls[i], visibility: 'investors');
-      }
-      return true;
-    }, success: 'Photos added');
-    if (r != null) _reload();
+    try {
+      final picked = await pickProjectPhotos();
+      if (picked.isEmpty || !mounted) return;
+      final files = picked.take(5).toList();
+      setState(() => _photoMessage = 'Preparing ${files.length} photo${files.length == 1 ? '' : 's'}…');
+      final uploaded = await runBusy(context, () async {
+        final bytes = <Uint8List>[];
+        final names = <String>[];
+        final types = <String>[];
+        for (final f in files) {
+          bytes.add(prepareProjectImage(await f.readAsBytes()));
+          names.add('${f.name.replaceAll(RegExp(r'\.\w+$'), '')}.jpg');
+          types.add('image/jpeg');
+        }
+        if (mounted) setState(() => _photoMessage = 'Uploading ${files.length} photo${files.length == 1 ? '' : 's'}…');
+        final urls = await ApiService.uploadImages(files: bytes, filenames: names, mimeTypes: types);
+        for (var i = 0; i < urls.length; i++) {
+          await InvestmentsApi.addDocument(widget.id, kind: 'other', title: names[i], url: urls[i], visibility: 'investors');
+        }
+        return urls.length;
+      }, success: 'Photos added');
+      if (!mounted) return;
+      setState(() => _photoMessage = uploaded == null ? null : 'Photos added.');
+      if (uploaded != null) _reload();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _photoMessage = null);
+      bizSnack(context, friendlyError(e));
+    }
   }
 
   Future<void> _addDoc(Map<String, dynamic> p) async {
@@ -381,7 +494,60 @@ class _BusinessProjectDetailPageState extends State<BusinessProjectDetailPage> {
             final reviews = ((p['reviews'] as List?) ?? const []).whereType<Map>().toList();
             final summary = ((p['investment_summary'] as List?) ?? const []).whereType<Map>().toList();
             final canUpdate = ['listed', 'funded', 'closed'].contains(status);
+            final lifecycle = projectLifecycleLabel(status);
+            final reason = '${p['review_notes'] ?? ''}'.trim();
             return ListView(padding: const EdgeInsets.all(16), children: [
+              BizCard(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(lifecycle, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fgColor(c))),
+                  const SizedBox(height: 4),
+                  Text(
+                    status == 'rejected'
+                        ? (reason.isEmpty ? 'FARM rejected this project.' : 'Rejected: $reason')
+                        : status == 'submitted' || status == 'under_review' || status == 'in_review'
+                            ? 'FARM is reviewing this project before it can be listed.'
+                            : status == 'approved' || status == 'listed'
+                                ? 'Approved for the investment marketplace.'
+                                : 'Draft. Submit it when the name, summary and funding target are filled in.',
+                    style: TextStyle(color: mutedColor(c)),
+                  ),
+                  if (projectCanSubmitForTokenization(status)) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: primaryButtonStyle(c),
+                        onPressed: () async {
+                          if (!projectIsFilled(p)) {
+                            bizSnack(c, 'Add a project name, a funding target, and a summary first.');
+                            return;
+                          }
+                          final requested = await showTokenizationRequest(
+                            c,
+                            projectId: widget.id,
+                            targetAmount: p['target_amount'],
+                          );
+                          if (!requested || !c.mounted) return;
+                          final submitted = await runBusy(
+                            c,
+                            () => InvestmentsApi.submitProject(widget.id),
+                            success: 'Submitted. FARM will review it before it is listed.',
+                          );
+                          if (submitted != null) reload();
+                        },
+                        icon: const Icon(Icons.token_rounded),
+                        label: const Text(submitForTokenizationLabel),
+                      ),
+                    ),
+                  ],
+                ]),
+              ),
+              const SizedBox(height: 12),
+              if (_photoMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(_photoMessage!, style: TextStyle(color: mutedColor(c))),
+                ),
               BizCard(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
@@ -634,6 +800,66 @@ class _MilestoneEditorPageState extends State<MilestoneEditorPage> {
 }
 
 
+/// Asks for the token name and sends the project to FARM for review.
+Future<bool> showTokenizationRequest(
+  BuildContext context, {
+  required String projectId,
+  dynamic targetAmount,
+  bool onInvest = true,
+}) async {
+  final n = TextEditingController();
+  final u = TextEditingController();
+  var agreed = false;
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
+      title: const Text(submitForTokenizationLabel),
+      content: SingleChildScrollView(
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          TextField(controller: n, maxLength: 32, decoration: bizInput(ctx, 'Token name (e.g. Solar Farm Shares)')),
+          TextField(
+              controller: u,
+              maxLength: 8,
+              textCapitalization: TextCapitalization.characters,
+              decoration: bizInput(ctx, 'Symbol, 1-8 letters/digits (e.g. SOLAR)')),
+          KeyValue('Price per token', '1 FARM'),
+          KeyValue('Total supply', '${targetAmount ?? 'Funding target'} (= funding target)'),
+          const SizedBox(height: 6),
+          Text(
+              'FARM reviews this before the project is listed. After approval, each investor gets 1 token per FARM.',
+              style: TextStyle(fontSize: 12, color: mutedColor(ctx))),
+          const SizedBox(height: 6),
+          CheckboxListTile(
+            value: agreed,
+            onChanged: (v) => setD(() => agreed = v == true),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('I agree to the 15% buyback commitment', style: TextStyle(fontSize: 13)),
+            subtitle: Text(
+                'FARM holds back 15% of what this project raises as a buyback fund. Investors only pay the 3% investment fee.',
+                style: TextStyle(fontSize: 11, color: mutedColor(ctx))),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+        TextButton(onPressed: agreed ? () => Navigator.pop(ctx, true) : null, child: const Text('Submit')),
+      ],
+    )),
+  );
+  final name = n.text.trim(), unit = u.text.trim();
+  n.dispose();
+  u.dispose();
+  if (ok != true || name.isEmpty || unit.isEmpty) return false;
+  if (!context.mounted) return false;
+  final r = await runBusy(
+    context,
+    () => InvestmentsApi.requestToken(projectId, name, unit, mode: onInvest ? 'on_invest' : null),
+    success: 'Sent to FARM for review.',
+  );
+  return r != null;
+}
+
 /// Request tokenization of a funded project. FARM approves and creates the ASA.
 class TokenizationCard extends StatefulWidget {
   const TokenizationCard({super.key, required this.projectId, this.projectStatus = 'funded', this.targetAmount, this.filled = false});
@@ -654,57 +880,13 @@ class _TokenizationCardState extends State<TokenizationCard> {
   bool get preListing => _preListing.contains(widget.projectStatus);
 
   Future<void> _request({required bool onInvest}) async {
-    final n = TextEditingController();
-    final u = TextEditingController();
-    var agreed = false;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setD) => AlertDialog(
-        title: const Text('Tokenize project'),
-        content: SingleChildScrollView(
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            TextField(controller: n, maxLength: 32, decoration: bizInput(ctx, 'Token name (e.g. Solar Farm Shares)')),
-            TextField(
-                controller: u,
-                maxLength: 8,
-                textCapitalization: TextCapitalization.characters,
-                decoration: bizInput(ctx, 'Symbol, 1-8 letters/digits (e.g. SOLAR)')),
-            KeyValue('Price per token', '1 FARM'),
-            KeyValue('Total supply',
-                onInvest ? '${widget.targetAmount ?? 'Funding target'} (= funding target)' : '1 token per FARM invested'),
-            const SizedBox(height: 6),
-            Text(
-                onInvest
-                    ? 'FARM creates the token when it approves and lists the project. Each investor then gets 1 token per FARM as they invest.'
-                    : 'Supply is counted from investments when FARM approves. Nothing is minted until approved.',
-                style: TextStyle(fontSize: 12, color: mutedColor(ctx))),
-            const SizedBox(height: 6),
-            CheckboxListTile(
-              value: agreed,
-              onChanged: (v) => setD(() => agreed = v == true),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('I agree to the 15% buyback commitment', style: TextStyle(fontSize: 13)),
-              subtitle: Text(
-                  'FARM holds back 15% of what this project raises as a buyback fund. Each investor can sell back up to 15% of their own investment at 1 FARM per token. Investors only pay the 3% investment fee.',
-                  style: TextStyle(fontSize: 11, color: mutedColor(ctx))),
-            ),
-          ]),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: agreed ? () => Navigator.pop(ctx, true) : null, child: const Text('Request')),
-        ],
-      )),
+    final ok = await showTokenizationRequest(
+      context,
+      projectId: widget.projectId,
+      targetAmount: widget.targetAmount,
+      onInvest: onInvest,
     );
-    final name = n.text.trim(), unit = u.text.trim();
-    n.dispose();
-    u.dispose();
-    if (ok != true || name.isEmpty || unit.isEmpty || !mounted) return;
-    final r = await runBusy(
-        context, () => InvestmentsApi.requestToken(widget.projectId, name, unit, mode: onInvest ? 'on_invest' : null),
-        success: 'Requested. FARM will review it.');
-    if (r != null) _key.currentState?.reload();
+    if (ok) _key.currentState?.reload();
   }
 
   Widget _progress(BuildContext c, Map<String, dynamic> t, Map p) {
@@ -733,9 +915,7 @@ class _TokenizationCardState extends State<TokenizationCard> {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(bottom: 12),
         child: BizCard(
-          child: SizedBox(
-            height: preListing ? 170 : 300,
-            child: BizAsync<Map<String, dynamic>>(
+          child: BizAsync<Map<String, dynamic>>(
               key: _key,
               load: () => InvestmentsApi.projectToken(widget.projectId),
               builder: (c, r, _) {
@@ -758,16 +938,20 @@ class _TokenizationCardState extends State<TokenizationCard> {
                                     ? 'Submit this funded project for tokenization.'
                                     : 'Fill in the project name, summary and funding target, then submit for tokenization.',
                         style: TextStyle(color: mutedColor(c))),
-                    const Spacer(),
-                    OutlinedButton.icon(
-                        style: secondaryButtonStyle(c),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: primaryButtonStyle(c),
                         onPressed: canOnInvest
                             ? () => _request(onInvest: true)
                             : canPost
                                 ? () => _request(onInvest: false)
-                                : null,
+                                : () => bizSnack(c, 'Add a project name, a funding target, and a summary first.'),
                         icon: const Icon(Icons.token_rounded, size: 18),
-                        label: const Text(submitForTokenizationLabel)),
+                        label: const Text(submitForTokenizationLabel),
+                      ),
+                    ),
                   ] else ...[
                     KeyValue('Status', tokenStatusLabels['${t['status']}'] ?? '${t['status']}'),
                     KeyValue('Token', '${t['asset_name']} (${t['unit_name']})'),
@@ -794,7 +978,6 @@ class _TokenizationCardState extends State<TokenizationCard> {
                 ]);
               },
             ),
-          ),
         ),
       );
 }

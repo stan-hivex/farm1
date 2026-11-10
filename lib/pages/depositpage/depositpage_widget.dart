@@ -228,7 +228,17 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   @override
   void initState() {
     super.initState();
-    _fetchWallet();
+    final cached = ApiService.getCached('/wallet');
+    if (cached != null) {
+      final data = cached['data'] as Map<String, dynamic>? ?? cached;
+      walletBalance = double.tryParse(
+            (data['balance'] ?? data['available_balance'] ?? 0).toString(),
+          ) ??
+          walletBalance;
+      loadingWallet = false;
+    } else {
+      _fetchWallet();
+    }
     _fetchHistory();
   }
 
@@ -677,7 +687,7 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
 
       amountController.clear();
     } catch (e) {
-      if (mounted) _snack('Network error: $e');
+      if (mounted) _snack(userErrorMessage(e));
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
