@@ -19,7 +19,6 @@ void main() {
     expect(bio.authFields(), {
       'biometric_auth': true,
       'device_fingerprint': 'fp',
-      'pin': null,
     });
     final pin = PaymentConfirmation.pin('1234');
     expect(pin.biometric, isFalse);

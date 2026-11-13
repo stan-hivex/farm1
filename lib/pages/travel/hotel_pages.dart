@@ -161,20 +161,19 @@ class _CheckoutState extends State<_Checkout> {
     if (_first.text.trim().isEmpty || _last.text.trim().isEmpty) return bizSnack(context, 'Enter the guest name');
     if (!_email.text.contains('@')) return bizSnack(context, 'Enter a valid email');
     if (!RegExp(r'^\+\d{8,15}$').hasMatch(_phone.text.trim())) return bizSnack(context, 'Phone must be in +254… format');
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Pay ${money(pb['price_farm'])}',
         message: 'Book ${widget.offer['hotel_name']} (${pb['checkin']} → ${pb['checkout']})?\n\n'
             'The amount is held from your FARM wallet and refunded in full if the hotel does not confirm.');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final r = await runBusy(
         context,
-        () => TravelApi.hotelBook({
+        () => TravelApi.hotelBook(withPaymentAuth({
               'prebook_id': pb['prebook_id'],
               'expected_total_farm': pb['price_farm'],
               'idempotency_key': _idem,
-              'pin': pin,
               'guest': {'first_name': _first.text.trim(), 'last_name': _last.text.trim(), 'email': _email.text.trim(), 'phone': _phone.text.trim()},
-            }));
+            }, auth)));
     if (r != null && mounted) {
       Navigator.of(context).pop();
       pushPage(context, HotelBookingPage(id: '${r['id']}'));

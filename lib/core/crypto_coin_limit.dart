@@ -56,7 +56,7 @@ String _usd(double v) => v.toStringAsFixed(2);
 double? _num(Object? v) {
   if (v == null) return null;
   final n = v is num ? v.toDouble() : double.tryParse(v.toString());
-  if (n == null || !n.isFinite || n < 0) return null;
+  if (n == null || !n.isFinite || n <= 0) return null;
   return n;
 }
 

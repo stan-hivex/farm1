@@ -1,4 +1,5 @@
 import '/backend/services/api_service.dart';
+import '/services/payment_confirm.dart';
 
 /// Tap to pay (NFC HCE / QR). The token never carries the amount; the backend does.
 class NfcPayApi {
@@ -19,8 +20,8 @@ class NfcPayApi {
   static Future<Map<String, dynamic>> resolve(String token) async => _d(await ApiService.request(
       method: 'GET', path: '/nfc-pay/resolve?token=${Uri.encodeQueryComponent(token)}'));
 
-  static Future<Map<String, dynamic>> pay(String token, String pin) async =>
-      _d(await ApiService.request(method: 'POST', path: '/nfc-pay/pay', body: {'token': token, 'pin': pin}));
+  static Future<Map<String, dynamic>> pay(String token, PaymentConfirmation auth) async =>
+      _d(await ApiService.request(method: 'POST', path: '/nfc-pay/pay', body: withPaymentAuth({'token': token}, auth)));
 
   /// Accepts "farmpay:<token>", "farmpay1.…" or a URL containing ?t=<token>.
   static String? extractToken(String raw) {

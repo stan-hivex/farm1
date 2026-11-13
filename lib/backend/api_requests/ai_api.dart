@@ -1,5 +1,6 @@
 import '/backend/api_requests/business_ops_api.dart';
 import '/backend/services/api_service.dart';
+import '/services/payment_confirm.dart';
 
 /// Phase 7: Mkulima AI assistant. All rules (caps, allowlist, PIN) are enforced by the server.
 class AiApi {
@@ -31,8 +32,8 @@ class AiApi {
       _d(await ApiService.request(method: 'POST', path: '/ai/permissions/revoke'));
   static Future<List<Map<String, dynamic>>> actions({String? status}) async => BusinessOpsApi.list(
       await ApiService.request(method: 'GET', path: '/ai/actions${status == null ? '' : '?status=$status'}'));
-  static Future<Map<String, dynamic>> confirm(String id, String pin) async =>
-      _d(await ApiService.request(method: 'POST', path: '/ai/actions/$id/confirm', body: {'pin': pin}));
+  static Future<Map<String, dynamic>> confirm(String id, PaymentConfirmation auth) async =>
+      _d(await ApiService.request(method: 'POST', path: '/ai/actions/$id/confirm', body: auth.authFields()));
   static Future<void> reject(String id) => ApiService.request(method: 'POST', path: '/ai/actions/$id/reject');
   /// Unified Mkulima activity (requests, bookings, payments) in one shape.
   static Future<List<Map<String, dynamic>>> activity() async =>

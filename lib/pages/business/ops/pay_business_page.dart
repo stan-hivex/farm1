@@ -100,16 +100,16 @@ class _LookupPayState extends State<_LookupPay> {
     if (fees == null || !mounted) return;
     final payerFee = fees['transfer']?.feeFor(amount) ?? 0;
     final m = fees['merchant'];
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Confirm payment',
         message: 'Pay ${money(amount)} to ${i['business_name']}.\n'
             'Your fee: ${money(payerFee)}\n'
             'Total from your wallet: ${money(amount + payerFee)}'
             '${m != null && m.percent > 0 ? '\nThe business pays a ${m.percentLabel} merchant fee (${money(m.feeFor(amount))}).' : ''}');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final res = await runBusy(context, () => _isLink
-        ? BusinessOpsApi.payLink(_ctrl.text.trim(), pin)
-        : BusinessOpsApi.payInvoice(_ctrl.text.trim(), pin));
+        ? BusinessOpsApi.payLink(_ctrl.text.trim(), auth)
+        : BusinessOpsApi.payInvoice(_ctrl.text.trim(), auth));
     if (res != null && mounted) setState(() => _paidRef = '${res['transaction_reference']}');
   }
 
@@ -186,13 +186,13 @@ class _IncomingEscrows extends StatelessWidget {
                       if (rule == null || !c.mounted) return;
                       final amt = (e['amount'] as num?)?.toDouble() ?? double.tryParse('${e['amount']}') ?? 0;
                       final fee = rule.feeFor(amt);
-                      final pin = await confirmWithPin(c,
+                      final auth = await confirmWithPin(c,
                           title: 'Fund escrow',
                           message: '${money(e['amount'])} will be held in escrow for ${e['business_name']} until you release it.\n'
                               'Escrow fee (${rule.percentLabel}): ${money(fee)}\n'
                               'Total from your wallet: ${money(amt + fee)}');
-                      if (pin == null || !c.mounted) return;
-                      final ok = await runBusy(c, () => BusinessOpsApi.fundEscrow('${e['id']}', pin),
+                      if (auth == null || !c.mounted) return;
+                      final ok = await runBusy(c, () => BusinessOpsApi.fundEscrow('${e['id']}', auth),
                           success: 'Escrow funded. Release or dispute it from Escrow.');
                       if (ok != null) reload();
                     },
@@ -242,12 +242,12 @@ class _EscrowMilestonesPage extends StatelessWidget {
                   onTap: !open || !['pending', 'release_requested'].contains(ms[i]['status'] ?? 'pending')
                       ? null
                       : () async {
-                          final pin = await confirmWithPin(c,
+                          final auth = await confirmWithPin(c,
                               title: 'Release milestone',
                               message:
                                   '${money(ms[i]['amount'])} for "${ms[i]['title']}" will be paid to ${e['business_name']}. This cannot be undone.');
-                          if (pin == null || !c.mounted) return;
-                          final ok = await runBusy(c, () => BusinessOpsApi.releaseMilestone(id, i, pin),
+                          if (auth == null || !c.mounted) return;
+                          final ok = await runBusy(c, () => BusinessOpsApi.releaseMilestone(id, i, auth),
                               success: 'Milestone released');
                           if (ok != null) reload();
                         },

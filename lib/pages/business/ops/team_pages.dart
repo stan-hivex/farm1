@@ -49,15 +49,15 @@ class _TeamState extends State<TeamPage> {
     if (ident == null || ident.isEmpty || !mounted) return;
     final role = await _pickRole(null);
     if (role == null || !mounted) return;
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Confirm', message: 'Give $ident the ${businessRoleLabels[role]} role on your business?');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final phoneInvite = teamIdentifierIsPhone(ident);
     final ok = await runBusy(context, () async {
       if (phoneInvite) {
-        await BusinessOpsApi.invite(normalizeTeamPhone(ident), role, pin);
+        await BusinessOpsApi.invite(normalizeTeamPhone(ident), role, auth);
       } else {
-        await BusinessOpsApi.addMember(ident, role, pin);
+        await BusinessOpsApi.addMember(ident, role, auth);
       }
       return true;
     }, success: phoneInvite ? 'Invitation sent' : 'Team member added');
@@ -80,18 +80,18 @@ class _TeamState extends State<TeamPage> {
     if (action == 'role') {
       final role = await _pickRole('${m['role']}');
       if (role == null || role == m['role'] || !mounted) return;
-      final pin = await confirmWithPin(context, title: 'Change role', message: 'Make $name ${businessRoleLabels[role]}?');
-      if (pin == null || !mounted) return;
+      final auth = await confirmWithPin(context, title: 'Change role', message: 'Make $name ${businessRoleLabels[role]}?');
+      if (auth == null || !mounted) return;
       final ok = await runBusy(context, () async {
-        await BusinessOpsApi.updateMember(id, role, pin);
+        await BusinessOpsApi.updateMember(id, role, auth);
         return true;
       }, success: 'Role updated');
       if (ok == true) _key.currentState?.reload();
     } else {
-      final pin = await confirmWithPin(context, title: 'Remove member', message: 'Remove $name from your business? They lose access immediately.');
-      if (pin == null || !mounted) return;
+      final auth = await confirmWithPin(context, title: 'Remove member', message: 'Remove $name from your business? They lose access immediately.');
+      if (auth == null || !mounted) return;
       final ok = await runBusy(context, () async {
-        await BusinessOpsApi.removeMember(id, pin);
+        await BusinessOpsApi.removeMember(id, auth);
         return true;
       }, success: 'Member removed');
       if (ok == true) _key.currentState?.reload();

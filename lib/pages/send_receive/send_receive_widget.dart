@@ -913,21 +913,31 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
             controller: controller,
             obscureText: true,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Transaction PIN'),
+            maxLength: 6,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Transaction PIN',
+              counterText: '',
+            ),
           ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text('Cancel')),
             ElevatedButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
+                onPressed: () {
+                  final entered = controller.text.trim();
+                  if (entered.length >= 4 && entered.length <= 6) {
+                    Navigator.pop(dialogContext, true);
+                  }
+                },
                 child: const Text('Approve')),
           ],
         ),
       );
       pin = controller.text.trim();
       controller.dispose();
-      if (confirmed != true || pin.isEmpty) return;
+      if (confirmed != true || pin.length < 4 || pin.length > 6) return;
     }
 
     setState(() => isSending = true);
@@ -943,7 +953,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       setState(() => selectedIncomingRequestIds.clear());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(response['message'] ?? 'Selected requests completed'),
+            content: Text(PaymentRequestApiService.batchResultMessage(response)),
             backgroundColor: Colors.green),
       );
       await AppSessionManager().syncNow(

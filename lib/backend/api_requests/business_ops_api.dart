@@ -1,4 +1,5 @@
 import '/backend/services/api_service.dart';
+import '/services/payment_confirm.dart';
 
 /// Phase 2 business operations. All money logic and permission checks
 /// happen on the server; this class only moves JSON.
@@ -16,9 +17,22 @@ class BusinessOpsApi {
   }
 
   static List<Map<String, dynamic>> list(Map<String, dynamic> r) {
-    final d = r['data'];
-    if (d is! List) return const [];
-    return d.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    final raw = _unwrapList(r['data'] ?? r);
+    return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// Accepts a bare array or `{ items | escrows | invoices | links | results }`.
+  static List<dynamic> _unwrapList(dynamic value) {
+    if (value is List) return value;
+    if (value is Map) {
+      for (final key in ['items', 'escrows', 'invoices', 'links', 'results', 'data']) {
+        final nested = value[key];
+        if (nested is List) return nested;
+      }
+      final data = value['data'];
+      if (data is Map) return _unwrapList(data);
+    }
+    return const [];
   }
 
   static String _q(Map<String, String?> p) {
@@ -36,8 +50,8 @@ class BusinessOpsApi {
   static Future<Map<String, dynamic>> wallet() async =>
       data(await _call('GET', '/business/wallet'));
   /// Free move from the business wallet to the owner's personal wallet.
-  static Future<Map<String, dynamic>> moveToPersonal(num amount, String pin) async =>
-      data(await _call('POST', '/business/wallet/move-to-personal', {'amount': amount, 'pin': pin}));
+  static Future<Map<String, dynamic>> moveToPersonal(num amount, PaymentConfirmation auth) async =>
+      data(await _call('POST', '/business/wallet/move-to-personal', withPaymentAuth({'amount': amount}, auth)));
   static Future<Map<String, dynamic>> analytics(String range) async =>
       data(await _call('GET', '/business/analytics${_q({'range': range})}'));
 
@@ -57,20 +71,20 @@ class BusinessOpsApi {
   static Future<Map<String, dynamic>> team() => _call('GET', '/business/team');
   static Future<Map<String, dynamic>> myInvites() =>
       _call('GET', '/business/team/invites');
-  static Future<Map<String, dynamic>> invite(String phone, String role, String pin) =>
-      _call('POST', '/business/team/invites', {'phone': phone, 'role': role, 'pin': pin});
+  static Future<Map<String, dynamic>> invite(String phone, String role, PaymentConfirmation auth) =>
+      _call('POST', '/business/team/invites', withPaymentAuth({'phone': phone, 'role': role}, auth));
   static Future<void> acceptInvite(String id) =>
       _call('POST', '/business/team/invites/$id/accept');
   static Future<void> declineInvite(String id) =>
       _call('POST', '/business/team/invites/$id/decline');
   static Future<void> revokeInvite(String id) =>
       _call('POST', '/business/team/invites/$id/revoke');
-  static Future<void> addMember(String identifier, String role, String pin) =>
-      _call('POST', '/business/team', {'identifier': identifier, 'role': role, 'pin': pin});
-  static Future<void> updateMember(String id, String role, String pin) =>
-      _call('PATCH', '/business/team/$id', {'role': role, 'pin': pin});
-  static Future<void> removeMember(String id, String pin) =>
-      _call('POST', '/business/team/$id/remove', {'pin': pin});
+  static Future<void> addMember(String identifier, String role, PaymentConfirmation auth) =>
+      _call('POST', '/business/team', withPaymentAuth({'identifier': identifier, 'role': role}, auth));
+  static Future<void> updateMember(String id, String role, PaymentConfirmation auth) =>
+      _call('PATCH', '/business/team/$id', withPaymentAuth({'role': role}, auth));
+  static Future<void> removeMember(String id, PaymentConfirmation auth) =>
+      _call('POST', '/business/team/$id/remove', auth.authFields());
 
   // Profile
   static Future<Map<String, dynamic>> profile() => _call('GET', '/business/profile');
@@ -118,20 +132,20 @@ class BusinessOpsApi {
   // Payer side
   static Future<Map<String, dynamic>> publicLink(String code) async =>
       data(await _call('GET', '/pay/links/${Uri.encodeComponent(code)}'));
-  static Future<Map<String, dynamic>> payLink(String code, String pin) async =>
-      data(await _call('POST', '/pay/links/${Uri.encodeComponent(code)}', {'pin': pin}));
+  static Future<Map<String, dynamic>> payLink(String code, PaymentConfirmation auth) async =>
+      data(await _call('POST', '/pay/links/${Uri.encodeComponent(code)}', auth.authFields()));
   static Future<Map<String, dynamic>> publicInvoice(String number) async =>
       data(await _call('GET', '/pay/invoices/${Uri.encodeComponent(number)}'));
-  static Future<Map<String, dynamic>> payInvoice(String number, String pin) async =>
-      data(await _call('POST', '/pay/invoices/${Uri.encodeComponent(number)}', {'pin': pin}));
+  static Future<Map<String, dynamic>> payInvoice(String number, PaymentConfirmation auth) async =>
+      data(await _call('POST', '/pay/invoices/${Uri.encodeComponent(number)}', auth.authFields()));
   static Future<Map<String, dynamic>> requestMilestone(String id, int index) async =>
       data(await _call('POST', '/business/escrows/$id/milestones/$index/request-release'));
-  static Future<Map<String, dynamic>> releaseMilestone(String id, int index, String pin) async =>
-      data(await _call('POST', '/pay/escrows/$id/milestones/$index/release', {'pin': pin}));
+  static Future<Map<String, dynamic>> releaseMilestone(String id, int index, PaymentConfirmation auth) async =>
+      data(await _call('POST', '/pay/escrows/$id/milestones/$index/release', auth.authFields()));
   static Future<List<Map<String, dynamic>>> incomingEscrows() async =>
       list(await _call('GET', '/pay/escrows'));
-  static Future<Map<String, dynamic>> fundEscrow(String id, String pin) async =>
-      data(await _call('POST', '/pay/escrows/$id/fund', {'pin': pin}));
+  static Future<Map<String, dynamic>> fundEscrow(String id, PaymentConfirmation auth) async =>
+      data(await _call('POST', '/pay/escrows/$id/fund', auth.authFields()));
 
   // Admin
   static Future<Map<String, dynamic>> adminBusinesses({String? status, int page = 1}) =>

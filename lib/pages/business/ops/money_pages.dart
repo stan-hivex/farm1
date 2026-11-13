@@ -40,12 +40,12 @@ class _BusinessWalletPageState extends State<BusinessWalletPage> {
     );
     ctrl.dispose();
     if (amount == null || amount <= 0 || !mounted) return;
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Move to personal',
         message: 'Move ${money(amount)} from your business wallet to your personal wallet? No fee.');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final ok = await runBusy(context, () async {
-      await BusinessOpsApi.moveToPersonal(amount, pin);
+      await BusinessOpsApi.moveToPersonal(amount, auth);
       return true;
     }, success: 'Moved to your personal wallet');
     if (ok == true && mounted) setState(() => _key = UniqueKey());
@@ -402,19 +402,18 @@ class _RequestPayoutState extends State<RequestPayoutPage> {
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     final amount = double.parse(_amount.text);
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Confirm payout',
         message: 'Send ${money(amount)} to ${_name.text.trim()} (${_number.text.trim()})?');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final ok = await runBusy(context, () async {
-      await BusinessOpsApi.requestPayout({
+      await BusinessOpsApi.requestPayout(withPaymentAuth({
         'amount': amount,
         'method': _method == 'mobile_money' ? 'MOBILE_MONEY' : 'BANK_TRANSFER',
         'account_name': _name.text.trim(),
         if (_method == 'mobile_money') 'phone_number': _number.text.trim().replaceAll(' ', ''),
         if (_method != 'mobile_money') 'account_number': _number.text.trim(),
-        'pin': pin,
-      });
+      }, auth));
       return true;
     }, success: 'Payout sent');
     if (ok == true && mounted) Navigator.pop(context, true);

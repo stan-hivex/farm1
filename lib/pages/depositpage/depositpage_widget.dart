@@ -202,6 +202,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
       return 'Could not load the minimum for ${_selectedCryptoToken!.toUpperCase()}';
     }
     if (selectedMethod == 'CRYPTO' && _cryptoMinimumUsd == null) {
+      if (_selectedCryptoToken != null && !_loadingCryptoMinimum) {
+        return 'Limits for ${_selectedCryptoToken!.toUpperCase()} were not returned. Deposit stays blocked until they load.';
+      }
       return 'Select a cryptocurrency to see its minimum deposit amount';
     }
     if (amount <= 0) {
@@ -1071,8 +1074,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                     child: Text(
                       'Loading ${_selectedCryptoToken?.toUpperCase() ?? ''} minimum...',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        color: theme.secondaryText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.primaryText,
                       ),
                     ),
                   )
@@ -1098,8 +1102,9 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
                               ? 'Minimum for ${_selectedCryptoToken!.toUpperCase()} comes from your account limits.'
                               : 'Minimum: ${_formatMinimumCrypto(_cryptoMinimumAmount!)} ${_selectedCryptoToken!.toUpperCase()}',
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            color: theme.secondaryText,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: theme.primaryText,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1367,8 +1372,11 @@ class _DepositpageWidgetState extends State<DepositpageWidget> {
   }
 
   Widget _feeRow(String label, String value, {bool bold = false}) {
+    final theme = FlutterFlowTheme.of(context);
     final style = GoogleFonts.plusJakartaSans(
-      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+      fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
+      fontSize: bold ? 16 : 14,
+      color: theme.primaryText,
     );
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

@@ -130,14 +130,14 @@ class PayIntentPage extends StatelessWidget {
                 ElevatedButton(
                   style: primaryButtonStyle(c),
                   onPressed: () async {
-                    final pin = await confirmWithPin(c,
+                    final auth = await confirmWithPin(c,
                         title: 'Confirm payment',
                         message: 'Pay ${money(i['amount'])} to ${i['business_name']}?');
-                    if (pin == null || !c.mounted) return;
-                    final r = await runBusy(c, () => AgentPaymentsApi.pay(id, pin), success: 'Payment sent');
+                    if (auth == null || !c.mounted) return;
+                    final r = await runBusy(c, () => AgentPaymentsApi.pay(id, auth), success: 'Payment sent');
                     if (r != null) reload();
                   },
-                  child: const Text('Pay with PIN'),
+                  child: const Text('Pay'),
                 ),
             ]);
           },
@@ -209,14 +209,14 @@ class _RequestCard extends StatelessWidget {
                 child: ElevatedButton(
                   style: primaryButtonStyle(c),
                   onPressed: () async {
-                    final pin = await confirmWithPin(c,
+                    final auth = await confirmWithPin(c,
                         title: 'Approve payment',
-                        message: 'Pay ${money(r['amount'])} to ${r['business_name']}?\n\nAn agent asked for this. Only your PIN sends it.');
-                    if (pin == null || !c.mounted) return;
-                    final ok = await runBusy(c, () => AgentPaymentsApi.confirmRequest('${r['id']}', pin), success: 'Payment sent');
+                        message: 'Pay ${money(r['amount'])} to ${r['business_name']}?\n\nAn agent asked for this. Biometrics or your PIN sends it.');
+                    if (auth == null || !c.mounted) return;
+                    final ok = await runBusy(c, () => AgentPaymentsApi.confirmRequest('${r['id']}', auth), success: 'Payment sent');
                     if (ok != null) reload();
                   },
-                  child: const Text('Approve with PIN'),
+                  child: const Text('Approve'),
                 ),
               ),
             ]),
@@ -325,10 +325,11 @@ class _NewMandatePageState extends State<_NewMandatePage> {
     if (tx == null || day == null || month == null || tx <= 0) return bizSnack(context, 'Enter all three limits');
     if (tx > day || day > month) return bizSnack(context, 'Limits must go per payment ≤ daily ≤ monthly');
     if (days == null || days < 1 || days > 365) return bizSnack(context, 'Duration must be 1–365 days');
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Allow agent payments',
-        message: 'Let this business’s agent ask you for up to ${money(tx)} per payment. You still approve each one with your PIN.');
-    if (pin == null || !mounted) return;
+        message: 'Let this business’s agent ask you for up to ${money(tx)} per payment. You still approve each one.',
+        biometricSupported: false);
+    if (auth == null || !mounted) return;
     final r = await runBusy(
         context,
         () => AgentPaymentsApi.createMandate({
@@ -338,7 +339,7 @@ class _NewMandatePageState extends State<_NewMandatePage> {
               'daily_cap': day,
               'monthly_cap': month,
               'expires_in_days': days,
-              'pin': pin,
+              'pin': auth.pin,
             }),
         success: 'Permission added');
     if (r != null && mounted) Navigator.pop(context);
@@ -556,9 +557,9 @@ class BusinessIntentPage extends StatelessWidget {
       return false;
     }
     final key = AgentPaymentsApi.newKey();
-    final pin = await confirmWithPin(c, title: 'Confirm refund', message: 'Refund ${money(a)} from the business wallet?');
-    if (pin == null || !c.mounted) return false;
-    final r = await runBusy(c, () => AgentPaymentsApi.refund(id, {'amount': a, if (why.isNotEmpty) 'reason': why, 'pin': pin}, key),
+    final auth = await confirmWithPin(c, title: 'Confirm refund', message: 'Refund ${money(a)} from the business wallet?');
+    if (auth == null || !c.mounted) return false;
+    final r = await runBusy(c, () => AgentPaymentsApi.refund(id, withPaymentAuth({'amount': a, if (why.isNotEmpty) 'reason': why}, auth), key),
         success: 'Refunded');
     return r != null;
   }

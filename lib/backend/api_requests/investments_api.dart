@@ -1,4 +1,5 @@
 import '/backend/services/api_service.dart';
+import '/services/payment_confirm.dart';
 import 'business_ops_api.dart';
 
 /// V2 Phase 4 investment marketplace. Eligibility, limits, risk disclosure
@@ -28,13 +29,12 @@ class InvestmentsApi {
   static Future<Map<String, dynamic>> requestEligibility() async =>
       _d(await _call('POST', '/marketplace/eligibility/request'));
   static Future<Map<String, dynamic>> invest(String id,
-          {required double amount, required String pin, required String disclosureVersion}) async =>
-      _d(await _call('POST', '/marketplace/projects/$id/invest', {
+          {required double amount, required PaymentConfirmation auth, required String disclosureVersion}) async =>
+      _d(await _call('POST', '/marketplace/projects/$id/invest', withPaymentAuth({
         'amount': amount,
-        'pin': pin,
         'accept_risk': true,
         'disclosure_version': disclosureVersion,
-      }));
+      }, auth)));
 
   // Portfolio
   static Future<Map<String, dynamic>> portfolio() async =>
@@ -73,8 +73,11 @@ class InvestmentsApi {
       _d(await _call('POST', '/business/projects/$id/tokenization',
           {'asset_name': assetName, 'unit_name': unitName, 'accept_buyback_commitment': true, if (mode != null) 'mode': mode}));
   /// Send tokens to another FARM user (username or phone). No transfer fee.
-  static Future<Map<String, dynamic>> sendTokens(String allocationId, String recipient, int units, String pin) async =>
-      await _call('POST', '/investments/tokens/$allocationId/send', {'recipient_identifier': recipient, 'units': units, 'pin': pin});
+  static Future<Map<String, dynamic>> sendTokens(String allocationId, String recipient, int units, PaymentConfirmation auth) async =>
+      await _call('POST', '/investments/tokens/$allocationId/send', withPaymentAuth({
+        'recipient_identifier': recipient,
+        'units': units,
+      }, auth));
   static Future<List<Map<String, dynamic>>> tokenIncome() async => _l(await _call('GET', '/investments/tokens/income'));
   static Future<List<Map<String, dynamic>>> tokenTransfers() async => _l(await _call('GET', '/investments/tokens/transfers'));
   static Future<List<Map<String, dynamic>>> projectDistributions(String id) async =>
@@ -88,18 +91,19 @@ class InvestmentsApi {
       'GET', owner ? '/business/projects/$id/funds-timeline' : '/marketplace/projects/$id/funds-timeline'));
   /// Pay another FARM business's invoice (number) or payment link (code) from project funds.
   static Future<Map<String, dynamic>> spendProjectFunds(String id,
-          {required String kind, required String ref, required String pin, String? tag, String? note, required String key}) async =>
-      await _call('POST', '/business/projects/$id/spend', {
+          {required String kind, required String ref, required PaymentConfirmation auth, String? tag, String? note, required String key}) async =>
+      await _call('POST', '/business/projects/$id/spend', withPaymentAuth({
         'kind': kind,
         'ref': ref,
-        'pin': pin,
         'idempotency_key': key,
         if (tag != null && tag.isNotEmpty) 'tag': tag,
         if (note != null && note.isNotEmpty) 'note': note,
-      });
-  static Future<Map<String, dynamic>> depositReturns(String id, num amount, String pin, {String? note}) async =>
-      await _call('POST', '/business/projects/$id/returns',
-          {'amount': amount, 'pin': pin, if (note != null && note.isNotEmpty) 'note': note});
+      }, auth));
+  static Future<Map<String, dynamic>> depositReturns(String id, num amount, PaymentConfirmation auth, {String? note}) async =>
+      await _call('POST', '/business/projects/$id/returns', withPaymentAuth({
+        'amount': amount,
+        if (note != null && note.isNotEmpty) 'note': note,
+      }, auth));
   static Future<Map<String, dynamic>> setFundsSettings(String id, Map<String, dynamic> body) async =>
       await _call('PATCH', '/business/projects/$id/funds-settings', body);
   /// Sell tokens back to FARM (1 FARM each) from the project's 15% buyback fund. Needs admin approval.
