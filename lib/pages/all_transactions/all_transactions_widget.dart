@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
 
 import '/backend/services/api_service.dart';
@@ -7,9 +8,10 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/transaction_receipt_service.dart';
 import '/utils/transaction_peer_resolver.dart';
-import '/utils/transaction_history_utils.dart';
+import '/utils/personal_activity.dart';
 import '/widgets/common/back_chevron.dart';
 import 'all_transactions_model.dart';
+import '/utils/user_error_message.dart';
 
 export 'all_transactions_model.dart';
 
@@ -89,7 +91,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save receipts: $error')),
+        SnackBar(content: Text('Could not save receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -102,7 +104,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share receipts: $error')),
+        SnackBar(content: Text('Could not share receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -133,7 +135,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
           : <Map<String, dynamic>>[];
 
       final filtered = items
-          .where(isVisibleTransactionHistoryItem)
+          .where(isPersonalActivity)
           .where(_matchesFilters)
           .toList();
       if (!mounted) return;
@@ -144,7 +146,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = userErrorMessage(e);
         _loading = false;
       });
     }
@@ -391,6 +393,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                           : payerUsername;
                       final isMerchantPayment =
                           type.toLowerCase() == 'merchant_payment';
+                      final displayType = merchantQrTitle(tx) ?? type;
                       final amountText =
                           '${isOutgoing ? '-' : '+'}${double.tryParse(amount.toString())?.toStringAsFixed(2) ?? amount} FARM';
                       final dateText = _formatDate(tx['created_at'] ??
@@ -459,7 +462,7 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
                                         children: [
                                           Expanded(
                                             child: Text(
-                                              type,
+                                              displayType,
                                               style: theme.titleSmall.copyWith(
                                                 fontWeight: FontWeight.w700,
                                               ),
@@ -587,11 +590,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      selectedColor: Theme.of(context).primaryColor,
+      selectedColor: AppTheme.accent,
       backgroundColor: Theme.of(context).colorScheme.surface,
       labelStyle: TextStyle(
         color: selected
-            ? Theme.of(context).colorScheme.onPrimary
+            ? AppTheme.onAccent
             : Theme.of(context).textTheme.bodyMedium?.color,
       ),
       shape: const StadiumBorder(),
@@ -607,11 +610,11 @@ class _AllTransactionsWidgetState extends State<AllTransactionsWidget> {
     return ChoiceChip(
       label: Text(label),
       selected: selected,
-      selectedColor: Theme.of(context).primaryColor,
+      selectedColor: AppTheme.accent,
       backgroundColor: Theme.of(context).colorScheme.surface,
       labelStyle: TextStyle(
         color: selected
-            ? Theme.of(context).colorScheme.onPrimary
+            ? AppTheme.onAccent
             : Theme.of(context).textTheme.bodyMedium?.color,
       ),
       shape: const StadiumBorder(),

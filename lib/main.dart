@@ -16,6 +16,7 @@ import 'core/app_theme.dart';
 import 'core/localization/app_locale_service.dart';
 import 'web_url_strategy.dart';
 import 'services/app_session_manager.dart';
+import 'services/offline_cache.dart';
 import 'services/biometric_lock_service.dart';
 import 'services/notification_service.dart';
 import 'services/socket_service.dart';
@@ -24,6 +25,7 @@ import 'pages/biometric_unlock_page/biometric_unlock_page_widget.dart';
 import 'pages/all_transactions/all_transactions_widget.dart';
 import 'pages/dashboard/dashboard_widget.dart';
 import 'admin/pages/admin_password_reset_page.dart';
+import 'utils/farmpay_checkout.dart';
 import 'utils/merchant_qr_parser.dart';
 
 Widget buildSafeErrorWidget(FlutterErrorDetails details) {
@@ -35,10 +37,13 @@ void main() async {
   print('APP START');
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load dotenv early to avoid NotInitializedError when Env is referenced.
+  // Configuration comes from --dart-define / --dart-define-from-file=.env
+  // (see .env.example). Initialise dotenv empty so any lookup is safe; no
+  // .env asset is bundled into the app.
   try {
-    await dotenv.load();
-    debugPrint('Loaded environment variables from .env');
+    // isOptional: a missing or empty .env falls back to production defaults.
+    await dotenv.load(isOptional: true);
+    debugPrint('Environment loaded (.env optional)');
   } catch (e) {
     debugPrint('Could not load .env (it may be missing): $e');
   }
@@ -51,18 +56,27 @@ void main() async {
   ErrorWidget.builder =
       (FlutterErrorDetails details) => buildSafeErrorWidget(details);
 
-  await EasyLocalization.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  debugPrint('Restoring the persisted secure login session...');
-  await FFAppState().initializePersistedState();
-  // Attempt to restore persisted session and perform a silent refresh before
-  // the app is started so routing decisions can use restored auth state.
-  await StartupAuthenticator().restoreSession();
-  await FlutterFlowTheme.initialize();
+  // Only local, fast work happens before the first frame. Independent steps
+  // run in parallel; nothing here waits on the network.
+  final prefsFuture = SharedPreferences.getInstance();
+  await Future.wait([
+    EasyLocalization.ensureInitialized(),
+    Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform),
+    FlutterFlowTheme.initialize(),
+    () async {
+      debugPrint('Restoring the persisted secure login session...');
+      await FFAppState().initializePersistedState();
+      // Restore the session from local storage only; the token refresh and
+      // profile check run after the first frame (see below), so reopening the
+      // app after a long time never waits on the network to paint.
+      await StartupAuthenticator().restoreSession(verifyInBackground: true);
+      // Last known balances / transactions for instant first paint.
+      await OfflineCache.load(FFAppState().userId, prefs: await prefsFuture);
+      FFAppState().hydrateFromOfflineCache();
+    }(),
+  ]);
 
-  final prefs = await SharedPreferences.getInstance();
+  final prefs = await prefsFuture;
   final savedLanguage = prefs.getString('language');
   final languageCode = FFAppState().isLoggedIn &&
           AppLocaleService.supportedLocales
@@ -74,11 +88,19 @@ void main() async {
   if (FFAppState().isLoggedIn &&
       FFAppState().refreshToken.isNotEmpty &&
       FFAppState().isUser) {
-    Future.microtask(() {
-      AppSessionManager().refreshAppData().catchError((e) {
+    // Revalidate in the background once the first frame is on screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      StartupAuthenticator()
+          .verifySession()
+          .then((_) => AppSessionManager().refreshAppData())
+          .catchError((e) {
         debugPrint('[Main] Initial app refresh failed: $e');
       });
     });
+  } else {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(StartupAuthenticator().verifySession()),
+    );
   }
 
   configureUrlStrategy();
@@ -102,7 +124,9 @@ void main() async {
 
     // These services are optional at launch. They must not prevent the first
     // frame when device permissions or the backend are unavailable.
-    unawaited(_initializeOptionalServices());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_initializeOptionalServices()),
+    );
   }, (error, stack) {
     // Print uncaught errors to console so they appear in the browser devtools
     // and in the terminal running `flutter run`.
@@ -242,6 +266,33 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   void _handleIncomingAppLink(Uri uri) {
+    final documentCheckout = classifyFarmpayPath(uri.path);
+    final documentLocation = documentCheckout == null
+        ? null
+        : farmpayAppLocation(documentCheckout);
+    final isBusinessPayLink = uri.scheme == 'farm' &&
+        uri.host == 'farm.com' &&
+        uri.path == '/pay-business';
+    if (documentLocation != null || isBusinessPayLink) {
+      final code = isBusinessPayLink
+          ? uri.queryParameters['code']?.trim()
+          : documentCheckout?.kind == FarmpayCheckoutKind.paymentLink
+              ? documentCheckout!.ref
+              : null;
+      final invoice = isBusinessPayLink
+          ? uri.queryParameters['invoice']?.trim()
+          : documentCheckout?.kind == FarmpayCheckoutKind.invoice
+              ? documentCheckout!.ref
+              : null;
+      _router.go(Uri(
+        path: '/pay-business',
+        queryParameters: {
+          if (code != null && code.isNotEmpty) 'code': code,
+          if (invoice != null && invoice.isNotEmpty) 'invoice': invoice,
+        },
+      ).toString());
+      return;
+    }
     if (uri.scheme == 'farm' && uri.host == 'farm.com' && uri.path == '/pay') {
       final encodedPayload = uri.queryParameters['qr'];
       try {
@@ -326,10 +377,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[APP] Resumed - session preserved');
+      debugPrint('[APP] Resumed - forcing a fresh auth/data sync');
       _startPeriodicRefresh();
-      _refreshAppState();
-      _handleResumeLock();
+      unawaited(_refreshAppState(forceAuthRefresh: true));
+      unawaited(_handleResumeLock());
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
@@ -379,13 +430,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _refreshAppState() async {
+  Future<void> _refreshAppState({bool forceAuthRefresh = false}) async {
     if (!mounted || !FFAppState().isLoggedIn) {
       return;
     }
 
     try {
-      await AppSessionManager().refreshAppData();
+      await AppSessionManager().refreshAppData(
+        forceAuthRefresh: forceAuthRefresh,
+      );
     } catch (e) {
       debugPrint('App resume coordinated refresh failed: $e');
     }

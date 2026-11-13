@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '/backend/services/api_service.dart';
+import '/backend/api_requests/fees_api.dart';
 import '/backend/models/escrow_model.dart';
 import '/components/escrow_item/escrow_item_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
@@ -20,6 +21,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import '/utils/user_error_message.dart';
 
 class EscrowHubWidget extends StatefulWidget {
   const EscrowHubWidget({super.key});
@@ -84,7 +86,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not load escrow details: $error')),
+        SnackBar(content: Text('Could not load escrow details: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -105,7 +107,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save receipts: $error')),
+          SnackBar(content: Text('Could not save receipts: ${userErrorMessage(error)}')),
         );
       }
     }
@@ -193,10 +195,25 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
     if (mounted) await fetchEscrows();
   }
 
+  /// Live fee rule from the backend; shows an error and returns null if it can't be loaded.
+  Future<FeeRule?> _feeRule(String key) async {
+    try {
+      return await FeesApi.rule(key);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not load the current fee. Check your connection and try again.')));
+      }
+      return null;
+    }
+  }
+
   Future<void> releaseEscrow(String escrowId, {double? releaseAmount}) async {
     // Find the escrow to get the amount
     final escrow = escrows.firstWhere((e) => e.id == escrowId);
-    final releaseFee = escrow.amount * 0.015;
+    final releaseRule = await _feeRule('escrow_release');
+    if (releaseRule == null || !mounted) return;
+    final releaseFee = releaseRule.feeFor(escrow.amount);
     final amountAfterFee = escrow.amount - releaseFee;
 
     final confirmed = await showDialog<bool>(
@@ -221,7 +238,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Platform Fee (1.5%):'),
+                  Text('Release fee (${releaseRule.percentLabel}):'),
                   Text('-${releaseFee.toStringAsFixed(2)} FARM'),
                 ],
               ),
@@ -318,7 +335,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Funds released successfully. Seller receives ${amountAfterFee.toStringAsFixed(2)} FARM (after 1.5% fee).'),
+              'Funds released successfully. Seller receives ${amountAfterFee.toStringAsFixed(2)} FARM (after ${releaseRule.percentLabel} release fee).'),
         ),
       );
 
@@ -327,7 +344,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Release failed: $e'),
+          content: Text('Release failed: ${userErrorMessage(e)}'),
         ),
       );
     }
@@ -607,7 +624,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Dispute failed: $e'),
+          content: Text('Dispute failed: ${userErrorMessage(e)}'),
         ),
       );
     } finally {
@@ -633,6 +650,8 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
   }
 
   Future<void> showCreateEscrowDialog() async {
+    final createRule = await _feeRule('escrow_creation');
+    if (createRule == null || !mounted) return;
     final sellerController = TextEditingController();
     final amountController = TextEditingController();
     final titleController = TextEditingController();
@@ -676,7 +695,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
             try {
               if (amountController.text.isNotEmpty) {
                 amount = double.parse(amountController.text.trim());
-                fee = double.parse((amount * 0.015).toStringAsFixed(2));
+                fee = createRule.feeFor(amount);
                 totalRequired = amount + fee;
               }
             } catch (_) {}
@@ -819,7 +838,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Platform Fee (1.5%):'),
+                                Text('Escrow fee (${createRule.percentLabel}):'),
                                 Text('${fee.toStringAsFixed(2)} FARM'),
                               ],
                             ),
@@ -902,9 +921,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                                   '0')
                                               .toString()) ??
                                       0;
-                                  final fee = double.tryParse((amount * 0.015)
-                                          .toStringAsFixed(2)) ??
-                                      0;
+                                  final fee = createRule.feeFor(amount);
                                   if (available < amount + fee) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
@@ -941,7 +958,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                         content:
-                                            Text('Escrow creation failed: $e')),
+                                            Text('Escrow creation failed: ${userErrorMessage(e)}')),
                                   );
                                 }
                                 return;
@@ -982,8 +999,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                   onPressed: () async {
                     try {
                       final amount = double.parse(amountController.text.trim());
-                      final fee =
-                          double.parse((amount * 0.015).toStringAsFixed(2));
+                      final fee = createRule.feeFor(amount);
 
                       // Check wallet balance
                       final walletResp = await ApiService.getWallet();
@@ -1056,7 +1072,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                       if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('$e'),
+                          content: Text(userErrorMessage(e)),
                         ),
                       );
                     }

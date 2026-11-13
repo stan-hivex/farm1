@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '/admin/widgets/admin_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
+import '/utils/user_error_message.dart';
 
 class KycManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -48,7 +50,7 @@ class _KycManagementPageState extends State<KycManagementPage>
       setState(() => _queue = res['data'] ?? []);
     } catch (e) {
       if (mounted && _queue.isEmpty) {
-        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+        setState(() => _error = userErrorMessage(e));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -58,47 +60,6 @@ class _KycManagementPageState extends State<KycManagementPage>
   @override
   Future<void> refreshAdminPage() => _load();
 
-  Future<void> _review(String docId, String status, {String? reason}) async {
-    try {
-      await AdminApiService.reviewKyc(docId, status, rejectionReason: reason);
-      _snack(status == 'verified' ? 'KYC Approved ✓' : 'KYC Rejected',
-          status == 'verified' ? context.successColor : context.errorColor);
-      _load();
-    } catch (e) {
-      _snack(e.toString(), context.errorColor);
-    }
-  }
-
-  void _showRejectDialog(String docId) {
-    final ctrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('Reject KYC',
-            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(
-              hintText: 'Reason for rejection...',
-              border: OutlineInputBorder()),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context), child: Text('Cancel')),
-          ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: context.errorColor),
-            onPressed: () {
-              Navigator.pop(context);
-              _review(docId, 'rejected', reason: ctrl.text.trim());
-            },
-            child: Text('Reject'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _snack(String msg, Color c) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -236,10 +197,10 @@ class _KycManagementPageState extends State<KycManagementPage>
                               fontWeight: FontWeight.bold, fontSize: 14)),
                       Text(user['phone'] ?? '-',
                           style: GoogleFonts.plusJakartaSans(
-                              color: context.textSecondary, fontSize: 12)),
+                              color: AdminColors.textSecondary, fontSize: 12)),
                       Text('Doc: ${doc['document_type'] ?? 'N/A'}',
                           style: GoogleFonts.plusJakartaSans(
-                              color: context.textSecondary, fontSize: 12)),
+                              color: AdminColors.textSecondary, fontSize: 12)),
                     ])),
                 Container(
                   padding:
@@ -272,7 +233,7 @@ class _KycManagementPageState extends State<KycManagementPage>
                 child: SelectableText(
                   'ID: ${doc['document_number']}',
                   style: GoogleFonts.plusJakartaSans(
-                    color: context.textSecondary,
+                    color: AdminColors.textSecondary,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
@@ -329,35 +290,10 @@ class _KycManagementPageState extends State<KycManagementPage>
             ),
             Padding(
               padding: const EdgeInsets.all(14),
-              child: Row(children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: context.errorColor),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10))),
-                    icon: Icon(Icons.close_rounded,
-                        color: context.errorColor, size: 16),
-                    label: Text('Reject',
-                        style: GoogleFonts.plusJakartaSans(
-                            color: context.errorColor)),
-                    onPressed: () => _showRejectDialog(doc['id']),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: context.successColor,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10))),
-                    icon: Icon(Icons.check_rounded, size: 16),
-                    label:
-                        Text('Approve', style: GoogleFonts.plusJakartaSans()),
-                    onPressed: () => _review(doc['id'], 'verified'),
-                  ),
-                ),
-              ]),
+              child: Text(
+                  'Decisions are made automatically by Didit. This view is read-only.',
+                  style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12, color: Colors.grey)),
             ),
           ]),
         ),
@@ -378,7 +314,7 @@ class _KycManagementPageState extends State<KycManagementPage>
           if (snap.hasError)
             return AlertDialog(
                 title: const Text('Error'),
-                content: Text(snap.error.toString()),
+                content: Text(userErrorMessage(snap.error)),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(context),
@@ -416,12 +352,12 @@ class _KycManagementPageState extends State<KycManagementPage>
                               if (user['email'] != null)
                                 Text(user['email'],
                                     style: GoogleFonts.plusJakartaSans(
-                                        color: context.textSecondary,
+                                        color: AdminColors.textSecondary,
                                         fontSize: 12)),
                               if (user['phone'] != null)
                                 Text(user['phone'],
                                     style: GoogleFonts.plusJakartaSans(
-                                        color: context.textSecondary,
+                                        color: AdminColors.textSecondary,
                                         fontSize: 12)),
                             ]),
                       )
@@ -493,22 +429,6 @@ class _KycManagementPageState extends State<KycManagementPage>
               TextButton(
                   onPressed: () => Navigator.pop(context),
                   child: const Text('Close')),
-              TextButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _showRejectDialog(d['id']);
-                  },
-                  child: Text('Reject',
-                      style: TextStyle(color: context.errorColor))),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _review(d['id'], 'verified');
-                },
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: context.successColor),
-                child: const Text('Approve'),
-              ),
             ],
           );
         },
@@ -682,7 +602,7 @@ class _KycManagementPageState extends State<KycManagementPage>
         Text(label,
             textAlign: TextAlign.center,
             style: GoogleFonts.plusJakartaSans(
-                fontSize: 12, color: context.textSecondary)),
+                fontSize: 12, color: AdminColors.textSecondary)),
       ]),
     );
   }
@@ -719,7 +639,7 @@ class _KycManagementPageState extends State<KycManagementPage>
           child: Text(value.toString(),
               softWrap: true,
               style: GoogleFonts.plusJakartaSans(
-                  color: context.textSecondary,
+                  color: AdminColors.textSecondary,
                   fontSize: 13,
                   fontWeight: FontWeight.w500)),
         ),

@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
+import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,9 +15,23 @@ import java.io.File
 class MainActivity: FlutterFragmentActivity() {
   private val channelName = "farm.qr_download_service"
   private val receiptChannelName = "farm.transaction_receipt"
+  private val voiceChannelName = "farm.mkulima_voice"
+  private var voiceChannel: MethodChannel? = null
+
+  override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+    if (keyCode == KeyEvent.KEYCODE_HEADSETHOOK ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE ||
+        keyCode == KeyEvent.KEYCODE_MEDIA_PLAY) {
+      voiceChannel?.invokeMethod("headset", null)
+      return true
+    }
+    return super.onKeyDown(keyCode, event)
+  }
 
   override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
+
+    voiceChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, voiceChannelName)
 
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
       when (call.method) {
@@ -43,6 +58,30 @@ class MainActivity: FlutterFragmentActivity() {
               "destination" to "unknown",
             ))
           }
+        }
+        else -> result.notImplemented()
+      }
+    }
+
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "farm.tap_pay").setMethodCallHandler { call, result ->
+      when (call.method) {
+        "supported" -> {
+          val pm = packageManager
+          val nfc = android.nfc.NfcAdapter.getDefaultAdapter(this)
+          result.success(mapOf(
+            "hce" to pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_NFC_HOST_CARD_EMULATION),
+            "enabled" to (nfc?.isEnabled == true),
+          ))
+        }
+        "start" -> {
+          FarmPayHceService.token = call.argument<String>("token")
+          FarmPayHceService.expiresAtMs = (call.argument<Number>("expiresAtMs") ?: 0).toLong()
+          result.success(true)
+        }
+        "stop" -> {
+          FarmPayHceService.token = null
+          FarmPayHceService.expiresAtMs = 0
+          result.success(true)
         }
         else -> result.notImplemented()
       }

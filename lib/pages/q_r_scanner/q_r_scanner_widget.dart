@@ -1,3 +1,6 @@
+import '/backend/api_requests/nfc_pay_api.dart';
+import '/pages/tap_pay/tap_pay_pages.dart';
+import '/components/fee_line.dart';
 import '/backend/services/api_service.dart';
 import '/components/action_circle/action_circle_widget.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
@@ -17,6 +20,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 
 import 'q_r_scanner_model.dart';
+import '/utils/user_error_message.dart';
 export 'q_r_scanner_model.dart';
 
 class QRScannerWidget extends StatefulWidget {
@@ -202,6 +206,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
                       const SizedBox(height: 16),
                       TextField(
                         controller: amountController,
+                        onChanged: (_) => setState(() {}),
                         keyboardType: const TextInputType.numberWithOptions(
                           decimal: true,
                         ),
@@ -210,6 +215,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
                           prefixText: 'FARM ',
                         ),
                       ),
+                      FeeLine(feeKey: 'transfer', amount: double.tryParse(amountController.text.trim()) ?? 0),
                       const SizedBox(height: 12),
                       if (pinEntryEnabled || !isBiometricChecking)
                         TextField(
@@ -284,7 +290,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: Text(
-                                        '${'common.transaction_failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}',
+                                        '${'common.transaction_failed'.tr()}: ${userErrorMessage(e)}',
                                       ),
                                     ),
                                   );
@@ -428,7 +434,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: Text(
-                                          'Transfer failed: ${e.toString().replaceFirst('Exception: ', '')}',
+                                          'Transfer failed: ${userErrorMessage(e)}',
                                         ),
                                       ),
                                     );
@@ -461,6 +467,15 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
 
   Future<void> validateQr(String qrPayload) async {
     if (isProcessing) return;
+    // Tap-to-pay request shown as QR (iOS / NFC off): review + PIN on its own screen.
+    final tapToken = NfcPayApi.extractToken(qrPayload);
+    if (tapToken != null) {
+      isProcessing = true;
+      await Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => TapPayPage(initialToken: tapToken)));
+      isProcessing = false;
+      return;
+    }
 
     isProcessing = true;
 
@@ -540,7 +555,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'QR Validation Error: $e',
+            'QR Validation Error: ${userErrorMessage(e)}',
           ),
         ),
       );
@@ -826,7 +841,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not create your QR code: $error')),
+        SnackBar(content: Text('Could not create your QR code: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -854,7 +869,7 @@ class _QRScannerWidgetState extends State<QRScannerWidget>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share your QR code: $error')),
+        SnackBar(content: Text('Could not share your QR code: ${userErrorMessage(error)}')),
       );
     }
   }

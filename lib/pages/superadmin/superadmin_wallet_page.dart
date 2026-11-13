@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import '/backend/services/api_service.dart';
+import 'fee_revenue.dart';
+import 'fee_revenue_card.dart';
 import 'superadmin_dashboard_page.dart';
 import 'superadmin_pin_setup_page.dart';
 import 'superadmin_change_pin_page.dart';
 import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
 import '/services/transaction_authorization_service.dart';
+import '/utils/user_error_message.dart';
 
 class SuperadminWalletPage extends StatefulWidget {
   const SuperadminWalletPage({super.key});
@@ -21,6 +25,7 @@ class SuperadminWalletPage extends StatefulWidget {
 
 class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
   Map<String, dynamic>? _walletData;
+  String _feePeriod = 'all';
   bool _loading = true;
   bool _loadingHistory = true;
   String? _error;
@@ -139,7 +144,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
           await ApiService.request(method: 'GET', path: '/admin/wallet');
       setState(() => _walletData = resp['data'] ?? resp);
     } catch (e) {
-      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      setState(() => _error = userErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -230,7 +235,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(content: Text('Error: ${userErrorMessage(e)}')),
       );
     }
   }
@@ -375,7 +380,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
   Widget build(BuildContext context) {
     final bgColor = const Color(0xFF0B1320);
     final cardColor = const Color(0xFF111B2A);
-    final accent = const Color(0xFFD4AF37);
+    const accent = AppTheme.accent;
     final muted = Colors.white70;
 
     if (_loading) {
@@ -414,11 +419,12 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _loadWalletData,
-                style: ElevatedButton.styleFrom(backgroundColor: accent),
+                style: ElevatedButton.styleFrom(
+  foregroundColor: AppTheme.onAccent,backgroundColor: AppTheme.accent),
                 child: Text(
                   'Retry',
                   style: GoogleFonts.plusJakartaSans(
-                    color: Colors.black,
+                    color: AppTheme.onAccent,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -434,15 +440,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     final pendingWithdrawals = _asDouble(_walletData?['pending_withdrawals']);
     final totalWithdrawn = _asDouble(_walletData?['total_withdrawn']);
     final currency = _walletData?['currency'] ?? 'FARM';
-    final creationRevenue = _asDouble(_walletData?['escrow_creation_revenue']);
-    final releaseRevenue = _asDouble(_walletData?['escrow_release_revenue']);
-    final withdrawalRevenue = _asDouble(_walletData?['withdrawal_revenue']);
-    final merchantSalesRevenue =
-        _asDouble(_walletData?['merchant_sales_revenue']);
-    final merchantSalesCount =
-        _asDouble(_walletData?['merchant_sales_count']).toInt();
-    final totalPlatformRevenue =
-        _asDouble(_walletData?['total_platform_revenue']);
+    final feeReport = parseFeeRevenue(_walletData ?? const {});
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -486,16 +484,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                   totalWithdrawn, currency, accent, cardColor, muted),
               const SizedBox(height: 24),
 
-              _buildRevenueBreakdown(
-                creationRevenue,
-                releaseRevenue,
-                withdrawalRevenue,
-                merchantSalesRevenue,
-                merchantSalesCount,
-                totalPlatformRevenue,
-                accent,
-                cardColor,
-                muted,
+              FeeRevenueCard(
+                report: feeReport,
+                period: _feePeriod,
+                onPeriod: (value) => setState(() => _feePeriod = value),
+                cardColor: cardColor,
+                accent: accent,
+                muted: muted,
               ),
               const SizedBox(height: 24),
 
@@ -532,8 +527,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                       icon: const Icon(Icons.lock_reset_rounded),
                       label: const Text('Change PIN'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accent,
-                        foregroundColor: Colors.black,
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: AppTheme.onAccent,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -570,7 +565,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                 child: ElevatedButton(
                   onPressed: _processWithdrawal,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
+  foregroundColor: AppTheme.onAccent,
+                    backgroundColor: AppTheme.accent,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -579,7 +575,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                   child: Text(
                     'Withdraw Funds',
                     style: GoogleFonts.plusJakartaSans(
-                      color: Colors.black,
+                      color: AppTheme.onAccent,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
@@ -748,7 +744,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
           Text(
             '${currency.toUpperCase()} ${balance.toStringAsFixed(2)}',
             style: GoogleFonts.plusJakartaSans(
-              color: Colors.white,
+              color: AppTheme.accent,
               fontSize: 42,
               fontWeight: FontWeight.w900,
             ),
@@ -839,140 +835,6 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  Widget _buildRevenueBreakdown(
-      double creation,
-      double release,
-      double withdrawal,
-      double merchantSales,
-      int merchantSalesCount,
-      double total,
-      Color accent,
-      Color cardColor,
-      Color muted) {
-    Widget revenueItem(String label, double value, Color color) {
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 11),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              '${value.toStringAsFixed(2)} FARM',
-              style: GoogleFonts.plusJakartaSans(
-                color: color,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Platform Revenue',
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Gross fees earned across escrow, withdrawals, and merchant sales',
-            style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Available balance is net of pending locks and completed withdrawals.',
-            style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 11),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              revenueItem('Escrow creation', creation, Colors.greenAccent),
-              revenueItem('Escrow release', release, Colors.lightBlueAccent),
-              revenueItem('Withdrawals', withdrawal, Colors.orangeAccent),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cardColor.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Merchant revenue',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.purpleAccent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '1% from $merchantSalesCount sales',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: muted,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  '${merchantSales.toStringAsFixed(2)} FARM',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: Colors.purpleAccent,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total platform revenue',
-                  style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white70, fontSize: 13)),
-              Text(
-                '${total.toStringAsFixed(2)} FARM',
-                style: GoogleFonts.plusJakartaSans(
-                  color: accent,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildMethodTabs(Color accent, Color cardColor) {
     final methods = [
@@ -1214,8 +1076,8 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
               width: double.infinity,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: accent,
-                  foregroundColor: Colors.black,
+                  backgroundColor: AppTheme.accent,
+                  foregroundColor: AppTheme.onAccent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),

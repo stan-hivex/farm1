@@ -1,3 +1,4 @@
+import '/components/farm_coin_icon.dart';
 import 'dart:async';
 // Removed unused import
 import '/backend/services/api_service.dart';
@@ -14,6 +15,10 @@ import '/pages/send_receive/send_receive_widget.dart';
 import '/pages/all_transactions/all_transactions_widget.dart';
 import '/pages/growth_tracking_page/growth_tracking_page_widget.dart';
 import '/pages/merchant_dashboard/merchant_dashboard_widget.dart';
+import '/services/account_context.dart';
+import '/components/account_switcher/account_switcher_widget.dart';
+import '/pages/business/ops/pay_business_page.dart';
+import '/pages/business/business_home_view.dart';
 import '/pages/notifications/user_notifications_page_widget.dart';
 import '/services/app_session_manager.dart';
 import '/services/transaction_authentication_service.dart';
@@ -21,13 +26,18 @@ import '/services/transaction_authorization_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/utils/transaction_peer_resolver.dart';
-import '/utils/transaction_history_utils.dart';
+import '/utils/personal_activity.dart';
 import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
+import '/pages/mkulima/mkulima_pages.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '/core/utils/activity_label.dart';
 import 'dashboard_model.dart';
+import '/services/offline_cache.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '/utils/user_error_message.dart';
 export 'dashboard_model.dart';
 
 class DashboardWidget extends StatefulWidget {
@@ -47,6 +57,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   double walletBalance = 0.0;
+  /// Separate business (merchant) balance, shown under personal when the backend has BUSINESS_WALLET_ENABLED.
+  double? businessBalance;
+  String? businessName;
   double kesEquivalent = 0.0;
   bool isBalanceLoading = true;
 
@@ -67,13 +80,53 @@ class _DashboardWidgetState extends State<DashboardWidget>
   int unreadNotificationsCount = 0;
   Timer? _refreshTimer;
 
+  /// True while a background refresh runs over cached data (thin bar only).
+  bool _refreshing = false;
+  static const _growthPath = '/analytics/growth-history?days=7';
+
+  /// Paint the last known values instantly (stale-while-revalidate); the
+  /// post-frame refresh replaces them silently.
+  void _hydrateFromCache() {
+    final app = FFAppState();
+    walletBalance = app.walletBalance;
+    kesEquivalent = app.kesEquivalent;
+    profileImageUrl = app.profileImageUrl;
+    final wallet = ApiService.getCached('/wallet');
+    if (wallet != null) {
+      isBalanceLoading = false;
+      _applyBusinessWallet(wallet);
+    }
+    if (OfflineCache.has('recentTransactions') ||
+        app.recentTransactions.isNotEmpty) {
+      transactions =
+          app.recentTransactions.where(isPersonalActivity).toList();
+      isTransactionsLoading = false;
+    }
+    final growth = ApiService.getCached(_growthPath);
+    if (growth != null) _applyGrowth(growth);
+  }
+
+  void _applyBusinessWallet(Map<String, dynamic> response) {
+    final data = response['data'] is Map
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : response;
+    final biz = data['business_wallet'];
+    businessBalance = biz is Map
+        ? double.tryParse('${biz['available_balance'] ?? biz['balance'] ?? 0}')
+        : null;
+    businessName = biz is Map ? '${biz['name'] ?? 'Business'}' : null;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _hydrateFromCache();
 
     _model = createModel(context, () => DashboardModel());
     FFAppState().addListener(_handleAppStateChanged);
+    AccountContext.instance.addListener(_handleAccountModeChanged);
+    AccountContext.instance.load();
     _startPeriodicRefresh();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -81,10 +134,15 @@ class _DashboardWidgetState extends State<DashboardWidget>
     });
   }
 
+  void _handleAccountModeChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _refreshTimer?.cancel();
     FFAppState().removeListener(_handleAppStateChanged);
+    AccountContext.instance.removeListener(_handleAccountModeChanged);
     WidgetsBinding.instance.removeObserver(this);
     _model.dispose();
     super.dispose();
@@ -95,7 +153,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
-      unawaited(_refreshDashboard());
+      unawaited(_refreshDashboard(includeExtras: false));
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
@@ -109,7 +167,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       kesEquivalent = FFAppState().kesEquivalent;
       profileImageUrl = FFAppState().profileImageUrl;
       transactions = FFAppState().recentTransactions
-          .where(isVisibleTransactionHistoryItem)
+          .where(isPersonalActivity)
           .toList();
       unreadNotificationsCount = FFAppState().unreadNotificationCount;
       isBalanceLoading = false;
@@ -123,47 +181,76 @@ class _DashboardWidgetState extends State<DashboardWidget>
       return;
     }
 
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 90), (_) {
       if (!mounted ||
           !FFAppState().isLoggedIn ||
           FFAppState().accessToken.isEmpty) {
         return;
       }
-      unawaited(_refreshDashboard());
+      unawaited(_refreshDashboard(includeExtras: false));
     });
   }
 
-  Future<void> _refreshDashboard() async {
+  bool _refreshInFlight = false;
+  DateTime? _lastNavAt;
+
+  void _openOnce(VoidCallback go) {
+    final now = DateTime.now();
+    if (_lastNavAt != null &&
+        now.difference(_lastNavAt!) < const Duration(milliseconds: 800)) {
+      return;
+    }
+    _lastNavAt = now;
+    go();
+  }
+
+  Future<void> _refreshDashboard({
+    bool forceAuthRefresh = false,
+    bool includeExtras = true,
+  }) async {
+    if (_refreshInFlight) return;
     if (!mounted ||
         !FFAppState().isLoggedIn ||
         FFAppState().accessToken.isEmpty) {
       return;
     }
+    _refreshInFlight = true;
 
+    if (mounted && !isBalanceLoading) setState(() => _refreshing = true);
     try {
-      await AppSessionManager().syncNow(
-        profileTimeoutSeconds: 5,
-        walletTimeoutSeconds: 5,
-        transactionsTimeoutSeconds: 5,
-      );
-    } catch (e) {
-      debugPrint('Dashboard refresh failed: $e');
+      try {
+        await AppSessionManager().syncNow(
+          profileTimeoutSeconds: 5,
+          walletTimeoutSeconds: 5,
+          transactionsTimeoutSeconds: 5,
+          forceAuthRefresh: forceAuthRefresh,
+        );
+      } catch (e) {
+        debugPrint('Dashboard refresh failed: $e');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        walletBalance = FFAppState().walletBalance;
+        kesEquivalent = FFAppState().kesEquivalent;
+        profileImageUrl = FFAppState().profileImageUrl;
+        transactions = FFAppState().recentTransactions
+            .where(isPersonalActivity)
+            .toList();
+        final wallet = ApiService.getCached('/wallet');
+        if (wallet != null) _applyBusinessWallet(wallet);
+        isBalanceLoading = false;
+        isTransactionsLoading = false;
+      });
+
+      if (includeExtras) {
+        await Future.wait([fetchGrowthHistory(), loadNotifications()]);
+      }
+    } finally {
+      _refreshInFlight = false;
+      if (mounted) setState(() => _refreshing = false);
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      walletBalance = FFAppState().walletBalance;
-      kesEquivalent = FFAppState().kesEquivalent;
-      profileImageUrl = FFAppState().profileImageUrl;
-      transactions = FFAppState().recentTransactions
-          .where(isVisibleTransactionHistoryItem)
-          .toList();
-      isBalanceLoading = false;
-      isTransactionsLoading = false;
-    });
-
-    await Future.wait([fetchGrowthHistory(), loadNotifications()]);
   }
 
   Future<void> logoutUser() async {
@@ -192,6 +279,11 @@ class _DashboardWidgetState extends State<DashboardWidget>
             0.0;
         kesEquivalent =
             double.tryParse((data['kes_equivalent'] ?? 0).toString()) ?? 0.0;
+        final biz = data['business_wallet'];
+        businessBalance = biz is Map
+            ? double.tryParse('${biz['available_balance'] ?? biz['balance'] ?? 0}')
+            : null;
+        businessName = biz is Map ? '${biz['name'] ?? 'Business'}' : null;
         isBalanceLoading = false;
       });
     } catch (e) {
@@ -239,7 +331,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       final items = response['data'] as List? ?? [];
       if (!mounted) return;
       setState(() {
-        transactions = items.where(isVisibleTransactionHistoryItem).toList();
+        transactions = items.where(isPersonalActivity).toList();
         isTransactionsLoading = false;
       });
     } catch (e) {
@@ -287,7 +379,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        notificationsError = e.toString();
+        notificationsError = userErrorMessage(e);
       });
     }
   }
@@ -339,7 +431,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  '${'common.transaction_failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}',
+                  '${'common.transaction_failed'.tr()}: ${userErrorMessage(e)}',
                 ),
               ),
             );
@@ -386,7 +478,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '${'common.failed'.tr()}: ${e.toString().replaceFirst('Exception: ', '')}',
+                '${'common.failed'.tr()}: ${userErrorMessage(e)}',
               ),
             ),
           );
@@ -411,6 +503,22 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
     try {
       final response = await ApiService.getGrowthHistory(days: 7);
+      if (!mounted) return;
+      setState(() => _applyGrowth(response));
+    } catch (e) {
+      print('GROWTH ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        isGrowthLoading = false;
+      });
+    }
+  }
+
+  /// Parses a growth-history response into chart state (no setState).
+  void _applyGrowth(Map<String, dynamic> response) {
+    {
       final history = response['data'] is List
           ? response['data'] as List
           : <dynamic>[];
@@ -453,23 +561,11 @@ class _DashboardWidgetState extends State<DashboardWidget>
           ? (maxValue * 1.2 > 72.0 ? maxValue * 1.2 : 72.0)
           : 72.0;
 
-      if (!mounted) return;
-
-      setState(() {
-        growthYValues = parsedValues;
-        growthXLabels = parsedLabels;
-        growthPercentage = computedGrowth;
-        growthChartMaxY = computedMaxY;
-        isGrowthLoading = false;
-      });
-    } catch (e) {
-      print('GROWTH ERROR: $e');
-
-      if (!mounted) return;
-
-      setState(() {
-        isGrowthLoading = false;
-      });
+      growthYValues = parsedValues;
+      growthXLabels = parsedLabels;
+      growthPercentage = computedGrowth;
+      growthChartMaxY = computedMaxY;
+      isGrowthLoading = false;
     }
   }
 
@@ -793,7 +889,10 @@ class _DashboardWidgetState extends State<DashboardWidget>
           ],
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-        body: RefreshIndicator(
+        body: AccountContext.instance.isBusiness
+            ? const BusinessHomeView()
+            : Stack(children: [
+            RefreshIndicator(
           onRefresh: _refreshDashboard,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -803,6 +902,28 @@ class _DashboardWidgetState extends State<DashboardWidget>
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    24.0,
+                    MediaQuery.of(context).padding.top + 12.0,
+                    24.0,
+                    0.0,
+                  ),
+                  child: Row(
+                    children: [
+                      const Expanded(child: AccountSwitcherWidget()),
+                      IconButton(
+                        tooltip: 'Pay a business',
+                        icon: Icon(
+                          Icons.storefront_outlined,
+                          color: FlutterFlowTheme.of(context).primaryText,
+                        ),
+                        onPressed: () =>
+                            context.pushNamed(PayBusinessPage.routeName),
+                      ),
+                    ],
+                  ),
+                ),
                 Padding(
                   padding: EdgeInsetsDirectional.fromSTEB(
                     0.0,
@@ -957,13 +1078,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                             ),
                                             style: ElevatedButton.styleFrom(
                                               backgroundColor:
-                                                  FlutterFlowTheme.of(
-                                                    context,
-                                                  ).primary,
+                                                  AppTheme.accent,
                                               foregroundColor:
-                                                  FlutterFlowTheme.of(
-                                                    context,
-                                                  ).secondaryBackground,
+                                                  AppTheme.onAccent,
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                     vertical: 12.0,
@@ -982,9 +1099,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                     context,
                                                   ).titleSmall.override(
                                                     fontWeight: FontWeight.w600,
-                                                    color: FlutterFlowTheme.of(
-                                                      context,
-                                                    ).secondaryBackground,
+                                                    color: AppTheme.onAccent,
                                                   ),
                                             ),
                                           ),
@@ -1061,11 +1176,18 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                             ? ClipRRect(
                                                 borderRadius:
                                                     BorderRadius.circular(100),
-                                                child: Image.network(
-                                                  profileImageUrl!,
+                                                child: CachedNetworkImage(
+                                                  imageUrl: profileImageUrl!,
                                                   width: 28,
                                                   height: 28,
+                                                  memCacheWidth: 84,
                                                   fit: BoxFit.cover,
+                                                  errorWidget: (_, __, ___) =>
+                                                      const Icon(
+                                                    Icons
+                                                        .account_circle_outlined,
+                                                    size: 28,
+                                                  ),
                                                 ),
                                               )
                                             : Icon(
@@ -1239,12 +1361,13 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                         CrossAxisAlignment
                                                             .center,
                                                     children: [
-                                                      SvgPicture.network(
-                                                        'https://cdn.simpleicons.org/algorand/ffffff.svg',
-                                                        width: 16.0,
-                                                        height: 16.0,
-                                                        fit: BoxFit.contain,
+                                                      FarmCoinIcon(
+                                                        size: 14,
+                                                        color: Theme.of(context).brightness == Brightness.dark
+                                                            ? Colors.white70
+                                                            : FlutterFlowTheme.of(context).onPrimary70,
                                                       ),
+                                                      const SizedBox(width: 6.0),
                                                       Text(
                                                         'FARM BALANCE',
                                                         style: FlutterFlowTheme.of(context).labelSmall.override(
@@ -1282,7 +1405,15 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       ),
                                                     ].divide(const SizedBox(width: 4.0)),
                                                   ),
-                                                  Text(
+                                                  Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                                    children: [
+                                                      if (!isBalanceLoading) ...[
+                                                        const FarmCoinIcon(size: 32, color: AppTheme.accent),
+                                                        const SizedBox(width: 8),
+                                                      ],
+                                                      Flexible(
+                                                        child: Text(
                                                     isBalanceLoading
                                                         ? 'Loading...'
                                                         : walletBalance
@@ -1299,22 +1430,36 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                                     FontWeight
                                                                         .w800,
                                                               ),
-                                                          color:
-                                                              Theme.of(
-                                                                    context,
-                                                                  ).brightness ==
-                                                                  Brightness
-                                                                      .dark
-                                                              ? Colors.white
-                                                              : FlutterFlowTheme.of(
-                                                                  context,
-                                                                ).onPrimary,
+                                                          // Black card in both modes: gold passes AA.
+                                                          color: AppTheme.accent,
                                                           letterSpacing: 0.0,
                                                           fontWeight:
                                                               FontWeight.w800,
                                                           lineHeight: 1.2,
                                                         ),
                                                   ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  if (!isBalanceLoading &&
+                                                      businessBalance != null)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            top: 4.0,
+                                                          ),
+                                                      child: Text(
+                                                        '${businessName ?? 'Business'} (merchant): ${businessBalance!.toStringAsFixed(2)} FARM',
+                                                        overflow:
+                                                            TextOverflow.ellipsis,
+                                                        style: const TextStyle(
+                                                          color: Colors.white70,
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   Padding(
                                                     padding:
                                                         const EdgeInsets.only(
@@ -1472,14 +1617,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       icon: Icons
                                                           .arrow_downward_rounded,
                                                       label: 'Deposit',
-                                                      onTap: () => _guardKycAccess(
+                                                      onTap: () => _openOnce(() => _guardKycAccess(
                                                         feature: 'deposit',
                                                         onAllowed: () =>
                                                             context.pushNamed(
                                                               DepositpageWidget
                                                                   .routeName,
                                                             ),
-                                                      ),
+                                                      )),
                                                     ),
                                                     buildActionButton(
                                                       color: buttonColor,
@@ -1534,12 +1679,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         CrossAxisAlignment.center,
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _guardKycAccess(
+                                        onTap: () => _openOnce(() => _guardKycAccess(
                                           feature: 'send & receive',
                                           onAllowed: () => context.pushNamed(
                                             SendReceiveWidget.routeName,
                                           ),
-                                        ),
+                                        )),
                                         child: wrapWithModel(
                                           model: _model.quickActionModel1,
                                           updateCallback: () =>
@@ -1562,16 +1707,20 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         updateCallback: () =>
                                             safeSetState(() {}),
                                         child: QuickActionWidget(
-                                          action:
-                                              'navigate:${QRScannerWidget.routeName}',
+                                          key: const ValueKey(
+                                              'dashboard-mkulima-action'),
+                                          onTap: () => Navigator.of(context)
+                                              .push(MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      const MkulimaHubPage())),
                                           icon: Icon(
-                                            Icons.qr_code_scanner_rounded,
+                                            Icons.smart_toy_outlined,
                                             color: FlutterFlowTheme.of(
                                               context,
                                             ).primaryText,
                                             size: 24.0,
                                           ),
-                                          label: 'Scan',
+                                          label: 'Mkulima',
                                         ),
                                       ),
                                       wrapWithModel(
@@ -2021,16 +2170,22 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         ? '$peerUsername ($merchantName)'
                                         : peerUsername;
 
-                                    final String title = isMerchantPayment
-                                        ? (isOutgoing
-                                              ? 'Sent to $peerWithMerchant'
-                                              : 'Received from $peerWithMerchant')
-                                        : (isOutgoing
-                                              ? 'Sent to $peerUsername'
-                                              : 'Received from $peerUsername');
+                                    final ActivityLabel? sysLabel =
+                                        systemActivityLabel(tx);
+                                    final String? qrTitle = merchantQrTitle(tx);
+                                    final String title = qrTitle ??
+                                        (sysLabel != null
+                                            ? sysLabel.title
+                                            : isMerchantPayment
+                                                ? (isOutgoing
+                                                    ? 'Sent to $peerWithMerchant'
+                                                    : 'Received from $peerWithMerchant')
+                                                : (isOutgoing
+                                                    ? 'Sent to $peerUsername'
+                                                    : 'Received from $peerUsername'));
 
                                     final String subtitle =
-                                        '${isMerchantPayment ? 'merchant_payment' : txType} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
+                                        '${qrTitle ?? sysLabel?.type ?? (isMerchantPayment ? 'merchant_payment' : txType)} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
 
                                     return Padding(
                                       padding: const EdgeInsets.only(
@@ -2074,6 +2229,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
             ),
           ),
         ),
+            if (_refreshing)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(minHeight: 2),
+              ),
+          ]),
       ),
     );
   }

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '/core/app_config.dart';
 import '/app_state.dart';
+import '/services/offline_cache.dart';
 import '/services/auth/refresh_manager.dart';
 import '/utils/transaction_history_utils.dart';
 
@@ -15,11 +16,17 @@ class ApiServiceException implements Exception {
     required this.statusCode,
     required this.message,
     this.retryAfterSeconds,
+    this.code,
+    this.data,
   });
 
   final int statusCode;
   final String message;
   final int? retryAfterSeconds;
+
+  /// Machine-readable error code from the backend, e.g. NEW_DEVICE.
+  final String? code;
+  final Map<String, dynamic>? data;
 
   @override
   String toString() => message;
@@ -55,6 +62,115 @@ class ApiService {
         filenames: filenames,
         mimeTypes: mimeTypes,
       );
+
+  /// Business document upload: PDF, JPG, PNG or WebP up to 10 MB.
+  /// The server re-validates type (magic bytes) and size.
+  /// Mkulima voice input: uploads a short recording (max ~60 s) for xAI
+  /// transcription. Returns {transcript, language}. Nothing is sent to the
+  /// assistant; the user must confirm the transcript first.
+  static Future<Map<String, dynamic>> transcribeVoice({
+    required Uint8List bytes,
+    required String filename,
+    required String mimeType,
+    bool isRetry = false,
+  }) async {
+    if (bytes.isEmpty) throw ArgumentError('Nothing was recorded.');
+    if (bytes.length > 2 * 1024 * 1024) {
+      throw ArgumentError('Recording is too long (max 60 seconds).');
+    }
+    final token = await FFAppState().getActiveAccessToken();
+    final parts = mimeType.split('/');
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.api}/ai/voice'),
+    )..headers.addAll({
+        'Accept': 'application/json',
+        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      });
+    request.files.add(http.MultipartFile.fromBytes('audio', bytes,
+        filename: filename, contentType: MediaType(parts[0], parts.length > 1 ? parts[1] : 'webm')));
+    final response = await http.Response.fromStream(
+      await _client.send(request).timeout(const Duration(seconds: 60)),
+    );
+    Map<String, dynamic> decoded = {};
+    try {
+      decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {}
+    if (response.statusCode == 401 &&
+        !isRetry &&
+        FFAppState().refreshToken.isNotEmpty) {
+      final refreshed = await RefreshManager().refreshIfNeeded(force: true);
+      if (refreshed) {
+        return transcribeVoice(
+            bytes: bytes, filename: filename, mimeType: mimeType, isRetry: true);
+      }
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final m = decoded['message'];
+      throw Exception(m is String ? m : 'Could not transcribe (${response.statusCode})');
+    }
+    final d = decoded['data'] is Map ? Map<String, dynamic>.from(decoded['data'] as Map) : decoded;
+    return d;
+  }
+
+  static Future<String> uploadDocument({
+    required Uint8List bytes,
+    required String filename,
+    bool isRetry = false,
+  }) async {
+    if (bytes.isEmpty || bytes.length > 10 * 1024 * 1024) {
+      throw ArgumentError('Documents must be no larger than 10 MB.');
+    }
+    final lower = filename.toLowerCase();
+    final MediaType type;
+    if (lower.endsWith('.pdf')) {
+      type = MediaType('application', 'pdf');
+    } else if (lower.endsWith('.png')) {
+      type = MediaType('image', 'png');
+    } else if (lower.endsWith('.webp')) {
+      type = MediaType('image', 'webp');
+    } else if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      type = MediaType('image', 'jpeg');
+    } else {
+      throw ArgumentError('Only PDF, JPG, PNG and WebP files are supported.');
+    }
+    final token = await FFAppState().getActiveAccessToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.api}/uploads/document'),
+    )..headers.addAll({
+        'Accept': 'application/json',
+        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      });
+    request.files.add(http.MultipartFile.fromBytes('file', bytes,
+        filename: filename, contentType: type));
+    final response = await http.Response.fromStream(
+      await _client.send(request).timeout(const Duration(seconds: 120)),
+    );
+    Map<String, dynamic> decoded = {};
+    try {
+      decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {}
+    if (response.statusCode == 401 &&
+        !isRetry &&
+        FFAppState().refreshToken.isNotEmpty) {
+      final refreshed = await RefreshManager().refreshIfNeeded(force: true);
+      if (refreshed) {
+        return uploadDocument(bytes: bytes, filename: filename, isRetry: true);
+      }
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = decoded['message'] is String
+          ? decoded['message'] as String
+          : 'Document upload failed (${response.statusCode})';
+      throw Exception(message);
+    }
+    final url = decoded['url'];
+    if (url is! String || url.isEmpty) {
+      throw const FormatException('The server returned an invalid file URL.');
+    }
+    return url;
+  }
 
   static Future<List<String>> _uploadImages({
     required List<Uint8List> files,
@@ -146,6 +262,7 @@ class ApiService {
 
   // Central method — all requests go through here
   static final Map<String, Map<String, dynamic>> _cache = {};
+  static final Map<String, Future<Map<String, dynamic>>> _inflightGets = {};
 
   static Future<Map<String, dynamic>> _request({
     required String method,
@@ -155,7 +272,33 @@ class ApiService {
     bool isRetry = false,
     int timeoutSeconds = 20,
     bool useUnversionedApi = false,
+    bool coalesce = true,
   }) async {
+    final verb = method.toUpperCase();
+    // Deposit, Send and the dashboard refresh often ask for the same GET at
+    // the same time. One in-flight call serves all of them.
+    if (verb == 'GET' && coalesce && !isRetry) {
+      final pending = _inflightGets[path];
+      if (pending != null) return pending;
+      final future = _request(
+        method: method,
+        path: path,
+        body: body,
+        requiresAuth: requiresAuth,
+        isRetry: isRetry,
+        timeoutSeconds: timeoutSeconds,
+        useUnversionedApi: useUnversionedApi,
+        coalesce: false,
+      );
+      _inflightGets[path] = future;
+      try {
+        return await future;
+      } finally {
+        if (identical(_inflightGets[path], future)) {
+          _inflightGets.remove(path);
+        }
+      }
+    }
     final apiBase = useUnversionedApi
         ? AppConfig.api.replaceFirst(RegExp(r'/api/v\d+$'), '/api')
         : AppConfig.api;
@@ -272,16 +415,17 @@ class ApiService {
       try {
         if (method.toUpperCase() == 'GET') {
           _cache[path] = decoded;
+          if (requiresAuth && _persistable(path)) {
+            OfflineCache.write('api:$path', decoded);
+          }
         } else {
-          _cache.clear();
+          _invalidateAfterWrite(path);
         }
       } catch (_) {}
       return decoded;
     }
 
-    final message = decoded['message'] is String
-        ? decoded['message'] as String
-        : responseBody;
+    final message = _apiMessage(decoded, responseBody);
     if (response.statusCode == 429) {
       final retryAfter = int.tryParse(response.headers['retry-after'] ?? '');
       final waitMessage = retryAfter == null
@@ -301,6 +445,27 @@ class ApiService {
             : 'Server error (${response.statusCode})',
       );
     }
+    if (response.statusCode == 402) {
+      // e.g. Mkulima when the FARM balance can't cover a use.
+      throw ApiServiceException(
+        statusCode: response.statusCode,
+        message: message.isNotEmpty
+            ? message
+            : 'Your FARM balance is too low. Top up your wallet to continue.',
+        code: decoded['code'] is String ? decoded['code'] as String : null,
+        data: decoded,
+      );
+    }
+    if (decoded['code'] is String) {
+      throw ApiServiceException(
+        statusCode: response.statusCode,
+        message: message.isNotEmpty
+            ? message
+            : 'Request failed (${response.statusCode})',
+        code: decoded['code'] as String,
+        data: decoded,
+      );
+    }
     throw Exception(message.isNotEmpty
         ? message
         : 'Request failed (${response.statusCode})');
@@ -312,6 +477,7 @@ class ApiService {
     required String password,
     String? turnstileToken,
     String? countryCode,
+    Map<String, dynamic>? device,
   }) =>
       _request(
         method: 'POST',
@@ -320,6 +486,7 @@ class ApiService {
           {
             'identifier': identifier,
             'password': password,
+            if (device != null) 'device': device,
           },
           turnstileToken: turnstileToken,
         ),
@@ -332,6 +499,7 @@ class ApiService {
     required String firebaseToken,
     String? countryCode,
     String? turnstileToken,
+    Map<String, dynamic>? device,
   }) =>
       _request(
         method: 'POST',
@@ -340,6 +508,7 @@ class ApiService {
           {
             'identifier': identifier,
             'firebaseIdToken': firebaseToken,
+            if (device != null) 'device': device,
           },
           turnstileToken: turnstileToken,
         ),
@@ -517,12 +686,11 @@ class ApiService {
   }) =>
       _request(
         method: 'POST',
-        path: '/auth/sessions/revoke',
-        body: {'session_id': sessionId},
+        path: '/auth/sessions/$sessionId/revoke',
       );
 
   static Future<Map<String, dynamic>> revokeOtherSessions() =>
-      _request(method: 'POST', path: '/auth/sessions/revoke-other');
+      _request(method: 'POST', path: '/auth/sessions/revoke-others');
 
   static Future<Map<String, dynamic>> revokeAllSessions() =>
       _request(method: 'POST', path: '/auth/sessions/revoke-all');
@@ -544,11 +712,92 @@ class ApiService {
 
   static Future<Map<String, dynamic>> refreshToken({
     required String refreshToken,
+    String? deviceId,
   }) =>
       _request(
         method: 'POST',
         path: '/auth/refresh',
-        body: {'refresh_token': refreshToken},
+        body: {
+          'refresh_token': refreshToken,
+          if (deviceId != null) 'device_id': deviceId,
+        },
+        requiresAuth: false,
+      );
+
+  // ── Device binding ────────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> deviceChallenge({
+    required String deviceId,
+  }) =>
+      _request(
+        method: 'POST',
+        path: '/auth/device/challenge',
+        body: {'device_id': deviceId},
+        requiresAuth: false,
+      );
+
+  static Future<Map<String, dynamic>> pendingDeviceStatus({
+    required String pendingDeviceId,
+    required String deviceId,
+  }) =>
+      _request(
+        method: 'GET',
+        path: '/auth/device/pending/$pendingDeviceId'
+            '?device_id=${Uri.encodeQueryComponent(deviceId)}',
+        requiresAuth: false,
+      );
+
+  static Future<Map<String, dynamic>> listTrustedDevices() =>
+      _request(method: 'GET', path: '/auth/device/list');
+
+  /// action: approve | reject | revoke
+  static Future<Map<String, dynamic>> decideDevice({
+    required String id,
+    required String action,
+  }) =>
+      _request(method: 'POST', path: '/auth/device/$id/$action');
+
+  static Future<Map<String, dynamic>> startDeviceRecovery({
+    required String pendingDeviceId,
+    required String deviceId,
+  }) =>
+      _request(
+        method: 'POST',
+        path: '/auth/device/recovery/start',
+        body: {'pending_device_id': pendingDeviceId, 'device_id': deviceId},
+        requiresAuth: false,
+      );
+
+  static Future<Map<String, dynamic>> verifyDeviceRecoveryOtp({
+    required String recoveryId,
+    required String deviceId,
+    required String otp,
+  }) =>
+      _request(
+        method: 'POST',
+        path: '/auth/device/recovery/verify-otp',
+        body: {'recovery_id': recoveryId, 'device_id': deviceId, 'otp': otp},
+        requiresAuth: false,
+      );
+
+  static Future<Map<String, dynamic>> deviceRecoveryStatus({
+    required String recoveryId,
+    required String deviceId,
+  }) =>
+      _request(
+        method: 'GET',
+        path: '/auth/device/recovery/$recoveryId'
+            '?device_id=${Uri.encodeQueryComponent(deviceId)}',
+        requiresAuth: false,
+      );
+
+  static Future<Map<String, dynamic>> completeDeviceRecovery({
+    required String recoveryId,
+    required String deviceId,
+  }) =>
+      _request(
+        method: 'POST',
+        path: '/auth/device/recovery/complete',
+        body: {'recovery_id': recoveryId, 'device_id': deviceId},
         requiresAuth: false,
       );
 
@@ -572,8 +821,9 @@ class ApiService {
     required String token,
   }) =>
       _request(
-        method: 'GET',
-        path: '/auth/verify-email/$token',
+        method: 'POST',
+        path: '/auth/verify-email',
+        body: {'token': token},
         requiresAuth: false,
       );
 
@@ -597,7 +847,74 @@ class ApiService {
       _request(method: 'GET', path: '/wallet', timeoutSeconds: timeoutSeconds);
 
   /// Return last cached response for a given path, if any.
-  static Map<String, dynamic>? getCached(String path) => _cache[path];
+  ///
+  /// Falls back to the persisted offline copy from a previous app session
+  /// (display only; money actions must call the API for a fresh balance).
+  static Map<String, dynamic>? getCached(String path) =>
+      _cache[path] ?? OfflineCache.readMap('api:$path');
+
+  /// Read-only screens worth showing instantly on the next launch.
+  static bool _persistable(String path) =>
+      path == '/wallet' ||
+      path == '/users/me' ||
+      path.startsWith('/analytics/growth-history');
+
+  /// Nest validation errors arrive as `message: ["field must be ..."]`.
+  static String _apiMessage(dynamic decoded, String raw) {
+    if (decoded is Map) {
+      final message = decoded['message'];
+      if (message is String && message.trim().isNotEmpty) return message.trim();
+      if (message is List) {
+        final joined = message
+            .map((part) => '$part'.trim())
+            .where((part) => part.isNotEmpty)
+            .join(' ');
+        if (joined.isNotEmpty) return joined;
+      }
+    }
+    return raw;
+  }
+
+  /// Drop cached reads for the resource that was just written, plus the
+  /// wallet and notification lists when money moved. Other screens keep
+  /// their cache.
+  static void _invalidateAfterWrite(String path) {
+    final root = path.split('?').first;
+    final parts = root.split('/').where((part) => part.isNotEmpty).toList();
+    final head = parts.isEmpty ? '' : '/${parts.first}';
+    bool related(String key) {
+      final clean = key.split('?').first;
+      if (clean == root || clean.startsWith('$root/')) return true;
+      if (head.isNotEmpty && (clean == head || clean.startsWith('$head/'))) {
+        return true;
+      }
+      return false;
+    }
+
+    _cache.removeWhere((key, _) => related(key));
+    const moneyHeads = {
+      '/wallet',
+      '/withdraw',
+      '/pay',
+      '/business',
+      '/escrow',
+      '/nfc-pay',
+      '/marketplace',
+      '/investments',
+      '/travel',
+      '/agent-payments',
+      '/ai',
+      '/payment-requests',
+      '/transfer-requests',
+      '/qr',
+    };
+    if (moneyHeads.contains(head)) {
+      _cache.remove('/wallet');
+      _cache.removeWhere((key, _) =>
+          key.split('?').first.startsWith('/wallet/') ||
+          key.split('?').first.startsWith('/notifications'));
+    }
+  }
 
   static void invalidateCache([String? path]) {
     if (path == null) {
@@ -861,57 +1178,24 @@ class ApiService {
         useUnversionedApi: true,
       );
 
-  static Future<Map<String, dynamic>> submitKyc({
-    required String documentType,
-    required String frontImageUrl,
-    String? backImageUrl,
-    required String selfieImageUrl,
-    String? addressDocumentUrl,
-    String? documentNumber,
-    String? firstName,
-    String? lastName,
-    String? dateOfBirth,
-    String? phoneNumber,
-    String? email,
-    String? country,
-    String? state,
-    String? city,
-    String? address,
-    String? postalCode,
-    String? gender,
-    String? nationality,
-  }) =>
-      _request(
+  // ── KYB (Didit business verification) ─────────────────────────────────────
+  /// Returns `{url, session_id}`. 503 when the backend has no KYB workflow.
+  static Future<Map<String, dynamic>> createDiditKybSession() => _request(
         method: 'POST',
-        path: '/kyc/submit',
-        body: {
-          'document_type': documentType,
-          'front_image_url': frontImageUrl,
-          if (backImageUrl != null) 'back_image_url': backImageUrl,
-          'selfie_image_url': selfieImageUrl,
-          if (addressDocumentUrl != null)
-            'address_document_url': addressDocumentUrl,
-          if (documentNumber != null && documentNumber.isNotEmpty)
-            'document_number': documentNumber,
-          if (firstName != null && firstName.isNotEmpty)
-            'first_name': firstName,
-          if (lastName != null && lastName.isNotEmpty) 'last_name': lastName,
-          if (dateOfBirth != null && dateOfBirth.isNotEmpty)
-            'date_of_birth': dateOfBirth,
-          if (phoneNumber != null && phoneNumber.isNotEmpty)
-            'phone_number': phoneNumber,
-          if (email != null && email.isNotEmpty) 'email': email,
-          if (country != null && country.isNotEmpty) 'country': country,
-          if (state != null && state.isNotEmpty) 'state': state,
-          if (city != null && city.isNotEmpty) 'city': city,
-          if (address != null && address.isNotEmpty) 'address': address,
-          if (postalCode != null && postalCode.isNotEmpty)
-            'postal_code': postalCode,
-          if (gender != null && gender.isNotEmpty) 'gender': gender,
-          if (nationality != null && nationality.isNotEmpty)
-            'nationality': nationality,
-        },
+        path: '/verify/business/create-session',
+        body: const {},
+        timeoutSeconds: 20,
+        useUnversionedApi: true,
       );
+
+  /// Returns `{data: {configured, status, entity_status, ...}}`.
+  static Future<Map<String, dynamic>> getDiditKybStatus() => _request(
+        method: 'GET',
+        path: '/verify/business/status',
+        useUnversionedApi: true,
+      );
+
+  // Manual KYC submission (/kyc/submit) was removed: KYC is Didit-only.
 
   static Future<Map<String, dynamic>> getMyKyc() =>
       _request(method: 'GET', path: '/kyc/my');

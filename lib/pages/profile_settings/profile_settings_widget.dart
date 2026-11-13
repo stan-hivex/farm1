@@ -1,3 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import '/pages/security/sessions_page.dart';
+import '/pages/security/change_password_page.dart';
+import '/pages/verify_email_page/verify_email_page_widget.dart';
+import '/pages/devices/trusted_devices_page.dart';
 import 'dart:async';
 
 import '/backend/services/api_service.dart';
@@ -9,6 +14,7 @@ import '/services/app_session_manager.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/services/biometric_lock_service.dart';
+import '/services/payment_confirm.dart';
 import '/pages/settings/delete_account_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -19,6 +25,10 @@ import '/pages/forgot_pin_page/forgot_pin_page_widget.dart';
 import '/widgets/common/back_chevron.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_settings_model.dart';
+import '/pages/chain_wallet/wallet_address_page.dart';
+import '/pages/travel/travel_pages.dart';
+import '/pages/agent_payments/agent_payments_pages.dart';
+import '/utils/user_error_message.dart';
 export 'profile_settings_model.dart';
 
 class ProfileSettingsWidget extends StatefulWidget {
@@ -122,7 +132,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      fetchProfile();
+      unawaited(fetchProfile(forceAuthRefresh: true));
       fetchSecuritySettings();
     }
   }
@@ -142,7 +152,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
     });
   }
 
-  Future<void> fetchProfile() async {
+  Future<void> fetchProfile({bool forceAuthRefresh = false}) async {
     if (!mounted) return;
     setState(() {
       isProfileLoading = true;
@@ -153,6 +163,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
         profileTimeoutSeconds: 5,
         walletTimeoutSeconds: 5,
         transactionsTimeoutSeconds: 4,
+        forceAuthRefresh: forceAuthRefresh,
       );
 
       if (!mounted) return;
@@ -267,8 +278,8 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                               (profileImage.isNotEmpty)
                                   ? ClipRRect(
                                       borderRadius: BorderRadius.circular(100),
-                                      child: Image.network(
-                                        profileImage,
+                                      child: CachedNetworkImage(
+                                        imageUrl: profileImage,
                                         width: 80,
                                         height: 80,
                                         fit: BoxFit.cover,
@@ -523,7 +534,12 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                 child: GestureDetector(
                                   onTap: _isKycApproved
                                       ? null
-                                      : () => context.pushNamed('KYCPAGE'),
+                                      : () => context.pushNamed(
+                                          'KYCPAGE',
+                                          queryParameters: const {
+                                            'startDidit': 'true',
+                                          },
+                                        ),
                                   child: ProfileInfoTileWidget(
                                     icon: Icon(
                                       Icons.fingerprint_rounded,
@@ -671,6 +687,47 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           ],
                                         ),
                                       ),
+                                      const Spacer(),
+                                      Icon(
+                                        Icons.chevron_right,
+                                        color: context.background,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // TRUSTED DEVICES
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const TrustedDevicesPage(),
+                                    ),
+                                  );
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: context.primaryColor,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.devices_outlined,
+                                        color: context.background,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        'Trusted devices',
+                                        style: TextStyle(
+                                          color: context.background,
+                                        ),
+                                      ),
                                       Icon(
                                         Icons.chevron_right_rounded,
                                         color: FlutterFlowTheme.of(context)
@@ -779,8 +836,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                       BiometricLockService();
                                   try {
                                     if (value) {
-                                      final ok = await biometricLockService
-                                          .enableBiometrics();
+                                      final ok = await turnOnPaymentBiometrics(context);
                                       if (ok) {
                                         setState(() {
                                           biometricsEnabled = true;
@@ -819,7 +875,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                       debugPrint(stack.toString());
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
-                                        SnackBar(content: Text(e.toString())),
+                                        SnackBar(content: Text(userErrorMessage(e))),
                                       );
                                     }
                                   }
@@ -870,6 +926,99 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                           biometricLockTimeoutSeconds),
                                     ),
                                   ),
+                                ),
+                              ),
+                              // RECEIVE ON ALGORAND (ALGO, USDC, FARM)
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const WalletAddressPage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.account_balance_wallet_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Receive on Algorand',
+                                ),
+                              ),
+                              // CHANGE PASSWORD
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const ChangePasswordPage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.lock_reset_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Change password',
+                                ),
+                              ),
+                              // VERIFY EMAIL (only while unverified)
+                              if (!FFAppState().emailVerified &&
+                                  FFAppState().email.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () {
+                                    Navigator.of(context).push(MaterialPageRoute(
+                                        builder: (_) =>
+                                            const VerifyEmailPageWidget()));
+                                  },
+                                  child: SettingsActionTileWidget(
+                                    icon: Icon(
+                                      Icons.mark_email_unread_outlined,
+                                      color: FlutterFlowTheme.of(context)
+                                          .primaryText,
+                                    ),
+                                    label: 'Verify email',
+                                  ),
+                                ),
+                              // DEVICES & SESSIONS
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const SessionsPage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.devices_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Devices & login history',
+                                ),
+                              ),
+                              // TRAVEL
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const TravelHomePage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.flight_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Travel',
+                                ),
+                              ),
+                              // AGENT PAYMENTS
+                              GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                      builder: (_) => const AgentPaymentsHomePage()));
+                                },
+                                child: SettingsActionTileWidget(
+                                  icon: Icon(
+                                    Icons.verified_user_outlined,
+                                    color: FlutterFlowTheme.of(context)
+                                        .primaryText,
+                                  ),
+                                  label: 'Agent payments',
                                 ),
                               ),
                               // NOTIFICATIONS

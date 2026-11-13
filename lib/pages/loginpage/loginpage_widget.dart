@@ -1,19 +1,27 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import '/core/app_config.dart';
+import '/core/african_phone_countries.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
 import 'package:flutter/material.dart';
+import '/components/brand_logo.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'loginpage_model.dart';
 export 'loginpage_model.dart';
+export '/core/african_phone_countries.dart' show kDefaultLoginCountry, kAfricanPhoneCountries;
 import '/admin/pages/admin_shell.dart';
 import '/pages/superadmin/superadmin_dashboard_page.dart';
 import '/services/auth/auth_service.dart';
 import '/services/auth/biometric_login_service.dart';
+import '/services/auth/biometric_reauth.dart';
+import '/services/biometric_lock_service.dart';
 import '/services/auth/session_store_service.dart';
 import '/pages/forgot_password_page/forgot_password_page_widget.dart';
 import '/pages/otppage/otppage_widget.dart';
+import '/pages/devices/new_device_page.dart';
+import '/services/auth/device_identity.dart';
 
 /// Create a premium black and white fintech login page for FARM App.
 ///
@@ -45,79 +53,12 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
   bool isLoading = false;
   bool _biometricAvailable = false;
   String _biometricButtonLabel = 'Login with Biometric';
-  Map<String, String> _selectedCountry = {
-    'name': 'Algeria',
-    'iso': 'DZ',
-    'code': '+213',
-    'flag': '🇩🇿',
-  };
+  // Kenya is the primary market; users can still pick any country.
+  Map<String, String> _selectedCountry = Map.of(kDefaultLoginCountry);
 
-  final List<Map<String, String>> _africanCountries = [
-    {'name': 'Algeria', 'iso': 'DZ', 'code': '+213', 'flag': '🇩🇿'},
-    {'name': 'Angola', 'iso': 'AO', 'code': '+244', 'flag': '🇦🇴'},
-    {'name': 'Benin', 'iso': 'BJ', 'code': '+229', 'flag': '🇧🇯'},
-    {'name': 'Botswana', 'iso': 'BW', 'code': '+267', 'flag': '🇧🇼'},
-    {'name': 'Burkina Faso', 'iso': 'BF', 'code': '+226', 'flag': '🇧🇫'},
-    {'name': 'Burundi', 'iso': 'BI', 'code': '+257', 'flag': '🇧🇮'},
-    {'name': 'Cabo Verde', 'iso': 'CV', 'code': '+238', 'flag': '🇨🇻'},
-    {'name': 'Cameroon', 'iso': 'CM', 'code': '+237', 'flag': '🇨🇲'},
-    {
-      'name': 'Central African Republic',
-      'iso': 'CF',
-      'code': '+236',
-      'flag': '🇨🇫'
-    },
-    {'name': 'Chad', 'iso': 'TD', 'code': '+235', 'flag': '🇹🇩'},
-    {'name': 'Comoros', 'iso': 'KM', 'code': '+269', 'flag': '🇰🇲'},
-    {'name': 'Congo', 'iso': 'CG', 'code': '+242', 'flag': '🇨🇬'},
-    {'name': 'DR Congo', 'iso': 'CD', 'code': '+243', 'flag': '🇨🇩'},
-    {'name': 'Cote d\'Ivoire', 'iso': 'CI', 'code': '+225', 'flag': '🇨🇮'},
-    {'name': 'Djibouti', 'iso': 'DJ', 'code': '+253', 'flag': '🇩🇯'},
-    {'name': 'Egypt', 'iso': 'EG', 'code': '+20', 'flag': '🇪🇬'},
-    {'name': 'Equatorial Guinea', 'iso': 'GQ', 'code': '+240', 'flag': '🇬🇶'},
-    {'name': 'Eritrea', 'iso': 'ER', 'code': '+291', 'flag': '🇪🇷'},
-    {'name': 'Eswatini', 'iso': 'SZ', 'code': '+268', 'flag': '🇸🇿'},
-    {'name': 'Ethiopia', 'iso': 'ET', 'code': '+251', 'flag': '🇪🇹'},
-    {'name': 'Gabon', 'iso': 'GA', 'code': '+241', 'flag': '🇬🇦'},
-    {'name': 'Gambia', 'iso': 'GM', 'code': '+220', 'flag': '🇬🇲'},
-    {'name': 'Ghana', 'iso': 'GH', 'code': '+233', 'flag': '🇬🇭'},
-    {'name': 'Guinea', 'iso': 'GN', 'code': '+224', 'flag': '🇬🇳'},
-    {'name': 'Guinea-Bissau', 'iso': 'GW', 'code': '+245', 'flag': '🇬🇼'},
-    {'name': 'Kenya', 'iso': 'KE', 'code': '+254', 'flag': '🇰🇪'},
-    {'name': 'Lesotho', 'iso': 'LS', 'code': '+266', 'flag': '🇱🇸'},
-    {'name': 'Liberia', 'iso': 'LR', 'code': '+231', 'flag': '🇱🇷'},
-    {'name': 'Libya', 'iso': 'LY', 'code': '+218', 'flag': '🇱🇾'},
-    {'name': 'Madagascar', 'iso': 'MG', 'code': '+261', 'flag': '🇲🇬'},
-    {'name': 'Malawi', 'iso': 'MW', 'code': '+265', 'flag': '🇲🇼'},
-    {'name': 'Mali', 'iso': 'ML', 'code': '+223', 'flag': '🇲🇱'},
-    {'name': 'Mauritania', 'iso': 'MR', 'code': '+222', 'flag': '🇲🇷'},
-    {'name': 'Mauritius', 'iso': 'MU', 'code': '+230', 'flag': '🇲🇺'},
-    {'name': 'Morocco', 'iso': 'MA', 'code': '+212', 'flag': '🇲🇦'},
-    {'name': 'Mozambique', 'iso': 'MZ', 'code': '+258', 'flag': '🇲🇿'},
-    {'name': 'Namibia', 'iso': 'NA', 'code': '+264', 'flag': '🇳🇦'},
-    {'name': 'Niger', 'iso': 'NE', 'code': '+227', 'flag': '🇳🇪'},
-    {'name': 'Nigeria', 'iso': 'NG', 'code': '+234', 'flag': '🇳🇬'},
-    {'name': 'Rwanda', 'iso': 'RW', 'code': '+250', 'flag': '🇷🇼'},
-    {
-      'name': 'Sao Tome and Principe',
-      'iso': 'ST',
-      'code': '+239',
-      'flag': '🇸🇹'
-    },
-    {'name': 'Senegal', 'iso': 'SN', 'code': '+221', 'flag': '🇸🇳'},
-    {'name': 'Seychelles', 'iso': 'SC', 'code': '+248', 'flag': '🇸🇨'},
-    {'name': 'Sierra Leone', 'iso': 'SL', 'code': '+232', 'flag': '🇸🇱'},
-    {'name': 'Somalia', 'iso': 'SO', 'code': '+252', 'flag': '🇸🇴'},
-    {'name': 'South Africa', 'iso': 'ZA', 'code': '+27', 'flag': '🇿🇦'},
-    {'name': 'South Sudan', 'iso': 'SS', 'code': '+211', 'flag': '🇸🇸'},
-    {'name': 'Sudan', 'iso': 'SD', 'code': '+249', 'flag': '🇸🇩'},
-    {'name': 'Tanzania', 'iso': 'TZ', 'code': '+255', 'flag': '🇹🇿'},
-    {'name': 'Togo', 'iso': 'TG', 'code': '+228', 'flag': '🇹🇬'},
-    {'name': 'Tunisia', 'iso': 'TN', 'code': '+216', 'flag': '🇹🇳'},
-    {'name': 'Uganda', 'iso': 'UG', 'code': '+256', 'flag': '🇺🇬'},
-    {'name': 'Zambia', 'iso': 'ZM', 'code': '+260', 'flag': '🇿🇲'},
-    {'name': 'Zimbabwe', 'iso': 'ZW', 'code': '+263', 'flag': '🇿🇼'},
-  ];
+  final List<Map<String, String>> _africanCountries = kAfricanPhoneCountries;
+
+
 
   final String baseUrl = '${AppConfig.api}/auth';
 
@@ -305,6 +246,23 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
           throw Exception(
               'Unable to start phone verification. Please try again.');
         }
+        if (FFAppState().biometricsEnabled && mounted) {
+          try {
+            final unlocked = await BiometricLockService().authenticate(
+              localizedReason:
+                  'Unlock FARM with biometrics instead of an SMS code.',
+            );
+            if (unlocked) {
+              final renewed = await BiometricReauth.exchange();
+              if (renewed != null && mounted) {
+                await _finalizeSuccessfulLogin(renewed);
+                return;
+              }
+            }
+          } catch (e) {
+            debugPrint('[Login] Biometric re-auth unavailable, using SMS: $e');
+          }
+        }
         if (!mounted) return;
         context.go(
           '${OtppageWidget.routePath}?pendingLoginId=${Uri.encodeComponent(pendingLoginId)}&phone=${Uri.encodeComponent(verifiedPhone)}&countryCode=${Uri.encodeComponent(_selectedCountry['code'] ?? '')}',
@@ -313,6 +271,20 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
       }
 
       await _finalizeSuccessfulLogin(response);
+    } on NewDeviceRequiredException catch (e) {
+      if (!mounted) return;
+      setState(() => isLoading = false);
+      final approved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => NewDevicePage(pendingDeviceId: e.pendingDeviceId),
+        ),
+      );
+      // Approved on the trusted phone or recovered: sign in again; this
+      // phone is now trusted, so the signed challenge passes.
+      if (approved == true && mounted) {
+        await handleLogin();
+      }
+      return;
     } catch (e) {
       if (mounted) {
         final errorMsg = e.toString();
@@ -479,57 +451,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Container(
-                      width: 72.0,
-                      height: 72.0,
-                      decoration: BoxDecoration(
-                        color: FlutterFlowTheme.of(context).primaryText,
-                        borderRadius: BorderRadius.circular(24.0),
-                      ),
-                      alignment: const AlignmentDirectional(0.0, 0.0),
-                      child: SizedBox(
-                        width: 40.0,
-                        height: 50.0,
-                        child: Stack(
-                          alignment: const AlignmentDirectional(-1.0, -1.0),
-                          children: [
-                            Align(
-                              alignment: const AlignmentDirectional(0.0, 0.0),
-                              child: Container(
-                                width: 6.0,
-                                height: 50.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                  borderRadius: BorderRadius.circular(2.0),
-                                ),
-                              ),
-                            ),
-                            Align(
-                              alignment: const AlignmentDirectional(-1.0, -0.6),
-                              child: Container(
-                                width: 24.0,
-                                height: 6.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                  borderRadius: BorderRadius.circular(2.0),
-                                ),
-                              ),
-                            ),
-                            Align(
-                              alignment: const AlignmentDirectional(-1.0, 0.0),
-                              child: Container(
-                                width: 18.0,
-                                height: 6.0,
-                                decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context).onPrimary,
-                                  borderRadius: BorderRadius.circular(2.0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    const BrandLogo(size: 72.0),
                     const SizedBox(height: 16.0),
                     Text(
                       'FARM',
@@ -802,12 +724,10 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         width: double.infinity,
                         height: 56.0,
                         padding: const EdgeInsets.symmetric(vertical: 0.0),
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF1F1F1F)
-                            : FlutterFlowTheme.of(context).primary,
+                        color: AppTheme.accent,
                         textStyle:
                             FlutterFlowTheme.of(context).titleSmall.override(
-                                  color: Colors.white,
+                                  color: AppTheme.onAccent,
                                   fontWeight: FontWeight.w600,
                                 ),
                         borderSide: const BorderSide(

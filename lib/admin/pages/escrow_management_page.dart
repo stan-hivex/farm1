@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '/admin/widgets/admin_ui.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/core/theme_extensions.dart';
@@ -70,19 +72,19 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
         backgroundColor: Colors.white,
         title: Text('Resolve Dispute — $outcome',
             style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold, color: context.onSurface)),
+                fontWeight: FontWeight.bold, color: AdminColors.text)),
         content: TextField(
           controller: ctrl,
-          style: TextStyle(color: context.onSurface),
+          style: TextStyle(color: AdminColors.text),
           decoration: InputDecoration(
               hintText: 'Resolution note...',
-              hintStyle: TextStyle(color: context.onSurface.withOpacity(0.54)),
+              hintStyle: TextStyle(color: AdminColors.textSecondary),
               border: OutlineInputBorder(
                   borderSide:
-                      BorderSide(color: context.onSurface.withOpacity(0.1))),
+                      BorderSide(color: AdminColors.border)),
               enabledBorder: OutlineInputBorder(
                   borderSide:
-                      BorderSide(color: context.onSurface.withOpacity(0.1)))),
+                      BorderSide(color: AdminColors.border))),
           maxLines: 3,
         ),
         actions: [
@@ -90,10 +92,11 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
               onPressed: () => Navigator.pop(context),
               child: Text('Cancel',
                   style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withOpacity(0.7)))),
+                      color: AdminColors.textSecondary))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF90CAF9)),
+  foregroundColor: AppTheme.onAccent,
+                backgroundColor: AppTheme.accent),
             onPressed: () async {
               Navigator.pop(context);
               try {
@@ -112,7 +115,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
             },
             child: Text('Confirm',
                 style: GoogleFonts.plusJakartaSans(
-                    color: context.onBackground.withOpacity(0.87))),
+                    color: AppTheme.onAccent)),
           ),
         ],
       ),
@@ -128,15 +131,15 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
   Color _escrowColor(String? s) {
     switch (s) {
       case 'active':
-        return Colors.blue;
+        return AdminColors.info;
       case 'completed':
-        return context.successColor;
+        return AdminColors.success;
       case 'disputed':
-        return context.errorColor;
+        return AdminColors.error;
       case 'refunded':
-        return context.warningColor;
+        return AdminColors.warning;
       default:
-        return context.textSecondary;
+        return AdminColors.textSecondary;
     }
   }
 
@@ -144,7 +147,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
   Widget build(BuildContext context) {
     final bgColor = Colors.white;
     final cardColor = Colors.white;
-    final accent = const Color(0xFFEAF2FF);
+    final accent = AppTheme.accentOn(bgColor);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -181,7 +184,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                               child: Text('No escrow contracts',
                                   style: GoogleFonts.plusJakartaSans(
                                       color:
-                                          context.onSurface.withOpacity(0.6))))
+                                          AdminColors.textSecondary)))
                           : ListView.builder(
                               padding: const EdgeInsets.all(20),
                               itemCount: _escrows
@@ -216,10 +219,8 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
                 controller: _searchController,
-                decoration: const InputDecoration(
-                    hintText: 'Search username, escrow ID or reference',
-                    prefixIcon: Icon(Icons.search_rounded),
-                    border: OutlineInputBorder()),
+                style: const TextStyle(color: AdminColors.text),
+                decoration: adminSearchDecoration('Search username, escrow ID or reference'),
                 onChanged: (value) => setState(() => _search = value))),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -239,12 +240,12 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                       style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
-                          color: _filter == f ? Colors.white : Colors.black)),
+                          color: _filter == f ? AppTheme.onAccent : Colors.black)),
                   selected: _filter == f,
-                  selectedColor: _filter == f ? Colors.black : Colors.white,
-                  backgroundColor: _filter == f ? Colors.black : Colors.white,
+                  selectedColor: AppTheme.accent,
+                  backgroundColor: Colors.white,
                   side: BorderSide(
-                      color: _filter == f ? Colors.black : Colors.black54,
+                      color: _filter == f ? AppTheme.accent : Colors.black54,
                       width: 1),
                   onSelected: (_) {
                     setState(() {
@@ -329,7 +330,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
             ? Border.all(
                 color: context.errorColor.withAlpha((0.4 * 255).round()),
                 width: 1.5)
-            : Border.all(color: context.onSurface.withOpacity(0.1)),
+            : Border.all(color: AdminColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -344,7 +345,8 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-                color: color.withAlpha((0.16 * 255).round()),
+                color: color.withAlpha((0.10 * 255).round()),
+                border: Border.all(color: color.withValues(alpha: 0.55)),
                 borderRadius: BorderRadius.circular(8)),
             child: Text((e['status'] ?? '').toUpperCase(),
                 style: GoogleFonts.plusJakartaSans(
@@ -352,10 +354,10 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
           ),
         ]),
         const SizedBox(height: 12),
-        _escrowDetail('Escrow ID', e['id']?.toString() ?? '-'),
+        _escrowDetail('Escrow ID', shortId(e['id'] ?? '-')),
         _escrowDetail('Description', description),
         _escrowDetail('Amount',
-            '${double.tryParse(e['amount']?.toString() ?? '0')?.toStringAsFixed(2)} FARM'),
+            '${formatFarmAmount(e['amount'])} FARM'),
         _escrowDetail('Buyer', buyerLabel),
         _escrowDetail('Seller', sellerLabel),
         _escrowDetail('Created', createdAt),
@@ -389,7 +391,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                       ? 'Reported by $disputedBy: $disputeReason'
                       : 'This escrow is in dispute and requires admin resolution.',
                   style: GoogleFonts.plusJakartaSans(
-                      color: context.onSurface.withOpacity(0.8), fontSize: 12)),
+                      color: AdminColors.textSecondary, fontSize: 12)),
               if (attachmentUrl != null && attachmentUrl.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 _disputeAttachment(attachmentUrl, attachmentMimeType),
@@ -508,7 +510,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                 return Container(
                   width: 260,
                   height: 190,
-                  color: context.onSurface.withOpacity(0.06),
+                  color: AdminColors.textSecondary,
                   alignment: Alignment.center,
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
@@ -548,9 +550,9 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
         constraints: const BoxConstraints(minHeight: 150),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: context.onSurface.withOpacity(0.06),
+          color: AdminColors.textSecondary,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: context.onSurface.withOpacity(0.12)),
+          border: Border.all(color: AdminColors.border),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -562,7 +564,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.onSurface.withOpacity(0.65)),
+              style: TextStyle(color: AdminColors.textSecondary),
             ),
           ],
         ),
@@ -614,7 +616,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
               child: Text(
                 label,
                 style: GoogleFonts.plusJakartaSans(
-                  color: context.onSurface.withOpacity(0.54),
+                  color: AdminColors.textSecondary,
                   fontSize: 12,
                 ),
               ),
@@ -623,7 +625,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
               child: SelectableText(
                 value,
                 style: GoogleFonts.plusJakartaSans(
-                  color: context.onSurface,
+                  color: AdminColors.text,
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
                 ),

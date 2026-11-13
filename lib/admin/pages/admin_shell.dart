@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '/admin/widgets/admin_ui.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '/core/app_theme.dart';
 import '/core/theme_extensions.dart';
@@ -13,7 +14,10 @@ import 'deposits_management_page.dart';
 import 'withdrawals_management_page.dart';
 import 'notifications_management_page.dart';
 import 'merchant_kyb_management_page.dart';
+import 'business_review_page.dart';
 import 'payouts_page.dart';
+import 'travel_review_page.dart';
+import 'monitoring_pages.dart';
 import '../services/admin_api_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
@@ -96,6 +100,11 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     _NavItem(icon: Icons.campaign_rounded, label: 'Notifications'),
     _NavItem(icon: Icons.support_agent_rounded, label: 'Live Support'),
     _NavItem(icon: Icons.badge_rounded, label: 'Merchant KYB'),
+    _NavItem(icon: Icons.business_rounded, label: 'Business KYB'),
+    _NavItem(icon: Icons.flight_rounded, label: 'Travel review'),
+    _NavItem(icon: Icons.agriculture_rounded, label: 'Projects'),
+    _NavItem(icon: Icons.token_rounded, label: 'Tokenization'),
+    _NavItem(icon: Icons.monitor_heart_rounded, label: 'Payments monitor'),
   ];
 
   void _goToDashboard() {
@@ -116,6 +125,11 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
         NotificationsManagementPage(onGoBack: _goToDashboard),
         SupportInboxPage(onGoBack: _goToDashboard),
         MerchantKybManagementPage(onGoBack: _goToDashboard),
+        BusinessReviewPage(onGoBack: _goToDashboard),
+        TravelReviewPage(onGoBack: _goToDashboard),
+        ProjectsReviewPage(onGoBack: _goToDashboard),
+        TokenizationReviewPage(onGoBack: _goToDashboard),
+        PaymentsMonitorPage(onGoBack: _goToDashboard),
       ];
 
   Widget _buildCurrentPage() {
@@ -213,24 +227,22 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? context.onSurface.withOpacity(0.12)
-                          : Colors.transparent,
+                      color: selected ? AppTheme.accent : Colors.transparent,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         Icon(item.icon,
                             color: selected
-                                ? context.onSurface
-                                : context.onSurface.withOpacity(0.38),
+                                ? AppTheme.onAccent
+                                : AdminColors.textSecondary,
                             size: 20),
                         const SizedBox(width: 12),
                         Text(item.label,
                             style: GoogleFonts.plusJakartaSans(
                               color: selected
-                                  ? context.onSurface
-                                  : context.onSurface.withOpacity(0.54),
+                                  ? AppTheme.onAccent
+                                  : AdminColors.textSecondary,
                               fontWeight: selected
                                   ? FontWeight.w600
                                   : FontWeight.normal,
@@ -280,7 +292,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
       padding: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+        border: Border(bottom: BorderSide(color: AdminColors.border)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -289,8 +301,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
             Text('FARM Admin',
                 style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: context.onSurface)),
+                    fontSize: 17,
+                    color: AdminColors.text)),
           if (isWide)
             Text(_navItems[_selectedIndex].label,
                 style: GoogleFonts.plusJakartaSans(
@@ -298,8 +310,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                     fontSize: 18,
                     color: context.onSurface)),
           Row(children: [
-            Icon(Icons.notifications_none_rounded,
-                color: context.onSurface.withOpacity(0.7)),
+            const Icon(Icons.notifications_none_rounded,
+                color: AdminColors.text),
             const SizedBox(width: 12),
             GestureDetector(
               onTap: _logout,
@@ -309,7 +321,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.grey.shade300, width: 1),
+                  border: Border.all(color: AdminColors.text, width: 1),
                 ),
                 child: Row(
                   children: [
@@ -336,8 +348,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                   color: Color(0xFF0A0F18), shape: BoxShape.circle),
               child: Center(
                   child: Text('AD',
-                      style: TextStyle(
-                          color: context.onSurface,
+                      style: const TextStyle(
+                          color: Colors.white,
                           fontSize: 12,
                           fontWeight: FontWeight.bold))),
             ),
@@ -351,7 +363,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey.shade300)),
+        border: Border(top: BorderSide(color: AdminColors.border)),
       ),
       child: SafeArea(
         top: false,
@@ -372,9 +384,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                     decoration: BoxDecoration(
-                      color: selected
-                          ? const Color(0xFFEAF2FF)
-                          : Colors.transparent,
+                      color: selected ? AppTheme.accent : Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
@@ -384,8 +394,8 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                           item.icon,
                           size: 18,
                           color: selected
-                              ? const Color(0xFF0D47A1)
-                              : context.onSurface.withOpacity(0.64),
+                              ? AppTheme.onAccent
+                              : AdminColors.textSecondary,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -394,12 +404,12 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
+                            fontSize: 11,
                             fontWeight:
-                                selected ? FontWeight.w700 : FontWeight.w500,
+                                selected ? FontWeight.w800 : FontWeight.w600,
                             color: selected
-                                ? const Color(0xFF0D47A1)
-                                : context.onSurface.withOpacity(0.7),
+                                ? AppTheme.onAccent
+                                : AdminColors.textSecondary,
                           ),
                         ),
                       ],

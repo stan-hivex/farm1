@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '/admin/widgets/admin_ui.dart';
+import '/core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '/core/theme_extensions.dart';
 import '../services/admin_api_service.dart';
 import '../services/admin_page_refresh_coordinator.dart';
 import '/services/transaction_receipt_service.dart';
 import '/widgets/common/transaction_receipt_selection_bar.dart';
+import '/utils/user_error_message.dart';
 
 class TransactionsManagementPage extends StatefulWidget {
   final VoidCallback? onGoBack;
@@ -83,7 +85,7 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not share receipts: $error')),
+        SnackBar(content: Text('Could not share receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -104,7 +106,7 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save receipts: $error')),
+        SnackBar(content: Text('Could not save receipts: ${userErrorMessage(error)}')),
       );
     }
   }
@@ -112,15 +114,15 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
   Color _statusColor(String? s) {
     switch (s) {
       case 'completed':
-        return context.successColor;
+        return AdminColors.success;
       case 'pending':
-        return context.warningColor;
+        return AdminColors.warning;
       case 'failed':
-        return context.errorColor;
+        return AdminColors.error;
       case 'processing':
-        return Colors.blue;
+        return AdminColors.info;
       default:
-        return context.textSecondary;
+        return AdminColors.textSecondary;
     }
   }
 
@@ -142,7 +144,7 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
   Widget build(BuildContext context) {
     final bgColor = Colors.white;
     final cardColor = Colors.white;
-    final accent = const Color(0xFFEAF2FF);
+    final accent = AppTheme.accentOn(bgColor);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -221,7 +223,7 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                                     Text('$_page / $last',
                                         style: GoogleFonts.plusJakartaSans(
                                             fontWeight: FontWeight.bold,
-                                            color: context.onSurface)),
+                                            color: AdminColors.text)),
                                     TextButton(
                                         onPressed: _page < last
                                             ? () {
@@ -268,7 +270,7 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                               (t['transaction_reference'] ?? t['id'] ?? '-')
                                   .toString();
                           final amountLabel = t['amount_display']?.toString() ??
-                              '${double.tryParse(t['amount']?.toString() ?? '0')?.toStringAsFixed(2) ?? '0.00'} FARM';
+                              '${formatFarmAmount(t['amount'])} FARM';
                           final statusLabel =
                               (t['status_display'] ?? t['status'] ?? '-')
                                   .toString()
@@ -298,7 +300,7 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                                 color: cardColor,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                    color: context.onSurface.withOpacity(0.1)),
+                                    color: AdminColors.border),
                               ),
                               child: Row(children: [
                                 if (_selectedTransactions.isNotEmpty)
@@ -332,60 +334,51 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                                           style: GoogleFonts.plusJakartaSans(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 13,
-                                              color: context.onSurface)),
+                                              color: AdminColors.text)),
                                       Text(
                                           'User ID: ${userId.isNotEmpty ? userId : '-'}',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Sender: $senderLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Receiver: $receiverLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('ID: $reference',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Method: $method',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Amount: $amountLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Status: $statusLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Date: $dateLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                       Text('Time: $timeLabel',
                                           style: GoogleFonts.plusJakartaSans(
-                                              color: context.onSurface
-                                                  .withOpacity(0.72),
+                                              color: AdminColors.textSecondary,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600)),
                                     ])),
@@ -400,13 +393,16 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                                             style: GoogleFonts.plusJakartaSans(
                                                 fontWeight: FontWeight.bold,
                                                 fontSize: 13,
-                                                color: context.onSurface)),
+                                                color: AdminColors.text)),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
                                               horizontal: 8, vertical: 2),
                                           decoration: BoxDecoration(
                                               color: color.withAlpha(
-                                                  (0.16 * 255).round()),
+                                                  (0.10 * 255).round()),
+                                              border: Border.all(
+                                                  color: color.withValues(
+                                                      alpha: 0.55)),
                                               borderRadius:
                                                   BorderRadius.circular(6)),
                                           child: Text(statusLabel,
@@ -436,11 +432,9 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search username, user ID, transaction ID',
-                prefixIcon: Icon(Icons.search_rounded),
-                border: OutlineInputBorder(),
-              ),
+              style: const TextStyle(color: AdminColors.text),
+              decoration: adminSearchDecoration(
+                  'Search username, user ID, transaction ID'),
               onChanged: (value) => setState(() {
                 _search = value;
                 _selectedTransactions.clear();
@@ -468,15 +462,13 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: _typeFilter == f
-                                ? Colors.white
+                                ? AppTheme.onAccent
                                 : Colors.black)),
                     selected: _typeFilter == f,
-                    selectedColor:
-                        _typeFilter == f ? Colors.black : Colors.white,
-                    backgroundColor:
-                        _typeFilter == f ? Colors.black : Colors.white,
+                    selectedColor: AppTheme.accent,
+                    backgroundColor: Colors.white,
                     side: BorderSide(
-                        color: _typeFilter == f ? Colors.black : Colors.black54,
+                        color: _typeFilter == f ? AppTheme.accent : Colors.black54,
                         width: 1),
                     onSelected: (_) {
                       setState(() {
@@ -509,16 +501,14 @@ class _TransactionsManagementPageState extends State<TransactionsManagementPage>
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
                             color: _statusFilter == s
-                                ? Colors.white
+                                ? AppTheme.onAccent
                                 : Colors.black)),
                     selected: _statusFilter == s,
-                    selectedColor:
-                        _statusFilter == s ? Colors.black : Colors.white,
-                    backgroundColor:
-                        _statusFilter == s ? Colors.black : Colors.white,
+                    selectedColor: AppTheme.accent,
+                    backgroundColor: Colors.white,
                     side: BorderSide(
                         color:
-                            _statusFilter == s ? Colors.black : Colors.black54,
+                            _statusFilter == s ? AppTheme.accent : Colors.black54,
                         width: 1),
                     onSelected: (_) {
                       setState(() {

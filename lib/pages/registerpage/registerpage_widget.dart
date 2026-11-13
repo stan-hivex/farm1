@@ -5,8 +5,10 @@ import '/backend/services/api_service.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
-import 'package:country_picker/country_picker.dart';
+import '/core/african_phone_countries.dart';
 import 'package:flutter/material.dart';
+import '/components/brand_logo.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'registerpage_model.dart';
 export 'registerpage_model.dart';
@@ -52,9 +54,10 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
 
   final TextEditingController referralController = TextEditingController();
 
-  String _selectedCountry = 'United States';
-  String _selectedCountryIsoCode = 'US';
-  String _selectedCountryCode = '+1';
+  Map<String, String> _selectedCountryMap = Map<String, String>.of(kDefaultLoginCountry);
+  String get _selectedCountry => _selectedCountryMap['name']!;
+  String get _selectedCountryIsoCode => _selectedCountryMap['iso']!;
+  String get _selectedCountryCode => _selectedCountryMap['code']!;
   _RegistrationAvailability _usernameAvailability =
       _RegistrationAvailability.idle;
   _RegistrationAvailability _phoneAvailability = _RegistrationAvailability.idle;
@@ -62,28 +65,15 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
   Timer? _availabilityDebounce;
   int _availabilityRequestId = 0;
 
-  String _flagForCountry(String countryCode) {
-    return String.fromCharCodes(
-      countryCode.codeUnits.map((unit) => unit + 0x1F1A5),
-    );
-  }
-
-  void _showCountryPicker() {
-    showCountryPicker(
-      context: context,
-      showPhoneCode: true,
-      searchAutofocus: true,
-      onSelect: (country) {
-        setState(() {
-          _selectedCountry = country.name;
-          _selectedCountryIsoCode = country.countryCode;
-          _selectedCountryCode = '+${country.phoneCode}';
-          _phoneAvailability = _RegistrationAvailability.idle;
-        });
-        _phoneFieldKey.currentState?.validate();
-        _scheduleAvailabilityCheck();
-      },
-    );
+  Future<void> _showCountryPicker() async {
+    final picked = await showAfricanCountryPicker(context, _selectedCountryMap);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedCountryMap = picked;
+      _phoneAvailability = _RegistrationAvailability.idle;
+    });
+    _phoneFieldKey.currentState?.validate();
+    _scheduleAvailabilityCheck();
   }
 
   void _scheduleAvailabilityCheck() {
@@ -420,62 +410,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                 children: [
                   Column(
                     children: [
-                      Container(
-                        width: 64.0,
-                        height: 64.0,
-                        decoration: BoxDecoration(
-                          color: FlutterFlowTheme.of(context).primaryText,
-                          borderRadius: BorderRadius.circular(16.0),
-                        ),
-                        alignment: const AlignmentDirectional(0.0, 0.0),
-                        child: SizedBox(
-                          width: 40.0,
-                          height: 50.0,
-                          child: Stack(
-                            alignment: const AlignmentDirectional(-1.0, -1.0),
-                            children: [
-                              Align(
-                                alignment: const AlignmentDirectional(0.0, 0.0),
-                                child: Container(
-                                  width: 6.0,
-                                  height: 50.0,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                    borderRadius: BorderRadius.circular(2.0),
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(-1.0, -0.6),
-                                child: Container(
-                                  width: 24.0,
-                                  height: 6.0,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                    borderRadius: BorderRadius.circular(2.0),
-                                  ),
-                                ),
-                              ),
-                              Align(
-                                alignment:
-                                    const AlignmentDirectional(-1.0, 0.0),
-                                child: Container(
-                                  width: 18.0,
-                                  height: 6.0,
-                                  decoration: BoxDecoration(
-                                    color:
-                                        FlutterFlowTheme.of(context).onPrimary,
-                                    borderRadius: BorderRadius.circular(2.0),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                      const BrandLogo(size: 64.0),
                       const SizedBox(height: 16.0),
                       Text(
                         'FARM',
@@ -601,9 +536,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                             ),
                             child: Row(
                               children: [
-                                Text(
-                                  _flagForCountry(_selectedCountryIsoCode),
-                                ),
+                                Text(_selectedCountryMap['flag'] ?? ''),
                                 const SizedBox(width: 6.0),
                                 Expanded(
                                   child: Text(
@@ -788,7 +721,7 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                       ),
                       child: Row(
                         children: [
-                          Text(_flagForCountry(_selectedCountryIsoCode)),
+                          Text(_selectedCountryMap['flag'] ?? ''),
                           const SizedBox(width: 8.0),
                           Expanded(
                             child: Text(
@@ -956,15 +889,13 @@ class _RegisterpageWidgetState extends State<RegisterpageWidget> {
                         0.0,
                         0.0,
                       ),
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? const Color(0xFF1F1F1F)
-                          : FlutterFlowTheme.of(context).primary,
+                      color: AppTheme.accent,
                       textStyle:
                           FlutterFlowTheme.of(context).titleSmall.override(
                                 font: GoogleFonts.interTight(
                                   fontWeight: FontWeight.w600,
                                 ),
-                                color: Colors.white,
+                                color: AppTheme.onAccent,
                                 letterSpacing: 0.0,
                                 fontWeight: FontWeight.w600,
                               ),

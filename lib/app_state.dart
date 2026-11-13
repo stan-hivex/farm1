@@ -1,10 +1,12 @@
 import 'dart:async';
+import '/services/account_context.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'flutter_flow/flutter_flow_theme.dart';
 import 'backend/services/api_service.dart';
 import 'services/auth/session_store_service.dart';
 import 'services/secure_storage_service.dart';
+import 'services/offline_cache.dart';
 
 enum AuthStartupState { initializing, authenticated, unauthenticated }
 
@@ -161,6 +163,9 @@ class FFAppState extends ChangeNotifier {
         : ThemeMode.light;
     if (_role.isEmpty || !_isLoggedIn) {
       _biometricsEnabled = false;
+    } else if (_biometricsEnabled) {
+      // Cold start with biometrics on unlocks locally. It does not go to SMS.
+      _needsBiometricReauth = true;
     }
 
     // Diagnostic auth restore log
@@ -246,6 +251,8 @@ class FFAppState extends ChangeNotifier {
     _userId = value;
     notifyListeners();
     unawaited(SecureStorageService.writeUserId(value));
+    // Offline screen cache is per user.
+    unawaited(OfflineCache.ensureScope(value));
   }
 
   String _firstName = '';
@@ -305,6 +312,16 @@ class FFAppState extends ChangeNotifier {
 
   bool _isLoggedIn = false;
   bool get isLoggedIn => _isLoggedIn;
+
+  /// Set when the server rejects the refresh token. The session stays on the
+  /// device; the user unlocks with biometrics instead of an SMS code.
+  bool _needsBiometricReauth = false;
+  bool get needsBiometricReauth => _needsBiometricReauth;
+  set needsBiometricReauth(bool value) {
+    if (_needsBiometricReauth == value) return;
+    _needsBiometricReauth = value;
+    notifyListeners();
+  }
   set isLoggedIn(bool value) {
     if (_isLoggedIn == value) return;
     _isLoggedIn = value;
@@ -506,6 +523,7 @@ class FFAppState extends ChangeNotifier {
     if (_recentTransactions == value) return;
     _recentTransactions = value;
     notifyListeners();
+    OfflineCache.write('recentTransactions', value);
   }
 
   ThemeMode _themeMode = ThemeMode.light;
@@ -525,11 +543,25 @@ class FFAppState extends ChangeNotifier {
     themeMode = value;
   }
 
+  /// Fills in-memory screen data from the offline cache (after
+  /// [OfflineCache.load]) so the first frame shows the last known values.
+  void hydrateFromOfflineCache() {
+    final tx = OfflineCache.read('recentTransactions');
+    if (tx is List && _recentTransactions.isEmpty) {
+      _recentTransactions = tx
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+  }
+
   Future<void> clearAuthCredentials([String? reason]) async {
     final msg = '[FFAppState] clearAuthCredentials called' +
         (reason != null ? ' reason=$reason' : '');
     debugPrint(msg);
     debugPrint(StackTrace.current.toString());
+    // Next sign-in always starts in the Personal account.
+    unawaited(AccountContext.instance.reset());
     accessToken = '';
     refreshToken = '';
     userId = '';
@@ -543,7 +575,14 @@ class FFAppState extends ChangeNotifier {
     biometricsEnabled = false;
     hasPin = false;
     role = '';
+    walletBalance = 0;
+    kesEquivalent = 0;
+    _recentTransactions = [];
     final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('walletBalance');
+    await prefs.remove('kesEquivalent');
+    // Stale-while-revalidate screen cache belongs to this user only.
+    await OfflineCache.clear();
     await prefs.remove('firstName');
     await prefs.remove('userName');
     await prefs.remove('phone');

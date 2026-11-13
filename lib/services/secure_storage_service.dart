@@ -3,8 +3,23 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SecureStorageService {
-  static final FlutterSecureStorage _secureStorage =
-      const FlutterSecureStorage();
+  /// Keychain / Keystore. `resetOnError` stays off: a transient read after the
+  /// process is swiped away must not delete the refresh token.
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      encryptedSharedPreferences: true,
+      resetOnError: false,
+    ),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+  );
+
+  /// Previous installs stored secrets in the older Android cipher. Read them
+  /// once and copy them forward. Never reset that store on a read error.
+  static const FlutterSecureStorage _legacyStorage = FlutterSecureStorage(
+    aOptions: AndroidOptions(resetOnError: false),
+  );
 
   static Future<String?> _readValue(String key) async {
     if (kIsWeb) {
@@ -12,7 +27,26 @@ class SecureStorageService {
       return prefs.getString(key);
     }
 
-    return _secureStorage.read(key: key);
+    try {
+      final current = await _secureStorage.read(key: key);
+      if (current != null && current.isNotEmpty) return current;
+    } catch (e) {
+      debugPrint('[SecureStorage] read failed for $key: $e');
+    }
+    try {
+      final legacy = await _legacyStorage.read(key: key);
+      if (legacy != null && legacy.isNotEmpty) {
+        try {
+          await _secureStorage.write(key: key, value: legacy);
+        } catch (e) {
+          debugPrint('[SecureStorage] migrate failed for $key: $e');
+        }
+        return legacy;
+      }
+    } catch (e) {
+      debugPrint('[SecureStorage] legacy read failed for $key: $e');
+    }
+    return null;
   }
 
   static Future<void> _writeValue(String key, String value) async {
@@ -32,7 +66,14 @@ class SecureStorageService {
       return;
     }
 
-    await _secureStorage.delete(key: key);
+    try {
+      await _secureStorage.delete(key: key);
+    } catch (e) {
+      debugPrint('[SecureStorage] delete failed for $key: $e');
+    }
+    try {
+      await _legacyStorage.delete(key: key);
+    } catch (_) {}
   }
 
   static Future<DateTime?> readBiometricLastVerified() async {

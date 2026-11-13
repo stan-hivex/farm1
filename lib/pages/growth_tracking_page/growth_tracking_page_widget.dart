@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '/backend/services/api_service.dart';
@@ -9,6 +10,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 import '/utils/refresh_loading_state.dart';
 import '/widgets/common/back_chevron.dart';
 import 'growth_tracking_page_model.dart';
+import '/utils/user_error_message.dart';
 
 export 'growth_tracking_page_model.dart';
 
@@ -165,7 +167,7 @@ class _GrowthTrackingPageWidgetState extends State<GrowthTrackingPageWidget> {
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = e.toString();
+        _error = userErrorMessage(e);
         _loading = false;
         _hasCompletedFirstLoad = true;
       });
@@ -364,8 +366,8 @@ class _GrowthTrackingPageWidgetState extends State<GrowthTrackingPageWidget> {
   Widget _periodChip(String label, String value) {
     final selected = _selectedPeriod == value;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final selectedFillColor = isDarkMode ? Colors.white : Colors.black;
-    final selectedTextColor = isDarkMode ? Colors.black : Colors.white;
+    const selectedFillColor = AppTheme.accent;
+    const selectedTextColor = AppTheme.onAccent;
     final unselectedTextColor = isDarkMode ? Colors.white : Colors.black87;
 
     return ChoiceChip(

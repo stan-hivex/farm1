@@ -1,3 +1,4 @@
+import '/services/auth/device_identity.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -22,6 +23,7 @@ class RefreshManager {
   int _consecutiveFailures = 0;
   DateTime? _nextAllowedRefreshTime;
   bool _lastFailureWasRevocation = false;
+  int _raceRetries = 0;
 
   bool get lastFailureWasRevocation => _lastFailureWasRevocation;
 
@@ -95,6 +97,13 @@ class RefreshManager {
       '[RefreshManager] Starting token refresh (failures=$_consecutiveFailures).',
     );
 
+    String? deviceId;
+    try {
+      deviceId = await DeviceIdentity.instance.deviceId();
+    } catch (_) {
+      deviceId = null;
+    }
+
     try {
       final response = await _client
           .post(
@@ -103,7 +112,10 @@ class RefreshManager {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({'refresh_token': refreshToken}),
+            body: jsonEncode({
+              'refresh_token': refreshToken,
+              if (deviceId != null) 'device_id': deviceId,
+            }),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -150,15 +162,30 @@ class RefreshManager {
         }
 
         _consecutiveFailures = 0;
+        _raceRetries = 0;
         _nextAllowedRefreshTime = null;
         debugPrint('[RefreshManager] Token refresh succeeded.');
         return true;
       }
 
       if (response.statusCode == 401 || response.statusCode == 403) {
+        final message = _errorMessage(response.body);
+        if (_isRefreshRace(message)) {
+          debugPrint('[RefreshManager] Concurrent refresh rejected. Keeping the latest token.');
+          final latest = FFAppState().refreshToken.trim();
+          if (latest.isNotEmpty && latest != refreshToken && _raceRetries < 1) {
+            _raceRetries++;
+            return await _doRefresh();
+          }
+          _registerFailure();
+          return FFAppState().accessToken.trim().isNotEmpty;
+        }
         _lastFailureWasRevocation = true;
+        // Stay signed in. The next unlock is biometric, not a new SMS login.
+        FFAppState().isLoggedIn = true;
+        FFAppState().needsBiometricReauth = true;
         debugPrint(
-            '[AUTH REFRESH] Persistent refresh session rejected by backend.');
+            '[AUTH REFRESH] Refresh rejected. Local session kept for biometric unlock.');
         _registerFailure();
         return false;
       }
@@ -193,6 +220,22 @@ class RefreshManager {
         DateTime.now().add(Duration(seconds: backoffSeconds));
     debugPrint(
         '[RefreshManager] Next refresh allowed after $_nextAllowedRefreshTime.');
+  }
+
+  bool _isRefreshRace(String message) {
+    final lower = message.toLowerCase();
+    return lower.contains('already in progress') ||
+        lower.contains('retry with the latest');
+  }
+
+  String _errorMessage(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['message'] is String) {
+        return decoded['message'] as String;
+      }
+    } catch (_) {}
+    return body;
   }
 
   bool _tokenNeedsRefresh() {

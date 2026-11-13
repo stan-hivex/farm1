@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/admin_api_service.dart';
+import '/utils/user_error_message.dart';
 
 class FeeManagementPage extends StatefulWidget {
   const FeeManagementPage({required this.onGoBack, super.key});
@@ -41,7 +42,7 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
             .toList();
       });
     } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = userErrorMessage(error));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -56,7 +57,7 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text(
-          'Update ${fee['name'] ?? fee['fee_type'] ?? 'fee'}',
+          'Update ${fee['label'] ?? fee['name'] ?? fee['transaction_type'] ?? 'fee'} (%)',
         ),
         content: TextField(
           controller: controller,
@@ -96,7 +97,7 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update fee: $error')),
+          SnackBar(content: Text('Could not update fee: ${userErrorMessage(error)}')),
         );
       }
     }
@@ -152,8 +153,8 @@ class _FeeManagementPageState extends State<FeeManagementPage> {
                               const SizedBox(height: 8),
                           itemBuilder: (context, index) {
                             final fee = _fees[index];
-                            final label = fee['name'] ??
-                                fee['fee_type'] ??
+                            final label = fee['label'] ?? fee['name'] ??
+                                fee['transaction_type'] ?? fee['fee_type'] ??
                                 fee['transaction_type'] ??
                                 'Fee';
                             return Card(

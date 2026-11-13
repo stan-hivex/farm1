@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/services/biometric_lock_service.dart';
+import '/services/auth/biometric_reauth.dart';
 import '/services/auth/route_guard_service.dart';
 import '/admin/pages/admin_shell.dart';
 import '/admin/core/admin_navigation.dart';
 import '/pages/dashboard/dashboard_widget.dart';
 import '/pages/loginpage/loginpage_widget.dart';
+import '/utils/user_error_message.dart';
 
 class BiometricUnlockPageWidget extends StatefulWidget {
   const BiometricUnlockPageWidget({super.key, this.returnPath});
@@ -63,11 +66,17 @@ class _BiometricUnlockPageWidgetState extends State<BiometricUnlockPageWidget> {
         throw Exception('Biometric verification failed.');
       }
 
+      FFAppState().isLoggedIn = true;
+      FFAppState().needsBiometricReauth = false;
+      // Renew the server session when it can. Failure keeps the local login.
+      await BiometricReauth.exchange();
+      FFAppState().needsBiometricReauth = false;
+
       _navigateToDestination();
     } catch (e) {
       setState(() {
         isLoading = false;
-        errorMessage = e.toString();
+        errorMessage = userErrorMessage(e);
         statusMessage = 'Unable to unlock with biometrics.';
       });
     }
@@ -145,7 +154,8 @@ class _BiometricUnlockPageWidgetState extends State<BiometricUnlockPageWidget> {
                 ElevatedButton(
                   onPressed: _attemptUnlock,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: FlutterFlowTheme.of(context).primary,
+  foregroundColor: AppTheme.onAccent,
+                    backgroundColor: AppTheme.accent,
                     padding: const EdgeInsets.symmetric(vertical: 16.0),
                   ),
                   child: Text('common.retry'.tr()),

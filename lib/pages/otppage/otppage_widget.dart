@@ -1,3 +1,4 @@
+import '/services/auth/otp_autofill.dart';
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -14,11 +15,13 @@ import '/services/biometric_enrollment_prompt.dart';
 import '/pages/superadmin/superadmin_dashboard_page.dart';
 
 import 'package:flutter/material.dart';
+import '../../core/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 
 import 'otppage_model.dart';
+import '/utils/user_error_message.dart';
 export 'otppage_model.dart';
 
 class OtppageWidget extends StatefulWidget {
@@ -63,6 +66,11 @@ class _OtppageWidgetState extends State<OtppageWidget> {
   String _statusMessage =
       'Please wait while we verify your phone automatically.';
   bool _showManualOtpField = false;
+  // Verify button is a fallback: shown ~20s after the field appears or once
+  // the user types by hand. Autofilled codes submit on their own.
+  bool _showVerifyButton = false;
+  bool _settingCodeProgrammatically = false;
+  Timer? _verifyButtonTimer;
   bool _isVerifying = true;
   String? _verificationId;
   int? _resendToken;
@@ -106,6 +114,9 @@ class _OtppageWidgetState extends State<OtppageWidget> {
     _verificationId = null;
     _resendToken = null;
     _showManualOtpField = false;
+    _showVerifyButton = false;
+    _verifyButtonTimer?.cancel();
+    _verifyButtonTimer = null;
     _isVerifying = true;
     _statusTitle = 'Verifying your phone number...';
     _statusMessage = 'Please wait while we verify your phone automatically.';
@@ -146,6 +157,8 @@ class _OtppageWidgetState extends State<OtppageWidget> {
   @override
   void dispose() {
     _fallbackTimer?.cancel();
+    _verifyButtonTimer?.cancel();
+    OtpAutofill.cancel();
     // Do not clear the shared verifier here; it will be cleared explicitly on resend.
     try {
       // clear any local reference only
@@ -157,7 +170,35 @@ class _OtppageWidgetState extends State<OtppageWidget> {
     super.dispose();
   }
 
+  void _revealManualField() {
+    if (_verifyButtonTimer != null) return; // already armed
+    _verifyButtonTimer = Timer(const Duration(seconds: 20), () {
+      if (mounted) setState(() => _showVerifyButton = true);
+    });
+    _listenForSmsCode();
+  }
+
+  /// Android SMS User Consent: one tap fills the code (Firebase SMS has no
+  /// app hash, so the silent Retriever cannot be used here).
+  Future<void> _listenForSmsCode() async {
+    try {
+      final code = await OtpAutofill.userConsent();
+      if (code == null || !mounted || otpController.text.trim().isNotEmpty) {
+        return;
+      }
+      _settingCodeProgrammatically = true;
+      otpController.text = code;
+      _settingCodeProgrammatically = false;
+    } catch (_) {}
+  }
+
   void _onOtpChanged() {
+    if (!_settingCodeProgrammatically &&
+        otpController.text.isNotEmpty &&
+        !_showVerifyButton &&
+        mounted) {
+      setState(() => _showVerifyButton = true);
+    }
     if (otpController.text.trim().length == 6 && !_isCompletingVerification) {
       _verifyManualCode();
     }
@@ -178,6 +219,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         setState(() {
           if (hasVerificationSession) {
             _showManualOtpField = true;
+            _revealManualField();
             _statusTitle = 'Automatic detection timed out';
             _statusMessage = 'Enter the code manually to continue.';
           }
@@ -341,6 +383,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
           _statusTitle = 'SMS sent';
           _statusMessage = 'Enter the code sent to your phone.';
           _showManualOtpField = true;
+          _revealManualField();
           _isVerifying = false;
         });
         return;
@@ -395,6 +438,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                 'We are waiting for the code to arrive automatically.';
             _verificationRequestFailed = false;
             _showManualOtpField = true;
+            _revealManualField();
             _isVerifying = false;
           });
         },
@@ -406,6 +450,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
           setState(() {
             _verificationId = verificationId;
             _showManualOtpField = true;
+            _revealManualField();
             _statusTitle = 'Automatic detection timed out';
             _statusMessage = 'Enter the code manually to continue.';
             _isVerifying = false;
@@ -494,11 +539,12 @@ class _OtppageWidgetState extends State<OtppageWidget> {
         _isCompletingVerification = false;
         _isVerifying = false;
         _statusTitle = 'Verification failed';
-        _statusMessage = e.toString();
+        _statusMessage = userErrorMessage(e);
         _showManualOtpField = true;
+        _revealManualField();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Verification failed: $e')),
+        SnackBar(content: Text('Verification failed: ${userErrorMessage(e)}')),
       );
     }
   }
@@ -779,30 +825,41 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: _model.isLoading ? null : _verifyManualCode,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black,
-                        disabledForegroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
+                  if (!_showVerifyButton)
+                    Text(
+                      _model.isLoading
+                          ? 'Verifying...'
+                          : 'The code fills in and submits by itself.',
+                      textAlign: TextAlign.center,
+                      style: FlutterFlowTheme.of(context).bodySmall,
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: _model.isLoading ? null : _verifyManualCode,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          foregroundColor: AppTheme.onAccent,
+                          disabledBackgroundColor:
+                              AppTheme.accent.withValues(alpha: 0.5),
+                          disabledForegroundColor:
+                              AppTheme.onAccent.withValues(alpha: 0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        _model.isLoading ? 'Verifying...' : 'Verify Code',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                        child: Text(
+                          _model.isLoading ? 'Verifying...' : 'Verify Code',
+                          style: const TextStyle(
+                            color: AppTheme.onAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: _resendCode,
@@ -815,10 +872,10 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                     child: ElevatedButton(
                       onPressed: _isVerifying ? null : _resendCode,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.black,
-                        disabledForegroundColor: Colors.white,
+                        backgroundColor: AppTheme.accent,
+                        foregroundColor: AppTheme.onAccent,
+                        disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.5),
+                        disabledForegroundColor: AppTheme.onAccent.withValues(alpha: 0.5),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
                         ),
@@ -826,7 +883,7 @@ class _OtppageWidgetState extends State<OtppageWidget> {
                       child: const Text(
                         'Try Again',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: AppTheme.onAccent,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),

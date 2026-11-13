@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '/app_state.dart';
+import '/utils/personal_activity.dart';
 import '/backend/services/api_service.dart';
 import '/services/auth/refresh_manager.dart';
 
@@ -12,11 +13,12 @@ class AppSessionManager {
   bool _refreshInProgress = false;
   Completer<void>? _refreshCompleter;
   Future<void>? _sharedRefreshFuture;
+  bool _sharedRefreshUsesForcedAuth = false;
   final Map<String, bool> _endpointInProgress = {};
 
   String _timeStamp() => DateTime.now().toIso8601String();
 
-  Future<void> refreshAppData() async {
+  Future<void> refreshAppData({bool forceAuthRefresh = false}) async {
     if (!FFAppState().isLoggedIn) {
       debugPrint('[AppSessionManager][${_timeStamp()}] Skipping refresh, user is not logged in.');
       return;
@@ -24,16 +26,26 @@ class AppSessionManager {
 
     if (_sharedRefreshFuture != null) {
       debugPrint('[AppSessionManager][${_timeStamp()}] Reusing an existing app refresh.');
-      return _sharedRefreshFuture!;
+      final sharedFuture = _sharedRefreshFuture!;
+      final sharedRefreshUsesForcedAuth = _sharedRefreshUsesForcedAuth;
+      await sharedFuture;
+      if (forceAuthRefresh && !sharedRefreshUsesForcedAuth) {
+        await refreshAppData(forceAuthRefresh: true);
+      }
+      return;
     }
 
-    final future = _refreshAppDataInternal();
+    final future = _refreshAppDataInternal(
+      forceAuthRefresh: forceAuthRefresh,
+    );
     _sharedRefreshFuture = future;
+    _sharedRefreshUsesForcedAuth = forceAuthRefresh;
     try {
       await future;
     } finally {
       if (identical(_sharedRefreshFuture, future)) {
         _sharedRefreshFuture = null;
+        _sharedRefreshUsesForcedAuth = false;
       }
     }
   }
@@ -49,14 +61,19 @@ class AppSessionManager {
         limit: 5,
         timeoutSeconds: 4,
       );
-      FFAppState().recentTransactions =
-          List<Map<String, dynamic>>.from(_extractList(response));
+      FFAppState().recentTransactions = _extractList(response)
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .where(isPersonalActivity)
+          .toList();
     } catch (error) {
       debugPrint('[AppSessionManager] Transaction refresh failed: $error');
     }
   }
 
-  Future<void> _refreshAppDataInternal() async {
+  Future<void> _refreshAppDataInternal({
+    required bool forceAuthRefresh,
+  }) async {
     if (_refreshInProgress) {
       debugPrint('[AppSessionManager][${_timeStamp()}] Refresh already in progress. Waiting for completion.');
       return _refreshCompleter?.future ?? Future.value();
@@ -105,12 +122,16 @@ class AppSessionManager {
     }
 
     try {
-      // 1) Refresh session only if token is near expiry.
+      // Force token rotation on app resume; routine refreshes only renew tokens
+      // when they are close to expiry.
       try {
-        final refreshed = await RefreshManager().refreshIfNeeded();
-        debugPrint('[AppSessionManager] RefreshIfNeeded completed: $refreshed');
+        final refreshed = await RefreshManager()
+            .refreshIfNeeded(force: forceAuthRefresh);
+        debugPrint(
+            '[AppSessionManager] refreshIfNeeded(force: $forceAuthRefresh) completed: $refreshed');
       } catch (e) {
-        debugPrint('[AppSessionManager] RefreshIfNeeded failed: $e');
+        debugPrint(
+            '[AppSessionManager] refreshIfNeeded(force: $forceAuthRefresh) failed: $e');
       }
 
       // 2) Use cached values if available to avoid UI placeholders
@@ -210,7 +231,11 @@ class AppSessionManager {
           try {
             if (key == 'transactions') {
               final items = _extractList(res);
-              FFAppState().recentTransactions = List<Map<String, dynamic>>.from(items);
+              FFAppState().recentTransactions = items
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .where(isPersonalActivity)
+                  .toList();
             } else if (key == 'notifications') {
               final items = _extractList(res);
               final unreadCount = items.where((item) {
@@ -304,6 +329,7 @@ class AppSessionManager {
     int profileTimeoutSeconds = 5,
     int walletTimeoutSeconds = 7,
     int transactionsTimeoutSeconds = 6,
+    bool forceAuthRefresh = false,
   }) async {
     if (!FFAppState().isLoggedIn) {
       debugPrint('[AppSessionManager] syncNow skipped because user is not logged in.');
@@ -312,7 +338,18 @@ class AppSessionManager {
 
     if (_sharedRefreshFuture != null) {
       debugPrint('[AppSessionManager] syncNow reusing the existing app refresh.');
-      await _sharedRefreshFuture!;
+      final sharedFuture = _sharedRefreshFuture!;
+      final sharedRefreshUsesForcedAuth = _sharedRefreshUsesForcedAuth;
+      await sharedFuture;
+      if (forceAuthRefresh && !sharedRefreshUsesForcedAuth) {
+        await syncNow(
+          authTimeoutSeconds: authTimeoutSeconds,
+          profileTimeoutSeconds: profileTimeoutSeconds,
+          walletTimeoutSeconds: walletTimeoutSeconds,
+          transactionsTimeoutSeconds: transactionsTimeoutSeconds,
+          forceAuthRefresh: true,
+        );
+      }
       return;
     }
 
@@ -321,13 +358,16 @@ class AppSessionManager {
       profileTimeoutSeconds: profileTimeoutSeconds,
       walletTimeoutSeconds: walletTimeoutSeconds,
       transactionsTimeoutSeconds: transactionsTimeoutSeconds,
+      forceAuthRefresh: forceAuthRefresh,
     );
     _sharedRefreshFuture = future;
+    _sharedRefreshUsesForcedAuth = forceAuthRefresh;
     try {
       await future;
     } finally {
       if (identical(_sharedRefreshFuture, future)) {
         _sharedRefreshFuture = null;
+        _sharedRefreshUsesForcedAuth = false;
       }
     }
   }
@@ -337,15 +377,19 @@ class AppSessionManager {
     int profileTimeoutSeconds = 5,
     int walletTimeoutSeconds = 7,
     int transactionsTimeoutSeconds = 6,
+    required bool forceAuthRefresh,
   }) async {
     debugPrint('[AppSessionManager] syncNow starting. authTokenPresent=${FFAppState().accessToken.isNotEmpty}, refreshTokenPresent=${FFAppState().refreshToken.isNotEmpty}');
 
-    // 1) Refresh session only if token is near expiry.
+    // Force token rotation only when requested by an app-resume refresh.
     try {
-      final refreshed = await RefreshManager().refreshIfNeeded();
-      debugPrint('[AppSessionManager] syncNow refreshIfNeeded completed: $refreshed');
+      final refreshed = await RefreshManager()
+          .refreshIfNeeded(force: forceAuthRefresh);
+      debugPrint(
+          '[AppSessionManager] syncNow refreshIfNeeded(force: $forceAuthRefresh) completed: $refreshed');
     } catch (e) {
-      debugPrint('[AppSessionManager] syncNow refreshIfNeeded failed: $e');
+      debugPrint(
+          '[AppSessionManager] syncNow refreshIfNeeded(force: $forceAuthRefresh) failed: $e');
     }
 
     // 2) Fetch profile, wallet, transactions in parallel
@@ -417,7 +461,11 @@ class AppSessionManager {
 
       if (txRes != null && txRes.isNotEmpty) {
         final txItems = _extractList(txRes);
-        FFAppState().recentTransactions = List<Map<String, dynamic>>.from(txItems);
+        FFAppState().recentTransactions = txItems
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .where(isPersonalActivity)
+            .toList();
       }
     });
 
