@@ -340,13 +340,38 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
   }
 
   Future<void> fetchWallet() async {
+    final cached = ApiService.getCached('/wallet');
+    if (cached != null) {
+      final walletData =
+          Map<String, dynamic>.from(cached['data'] ?? cached);
+      setState(() {
+        balance = _parseNumericValue(
+          walletData['available_balance'] ??
+              walletData['balance'] ??
+              walletData['wallet_balance'],
+        );
+        isLoading = false;
+      });
+    }
     try {
       final walletResp = await ApiService.getWallet();
-      final txResp = await ApiService.getTransactions();
+      Map<String, dynamic>? txResp;
+      try {
+        txResp = await ApiService.getTransactions(page: 1, limit: 10);
+      } on ApiServiceException catch (e) {
+        if (e.statusCode != 429) rethrow;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message)),
+          );
+        }
+      }
 
       final walletData =
           Map<String, dynamic>.from(walletResp['data'] ?? walletResp);
-      final txs = List<dynamic>.from(txResp['data'] ?? txResp);
+      final txs = txResp == null
+          ? transactions
+          : List<dynamic>.from(txResp['data'] ?? txResp);
 
       setState(() {
         balance = _parseNumericValue(
@@ -888,21 +913,31 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
             controller: controller,
             obscureText: true,
             keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'Transaction PIN'),
+            maxLength: 6,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            decoration: const InputDecoration(
+              labelText: 'Transaction PIN',
+              counterText: '',
+            ),
           ),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(dialogContext, false),
                 child: const Text('Cancel')),
             ElevatedButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
+                onPressed: () {
+                  final entered = controller.text.trim();
+                  if (entered.length >= 4 && entered.length <= 6) {
+                    Navigator.pop(dialogContext, true);
+                  }
+                },
                 child: const Text('Approve')),
           ],
         ),
       );
       pin = controller.text.trim();
       controller.dispose();
-      if (confirmed != true || pin.isEmpty) return;
+      if (confirmed != true || pin.length < 4 || pin.length > 6) return;
     }
 
     setState(() => isSending = true);
@@ -918,7 +953,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       setState(() => selectedIncomingRequestIds.clear());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(response['message'] ?? 'Selected requests completed'),
+            content: Text(PaymentRequestApiService.batchResultMessage(response)),
             backgroundColor: Colors.green),
       );
       await AppSessionManager().syncNow(
@@ -1865,7 +1900,7 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                       const SizedBox(
                                         height: 12,
                                       ),
-                                      Row(mainAxisSize: MainAxisSize.min, children: [const FarmCoinIcon(size: 30), const SizedBox(width: 10), Flexible(child: Text(
+                                      Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [FarmCoinIcon(size: 32, color: FlutterFlowTheme.of(context).brandAccentText), const SizedBox(width: 8), Flexible(child: Text(
                                         '${balance.toStringAsFixed(2)} FARM',
                                         style: FlutterFlowTheme.of(context)
                                             .headlineLarge

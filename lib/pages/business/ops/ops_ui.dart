@@ -1,6 +1,9 @@
 import '/services/offline_cache.dart';
+import '/services/payment_confirm.dart';
+
+export '/services/payment_confirm.dart';
+import '/utils/user_error_message.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '../business_ui.dart';
 
@@ -180,8 +183,12 @@ class BizAsyncState<T> extends State<BizAsync<T>> {
         child: SingleChildScrollView(
           child: BizMessage(
             icon: Icons.cloud_off_rounded,
-            title: 'Something went wrong',
-            message: _error!,
+            title: _error == kGenericErrorMessage || _error == kServerErrorMessage
+                ? 'Something went wrong'
+                : _error!,
+            message: _error == kGenericErrorMessage || _error == kServerErrorMessage
+                ? _error!
+                : 'Tap Retry to load this again.',
             action: reload,
             actionLabel: 'Retry',
           ),
@@ -346,43 +353,21 @@ Future<bool> confirmAction(BuildContext c,
   return r ?? false;
 }
 
-/// Confirmation with transaction PIN. Returns the PIN, or null if cancelled.
-Future<String?> confirmWithPin(BuildContext c,
-    {required String title, required String message}) async {
-  final ctrl = TextEditingController();
-  final r = await showDialog<String>(
-    context: c,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(message),
-        const SizedBox(height: 16),
-        TextField(
-          controller: ctrl,
-          autofocus: true,
-          obscureText: true,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: bizInput(ctx, 'Transaction PIN'),
-        ),
-      ]),
-      actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: mutedColor(ctx)))),
-        TextButton(
-            onPressed: () {
-              if (ctrl.text.length >= 4) Navigator.pop(ctx, ctrl.text);
-            },
-            child: Text('Confirm',
-                style: TextStyle(
-                    color: fgColor(ctx), fontWeight: FontWeight.w700))),
-      ],
-    ),
+/// Shared confirm. Biometrics first when [biometricSupported] is true.
+/// API keys and webhook secrets pass false and still require the PIN.
+Future<PaymentConfirmation?> confirmWithPin(
+  BuildContext c, {
+  required String title,
+  required String message,
+  bool biometricSupported = true,
+}) {
+  return confirmPayment(
+    c,
+    title: title,
+    message: message,
+    biometricSupported: biometricSupported,
+    localizedReason: title,
   );
-  ctrl.dispose();
-  return r;
 }
 
 /// Runs [action] with a blocking spinner and reports errors.

@@ -274,13 +274,13 @@ class _TapPayState extends State<TapPayPage> {
   Future<void> _confirm() async {
     final r = _req!;
     final payee = (r['payee'] as Map?) ?? const {};
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Confirm payment',
         message: 'Pay ${money(r['amount'])} to ${payee['name']}.\n'
             'Your fee: ${money(r['payer_fee'])}\n'
             'Total from your wallet: ${money(r['payer_total'])}');
-    if (pin == null || !mounted) return;
-    final res = await runBusy(context, () => NfcPayApi.pay(_token!, pin), success: 'Payment sent');
+    if (auth == null || !mounted) return;
+    final res = await runBusy(context, () => NfcPayApi.pay(_token!, auth), success: 'Payment sent');
     if (res != null && mounted) setState(() {
       _receipt = res;
       _mode = 'done';

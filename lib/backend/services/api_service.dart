@@ -262,6 +262,7 @@ class ApiService {
 
   // Central method — all requests go through here
   static final Map<String, Map<String, dynamic>> _cache = {};
+  static final Map<String, Future<Map<String, dynamic>>> _inflightGets = {};
 
   static Future<Map<String, dynamic>> _request({
     required String method,
@@ -271,7 +272,33 @@ class ApiService {
     bool isRetry = false,
     int timeoutSeconds = 20,
     bool useUnversionedApi = false,
+    bool coalesce = true,
   }) async {
+    final verb = method.toUpperCase();
+    // Deposit, Send and the dashboard refresh often ask for the same GET at
+    // the same time. One in-flight call serves all of them.
+    if (verb == 'GET' && coalesce && !isRetry) {
+      final pending = _inflightGets[path];
+      if (pending != null) return pending;
+      final future = _request(
+        method: method,
+        path: path,
+        body: body,
+        requiresAuth: requiresAuth,
+        isRetry: isRetry,
+        timeoutSeconds: timeoutSeconds,
+        useUnversionedApi: useUnversionedApi,
+        coalesce: false,
+      );
+      _inflightGets[path] = future;
+      try {
+        return await future;
+      } finally {
+        if (identical(_inflightGets[path], future)) {
+          _inflightGets.remove(path);
+        }
+      }
+    }
     final apiBase = useUnversionedApi
         ? AppConfig.api.replaceFirst(RegExp(r'/api/v\d+$'), '/api')
         : AppConfig.api;
@@ -392,15 +419,13 @@ class ApiService {
             OfflineCache.write('api:$path', decoded);
           }
         } else {
-          _cache.clear();
+          _invalidateAfterWrite(path);
         }
       } catch (_) {}
       return decoded;
     }
 
-    final message = decoded['message'] is String
-        ? decoded['message'] as String
-        : responseBody;
+    final message = _apiMessage(decoded, responseBody);
     if (response.statusCode == 429) {
       final retryAfter = int.tryParse(response.headers['retry-after'] ?? '');
       final waitMessage = retryAfter == null
@@ -833,6 +858,63 @@ class ApiService {
       path == '/wallet' ||
       path == '/users/me' ||
       path.startsWith('/analytics/growth-history');
+
+  /// Nest validation errors arrive as `message: ["field must be ..."]`.
+  static String _apiMessage(dynamic decoded, String raw) {
+    if (decoded is Map) {
+      final message = decoded['message'];
+      if (message is String && message.trim().isNotEmpty) return message.trim();
+      if (message is List) {
+        final joined = message
+            .map((part) => '$part'.trim())
+            .where((part) => part.isNotEmpty)
+            .join(' ');
+        if (joined.isNotEmpty) return joined;
+      }
+    }
+    return raw;
+  }
+
+  /// Drop cached reads for the resource that was just written, plus the
+  /// wallet and notification lists when money moved. Other screens keep
+  /// their cache.
+  static void _invalidateAfterWrite(String path) {
+    final root = path.split('?').first;
+    final parts = root.split('/').where((part) => part.isNotEmpty).toList();
+    final head = parts.isEmpty ? '' : '/${parts.first}';
+    bool related(String key) {
+      final clean = key.split('?').first;
+      if (clean == root || clean.startsWith('$root/')) return true;
+      if (head.isNotEmpty && (clean == head || clean.startsWith('$head/'))) {
+        return true;
+      }
+      return false;
+    }
+
+    _cache.removeWhere((key, _) => related(key));
+    const moneyHeads = {
+      '/wallet',
+      '/withdraw',
+      '/pay',
+      '/business',
+      '/escrow',
+      '/nfc-pay',
+      '/marketplace',
+      '/investments',
+      '/travel',
+      '/agent-payments',
+      '/ai',
+      '/payment-requests',
+      '/transfer-requests',
+      '/qr',
+    };
+    if (moneyHeads.contains(head)) {
+      _cache.remove('/wallet');
+      _cache.removeWhere((key, _) =>
+          key.split('?').first.startsWith('/wallet/') ||
+          key.split('?').first.startsWith('/notifications'));
+    }
+  }
 
   static void invalidateCache([String? path]) {
     if (path == null) {

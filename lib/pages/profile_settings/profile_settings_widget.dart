@@ -1,5 +1,4 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import '/pages/mkulima/mkulima_pages.dart';
 import '/pages/security/sessions_page.dart';
 import '/pages/security/change_password_page.dart';
 import '/pages/verify_email_page/verify_email_page_widget.dart';
@@ -15,6 +14,7 @@ import '/services/app_session_manager.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/services/biometric_lock_service.dart';
+import '/services/payment_confirm.dart';
 import '/pages/settings/delete_account_page.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -836,8 +836,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                       BiometricLockService();
                                   try {
                                     if (value) {
-                                      final ok = await biometricLockService
-                                          .enableBiometrics();
+                                      final ok = await turnOnPaymentBiometrics(context);
                                       if (ok) {
                                         setState(() {
                                           biometricsEnabled = true;

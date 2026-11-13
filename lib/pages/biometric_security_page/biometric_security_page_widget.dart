@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import '/services/biometric_lock_service.dart';
+import '/services/payment_confirm.dart';
 import '../dashboard/dashboard_widget.dart';
 import 'biometric_security_page_model.dart';
 import '/utils/user_error_message.dart';
@@ -135,8 +136,7 @@ class _BiometricSecurityPageWidgetState
     });
 
     try {
-      final biometricService = BiometricLockService();
-      final ok = await biometricService.enableBiometrics();
+      final ok = await turnOnPaymentBiometrics(context);
       if (ok) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

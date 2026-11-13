@@ -211,9 +211,9 @@ class _KeysState extends State<ApiKeysPage> {
             OutlinedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                final pin = await confirmWithPin(context, title: 'Rotate key', message: 'A new key is created and this one stops working immediately.');
-                if (pin == null || !mounted) return;
-                final r = await runBusy(context, () => DeveloperApi.rotateKey('${k['id']}', pin));
+                final auth = await confirmWithPin(context, title: 'Rotate key', message: 'A new key is created and this one stops working immediately.', biometricSupported: false);
+                if (auth?.pin == null || !mounted) return;
+                final r = await runBusy(context, () => DeveloperApi.rotateKey('${k['id']}', auth!.pin!));
                 if (r == null || !mounted) return;
                 await _showSecret(context, 'Your rotated API key', '${r['secret']}');
                 _key.currentState?.reload();
@@ -224,9 +224,9 @@ class _KeysState extends State<ApiKeysPage> {
             OutlinedButton(
               onPressed: () async {
                 Navigator.pop(ctx);
-                final pin = await confirmWithPin(context, title: 'Revoke key', message: 'Apps using this key will stop working. This cannot be undone.');
-                if (pin == null || !mounted) return;
-                await runBusy(context, () => DeveloperApi.revokeKey('${k['id']}', pin), success: 'Key revoked');
+                final auth = await confirmWithPin(context, title: 'Revoke key', message: 'Apps using this key will stop working. This cannot be undone.', biometricSupported: false);
+                if (auth?.pin == null || !mounted) return;
+                await runBusy(context, () => DeveloperApi.revokeKey('${k['id']}', auth!.pin!), success: 'Key revoked');
                 _key.currentState?.reload();
               },
               child: Text('Revoke', style: TextStyle(color: fgColor(ctx), fontWeight: FontWeight.w700)),
@@ -390,14 +390,14 @@ class _HookDetailState extends State<WebhookDetailPage> {
                 final r = await runBusy(context, () => DeveloperApi.updateWebhook(id, {'is_active': e['is_active'] != true}));
                 if (r != null) setState(() => e = r);
               } else if (v == 'roll') {
-                final pin = await confirmWithPin(context, title: 'Replace signing secret', message: 'Your server must switch to the new secret.');
-                if (pin == null || !mounted) return;
-                final r = await runBusy(context, () => DeveloperApi.rollSecret(id, pin));
+                final auth = await confirmWithPin(context, title: 'Replace signing secret', message: 'Your server must switch to the new secret.', biometricSupported: false);
+                if (auth?.pin == null || !mounted) return;
+                final r = await runBusy(context, () => DeveloperApi.rollSecret(id, auth!.pin!));
                 if (r != null && mounted) await _showSecret(context, 'New signing secret', '${r['signing_secret']}');
               } else if (v == 'delete') {
-                final pin = await confirmWithPin(context, title: 'Delete endpoint', message: 'Deliveries and logs for this endpoint are deleted too.');
-                if (pin == null || !mounted) return;
-                final ok = await runBusy(context, () async { await DeveloperApi.deleteWebhook(id, pin); return true; }, success: 'Endpoint deleted');
+                final auth = await confirmWithPin(context, title: 'Delete endpoint', message: 'Deliveries and logs for this endpoint are deleted too.', biometricSupported: false);
+                if (auth?.pin == null || !mounted) return;
+                final ok = await runBusy(context, () async { await DeveloperApi.deleteWebhook(id, auth!.pin!); return true; }, success: 'Endpoint deleted');
                 if (ok == true && mounted) Navigator.pop(context);
               }
             },

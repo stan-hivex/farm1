@@ -1,5 +1,7 @@
 import '/components/fee_line.dart';
+import 'package:cross_file/cross_file.dart';
 import 'package:share_plus/share_plus.dart';
+import 'invoice_receipt.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '/backend/api_requests/business_ops_api.dart';
@@ -713,6 +715,25 @@ class InvoiceDetailPage extends StatelessWidget {
                   const SizedBox(height: 8),
                 ],
               ],
+              OutlinedButton.icon(
+                style: secondaryButtonStyle(c),
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('Share invoice PDF'),
+                onPressed: () {
+                  final bytes = invoicePdfBytes(Map<String, dynamic>.from(inv));
+                  SharePlus.instance.share(ShareParams(
+                    files: [
+                      XFile.fromData(
+                        bytes,
+                        mimeType: 'application/pdf',
+                        name: '${inv['invoice_number'] ?? 'invoice'}.pdf',
+                      ),
+                    ],
+                    text: 'Invoice ${inv['invoice_number']}',
+                  ));
+                },
+              ),
+              const SizedBox(height: 8),
               if (['sent', 'pending', 'overdue'].contains(status))
                 OutlinedButton.icon(
                   style: secondaryButtonStyle(c),

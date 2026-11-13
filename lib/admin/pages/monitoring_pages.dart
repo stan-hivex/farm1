@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '/backend/api_requests/business_ops_api.dart';
 import '/backend/services/api_service.dart';
 import '/pages/business/ops/ops_ui.dart';
+import '/pages/business/ops/project_logic.dart';
 
 /// Gap fix: admin review/monitoring for projects & listings, tokenization, and agent / x402 payments.
 Future<Map<String, dynamic>> _post(String path, [Map<String, dynamic>? body]) async {
@@ -120,7 +121,7 @@ class _ProjectsReviewPageState extends State<ProjectsReviewPage> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
                       Expanded(child: Text('${p['project_name'] ?? 'Project'}', style: TextStyle(fontWeight: FontWeight.w700, color: fgColor(c)))),
-                      StatusChip('${p['status']}', filled: p['status'] == 'listed'),
+                      StatusChip(projectLifecycleLabel('${p['status']}'), filled: p['status'] == 'listed' || p['status'] == 'approved'),
                     ]),
                     const SizedBox(height: 6),
                     KeyValue('Business', '${(p['business'] as Map?)?['trading_name'] ?? (p['business'] as Map?)?['legal_name'] ?? '-'}'),
@@ -128,11 +129,13 @@ class _ProjectsReviewPageState extends State<ProjectsReviewPage> {
                     KeyValue('Target', '${money(p['target_amount'])}'),
                     KeyValue('Raised', '${money(p['raised_amount'])}'),
                     KeyValue('Sector', '${p['sector'] ?? '-'}'),
-                    if (p['review_notes'] != null) KeyValue('Review notes', '${p['review_notes']}'),
+                    if (p['review_notes'] != null) KeyValue(p['status'] == 'rejected' ? 'Rejection reason' : 'Review notes', '${p['review_notes']}'),
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       for (final a in _projectActions['${p['status']}'] ?? const <String>[])
-                        OutlinedButton(style: secondaryButtonStyle(c), onPressed: () => _act(c, p, a), child: Text(_actionLabels[a]!)),
+                        a == 'approve'
+                            ? ElevatedButton(style: primaryButtonStyle(c), onPressed: () => _act(c, p, a), child: Text(_actionLabels[a]!))
+                            : OutlinedButton(style: secondaryButtonStyle(c), onPressed: () => _act(c, p, a), child: Text(_actionLabels[a]!)),
                     ]),
                   ]),
                 ),

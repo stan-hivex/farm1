@@ -272,15 +272,15 @@ Future<bool?> startInvest(BuildContext c, Map<String, dynamic> p) async {
   final rule = await runBusy(c, () => FeesApi.rule('investment'));
   if (rule == null || !c.mounted) return null;
   final fee = rule.feeFor(amount);
-  final pin = await confirmWithPin(c,
+  final auth = await confirmWithPin(c,
       title: 'Confirm investment',
       message: 'Invest ${money(amount)} in ${p['project_name']}.\n'
           'Marketplace fee (${rule.percentLabel}): ${money(fee)}\n'
           'Total from your wallet: ${money(amount + fee)}\n'
           'You could lose this money.');
-  if (pin == null || !c.mounted) return null;
+  if (auth == null || !c.mounted) return null;
   final r = await runBusy(c,
-      () => InvestmentsApi.invest('${p['id']}', amount: amount, pin: pin, disclosureVersion: '${disc['version']}'),
+      () => InvestmentsApi.invest('${p['id']}', amount: amount, auth: auth, disclosureVersion: '${disc['version']}'),
       success: 'Investment recorded');
   return r != null;
 }
@@ -552,7 +552,6 @@ class _TokensTabState extends State<TokensTab> {
     final max = _n(a['transferable_units']).toInt();
     final who = TextEditingController();
     final ctl = TextEditingController();
-    final pin = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -562,8 +561,6 @@ class _TokensTabState extends State<TokensTab> {
             TextField(controller: who, decoration: bizInput(ctx, 'Recipient username or phone')),
             const SizedBox(height: 8),
             TextField(controller: ctl, keyboardType: TextInputType.number, decoration: bizInput(ctx, 'Tokens to send (max $max)')),
-            const SizedBox(height: 8),
-            TextField(controller: pin, obscureText: true, keyboardType: TextInputType.number, decoration: bizInput(ctx, 'Transaction PIN')),
             const SizedBox(height: 6),
             Text('No transfer fee. The recipient gets any future holder income on these tokens, but sent tokens cannot be sold back by them.',
                 style: TextStyle(fontSize: 11, color: mutedColor(ctx))),
@@ -571,21 +568,22 @@ class _TokensTabState extends State<TokensTab> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Continue')),
         ],
       ),
     );
-    final to = who.text.trim(), p = pin.text.trim();
+    final to = who.text.trim();
     final units = int.tryParse(ctl.text.trim()) ?? 0;
     who.dispose();
     ctl.dispose();
-    pin.dispose();
     if (ok != true || !mounted) return;
-    if (to.isEmpty || p.isEmpty || units < 1 || units > max) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enter a recipient, your PIN and 1 to $max tokens')));
+    if (to.isEmpty || units < 1 || units > max) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enter a recipient and 1 to $max tokens')));
       return;
     }
-    final r = await runBusy(context, () => InvestmentsApi.sendTokens('${a['id']}', to, units, p), success: 'Tokens sent.');
+    final auth = await confirmWithPin(context, title: 'Send tokens', message: 'Send $units tokens to $to.');
+    if (auth == null || !mounted) return;
+    final r = await runBusy(context, () => InvestmentsApi.sendTokens('${a['id']}', to, units, auth), success: 'Tokens sent.');
     if (r != null) _key.currentState?.reload();
   }
 

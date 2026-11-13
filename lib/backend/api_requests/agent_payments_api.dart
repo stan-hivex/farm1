@@ -1,6 +1,7 @@
 import 'dart:math';
 import '/backend/api_requests/business_ops_api.dart';
 import '/backend/services/api_service.dart';
+import '/services/payment_confirm.dart';
 
 /// Phase 9: agentic payments. Caps, PIN checks and money movement are all enforced by the server.
 class AgentPaymentsApi {
@@ -18,8 +19,8 @@ class AgentPaymentsApi {
   static Future<Map<String, dynamic>> status() async => _d(await _r('GET', '/agent-payments/status'));
   // Payer
   static Future<Map<String, dynamic>> intent(String id) async => _d(await _r('GET', '/agent-payments/intents/$id'));
-  static Future<Map<String, dynamic>> pay(String id, String pin) async =>
-      _d(await _r('POST', '/agent-payments/intents/$id/pay', {'pin': pin}));
+  static Future<Map<String, dynamic>> pay(String id, PaymentConfirmation auth) async =>
+      _d(await _r('POST', '/agent-payments/intents/$id/pay', auth.authFields()));
   static Future<List<Map<String, dynamic>>> mandates() async =>
       BusinessOpsApi.list(await _r('GET', '/agent-payments/authorizations'));
   static Future<Map<String, dynamic>> createMandate(Map<String, dynamic> body) async =>
@@ -28,8 +29,8 @@ class AgentPaymentsApi {
       _d(await _r('POST', '/agent-payments/authorizations/$id/revoke'));
   static Future<List<Map<String, dynamic>>> requests({String? status}) async => BusinessOpsApi.list(
       await _r('GET', '/agent-payments/requests${status == null ? '' : '?status=$status'}'));
-  static Future<Map<String, dynamic>> confirmRequest(String id, String pin) async =>
-      _d(await _r('POST', '/agent-payments/requests/$id/confirm', {'pin': pin}));
+  static Future<Map<String, dynamic>> confirmRequest(String id, PaymentConfirmation auth) async =>
+      _d(await _r('POST', '/agent-payments/requests/$id/confirm', auth.authFields()));
   static Future<Map<String, dynamic>> rejectRequest(String id) async =>
       _d(await _r('POST', '/agent-payments/requests/$id/reject'));
   // Business dashboard

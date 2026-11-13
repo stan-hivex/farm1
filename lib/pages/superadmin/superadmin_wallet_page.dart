@@ -3,6 +3,8 @@ import '../../core/app_theme.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import '/backend/services/api_service.dart';
+import 'fee_revenue.dart';
+import 'fee_revenue_card.dart';
 import 'superadmin_dashboard_page.dart';
 import 'superadmin_pin_setup_page.dart';
 import 'superadmin_change_pin_page.dart';
@@ -23,6 +25,7 @@ class SuperadminWalletPage extends StatefulWidget {
 
 class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
   Map<String, dynamic>? _walletData;
+  String _feePeriod = 'all';
   bool _loading = true;
   bool _loadingHistory = true;
   String? _error;
@@ -437,15 +440,7 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     final pendingWithdrawals = _asDouble(_walletData?['pending_withdrawals']);
     final totalWithdrawn = _asDouble(_walletData?['total_withdrawn']);
     final currency = _walletData?['currency'] ?? 'FARM';
-    final creationRevenue = _asDouble(_walletData?['escrow_creation_revenue']);
-    final releaseRevenue = _asDouble(_walletData?['escrow_release_revenue']);
-    final withdrawalRevenue = _asDouble(_walletData?['withdrawal_revenue']);
-    final merchantSalesRevenue =
-        _asDouble(_walletData?['merchant_sales_revenue']);
-    final merchantSalesCount =
-        _asDouble(_walletData?['merchant_sales_count']).toInt();
-    final totalPlatformRevenue =
-        _asDouble(_walletData?['total_platform_revenue']);
+    final feeReport = parseFeeRevenue(_walletData ?? const {});
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -489,16 +484,13 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
                   totalWithdrawn, currency, accent, cardColor, muted),
               const SizedBox(height: 24),
 
-              _buildRevenueBreakdown(
-                creationRevenue,
-                releaseRevenue,
-                withdrawalRevenue,
-                merchantSalesRevenue,
-                merchantSalesCount,
-                totalPlatformRevenue,
-                accent,
-                cardColor,
-                muted,
+              FeeRevenueCard(
+                report: feeReport,
+                period: _feePeriod,
+                onPeriod: (value) => setState(() => _feePeriod = value),
+                cardColor: cardColor,
+                accent: accent,
+                muted: muted,
               ),
               const SizedBox(height: 24),
 
@@ -843,140 +835,6 @@ class _SuperadminWalletPageState extends State<SuperadminWalletPage> {
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
-  Widget _buildRevenueBreakdown(
-      double creation,
-      double release,
-      double withdrawal,
-      double merchantSales,
-      int merchantSalesCount,
-      double total,
-      Color accent,
-      Color cardColor,
-      Color muted) {
-    Widget revenueItem(String label, double value, Color color) {
-      return Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 11),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              '${value.toStringAsFixed(2)} FARM',
-              style: GoogleFonts.plusJakartaSans(
-                color: color,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Platform Revenue',
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Gross fees earned across escrow, withdrawals, and merchant sales',
-            style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 12),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Available balance is net of pending locks and completed withdrawals.',
-            style: GoogleFonts.plusJakartaSans(color: muted, fontSize: 11),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              revenueItem('Escrow creation', creation, Colors.greenAccent),
-              revenueItem('Escrow release', release, Colors.lightBlueAccent),
-              revenueItem('Withdrawals', withdrawal, Colors.orangeAccent),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cardColor.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.purpleAccent.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Merchant revenue',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: Colors.purpleAccent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Merchant fees from $merchantSalesCount sales',
-                      style: GoogleFonts.plusJakartaSans(
-                        color: muted,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  '${merchantSales.toStringAsFixed(2)} FARM',
-                  style: GoogleFonts.plusJakartaSans(
-                    color: Colors.purpleAccent,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.white12, height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Total platform revenue',
-                  style: GoogleFonts.plusJakartaSans(
-                      color: Colors.white70, fontSize: 13)),
-              Text(
-                '${total.toStringAsFixed(2)} FARM',
-                style: GoogleFonts.plusJakartaSans(
-                  color: accent,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildMethodTabs(Color accent, Color cardColor) {
     final methods = [

@@ -87,7 +87,7 @@ class _CreateEscrowState extends State<CreateBusinessEscrowPage> {
         if (_expires != null) 'expires_at': _expires!.toUtc().toIso8601String(),
       });
       return true;
-    }, success: 'Escrow created');
+    }, success: 'Escrow created. Open it and tap Send to buyer so they can fund it.');
     if (ok == true && mounted) Navigator.pop(context, true);
   }
 
@@ -100,7 +100,11 @@ class _CreateEscrowState extends State<CreateBusinessEscrowPage> {
         body: Form(
           key: _form,
           child: ListView(padding: const EdgeInsets.all(20), children: [
-            TextFormField(controller: _buyer, decoration: bizInput(context, 'Buyer username or phone'), validator: _req),
+            TextFormField(
+              controller: _buyer,
+              decoration: bizInput(context, 'Buyer username, phone or email'),
+              validator: _req,
+            ),
             const SizedBox(height: 12),
             TextFormField(controller: _title, decoration: bizInput(context, 'Title'), validator: _req),
             const SizedBox(height: 12),

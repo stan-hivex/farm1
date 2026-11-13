@@ -26,7 +26,7 @@ import '/services/transaction_authorization_service.dart';
 import '/services/auth/auth_service.dart';
 import '/core/localization/app_locale_service.dart';
 import '/utils/transaction_peer_resolver.dart';
-import '/utils/transaction_history_utils.dart';
+import '/utils/personal_activity.dart';
 import '/services/transaction_receipt_service.dart';
 import 'package:flutter/material.dart';
 import '/pages/mkulima/mkulima_pages.dart';
@@ -99,7 +99,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     if (OfflineCache.has('recentTransactions') ||
         app.recentTransactions.isNotEmpty) {
       transactions =
-          app.recentTransactions.where(isVisibleTransactionHistoryItem).toList();
+          app.recentTransactions.where(isPersonalActivity).toList();
       isTransactionsLoading = false;
     }
     final growth = ApiService.getCached(_growthPath);
@@ -153,7 +153,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _startPeriodicRefresh();
-      unawaited(_refreshDashboard(forceAuthRefresh: true));
+      unawaited(_refreshDashboard(includeExtras: false));
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       _refreshTimer?.cancel();
@@ -167,7 +167,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       kesEquivalent = FFAppState().kesEquivalent;
       profileImageUrl = FFAppState().profileImageUrl;
       transactions = FFAppState().recentTransactions
-          .where(isVisibleTransactionHistoryItem)
+          .where(isPersonalActivity)
           .toList();
       unreadNotificationsCount = FFAppState().unreadNotificationCount;
       isBalanceLoading = false;
@@ -181,52 +181,76 @@ class _DashboardWidgetState extends State<DashboardWidget>
       return;
     }
 
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 90), (_) {
       if (!mounted ||
           !FFAppState().isLoggedIn ||
           FFAppState().accessToken.isEmpty) {
         return;
       }
-      unawaited(_refreshDashboard());
+      unawaited(_refreshDashboard(includeExtras: false));
     });
   }
 
-  Future<void> _refreshDashboard({bool forceAuthRefresh = false}) async {
+  bool _refreshInFlight = false;
+  DateTime? _lastNavAt;
+
+  void _openOnce(VoidCallback go) {
+    final now = DateTime.now();
+    if (_lastNavAt != null &&
+        now.difference(_lastNavAt!) < const Duration(milliseconds: 800)) {
+      return;
+    }
+    _lastNavAt = now;
+    go();
+  }
+
+  Future<void> _refreshDashboard({
+    bool forceAuthRefresh = false,
+    bool includeExtras = true,
+  }) async {
+    if (_refreshInFlight) return;
     if (!mounted ||
         !FFAppState().isLoggedIn ||
         FFAppState().accessToken.isEmpty) {
       return;
     }
+    _refreshInFlight = true;
 
     if (mounted && !isBalanceLoading) setState(() => _refreshing = true);
     try {
-      await AppSessionManager().syncNow(
-        profileTimeoutSeconds: 5,
-        walletTimeoutSeconds: 5,
-        transactionsTimeoutSeconds: 5,
-        forceAuthRefresh: forceAuthRefresh,
-      );
-    } catch (e) {
-      debugPrint('Dashboard refresh failed: $e');
+      try {
+        await AppSessionManager().syncNow(
+          profileTimeoutSeconds: 5,
+          walletTimeoutSeconds: 5,
+          transactionsTimeoutSeconds: 5,
+          forceAuthRefresh: forceAuthRefresh,
+        );
+      } catch (e) {
+        debugPrint('Dashboard refresh failed: $e');
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        walletBalance = FFAppState().walletBalance;
+        kesEquivalent = FFAppState().kesEquivalent;
+        profileImageUrl = FFAppState().profileImageUrl;
+        transactions = FFAppState().recentTransactions
+            .where(isPersonalActivity)
+            .toList();
+        final wallet = ApiService.getCached('/wallet');
+        if (wallet != null) _applyBusinessWallet(wallet);
+        isBalanceLoading = false;
+        isTransactionsLoading = false;
+      });
+
+      if (includeExtras) {
+        await Future.wait([fetchGrowthHistory(), loadNotifications()]);
+      }
+    } finally {
+      _refreshInFlight = false;
+      if (mounted) setState(() => _refreshing = false);
     }
-
-    if (!mounted) return;
-
-    setState(() {
-      walletBalance = FFAppState().walletBalance;
-      kesEquivalent = FFAppState().kesEquivalent;
-      profileImageUrl = FFAppState().profileImageUrl;
-      transactions = FFAppState().recentTransactions
-          .where(isVisibleTransactionHistoryItem)
-          .toList();
-      final wallet = ApiService.getCached('/wallet');
-      if (wallet != null) _applyBusinessWallet(wallet);
-      isBalanceLoading = false;
-      isTransactionsLoading = false;
-    });
-
-    await Future.wait([fetchGrowthHistory(), loadNotifications()]);
-    if (mounted) setState(() => _refreshing = false);
   }
 
   Future<void> logoutUser() async {
@@ -307,7 +331,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
       final items = response['data'] as List? ?? [];
       if (!mounted) return;
       setState(() {
-        transactions = items.where(isVisibleTransactionHistoryItem).toList();
+        transactions = items.where(isPersonalActivity).toList();
         isTransactionsLoading = false;
       });
     } catch (e) {
@@ -1337,7 +1361,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                         CrossAxisAlignment
                                                             .center,
                                                     children: [
-                                                      const FarmCoinIcon(size: 16.0),
+                                                      FarmCoinIcon(
+                                                        size: 14,
+                                                        color: Theme.of(context).brightness == Brightness.dark
+                                                            ? Colors.white70
+                                                            : FlutterFlowTheme.of(context).onPrimary70,
+                                                      ),
                                                       const SizedBox(width: 6.0),
                                                       Text(
                                                         'FARM BALANCE',
@@ -1376,7 +1405,15 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       ),
                                                     ].divide(const SizedBox(width: 4.0)),
                                                   ),
-                                                  Text(
+                                                  Row(
+                                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                                    children: [
+                                                      if (!isBalanceLoading) ...[
+                                                        const FarmCoinIcon(size: 32, color: AppTheme.accent),
+                                                        const SizedBox(width: 8),
+                                                      ],
+                                                      Flexible(
+                                                        child: Text(
                                                     isBalanceLoading
                                                         ? 'Loading...'
                                                         : walletBalance
@@ -1400,6 +1437,9 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                               FontWeight.w800,
                                                           lineHeight: 1.2,
                                                         ),
+                                                  ),
+                                                      ),
+                                                    ],
                                                   ),
                                                   if (!isBalanceLoading &&
                                                       businessBalance != null)
@@ -1577,14 +1617,14 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       icon: Icons
                                                           .arrow_downward_rounded,
                                                       label: 'Deposit',
-                                                      onTap: () => _guardKycAccess(
+                                                      onTap: () => _openOnce(() => _guardKycAccess(
                                                         feature: 'deposit',
                                                         onAllowed: () =>
                                                             context.pushNamed(
                                                               DepositpageWidget
                                                                   .routeName,
                                                             ),
-                                                      ),
+                                                      )),
                                                     ),
                                                     buildActionButton(
                                                       color: buttonColor,
@@ -1639,12 +1679,12 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         CrossAxisAlignment.center,
                                     children: [
                                       GestureDetector(
-                                        onTap: () => _guardKycAccess(
+                                        onTap: () => _openOnce(() => _guardKycAccess(
                                           feature: 'send & receive',
                                           onAllowed: () => context.pushNamed(
                                             SendReceiveWidget.routeName,
                                           ),
-                                        ),
+                                        )),
                                         child: wrapWithModel(
                                           model: _model.quickActionModel1,
                                           updateCallback: () =>
@@ -2132,18 +2172,20 @@ class _DashboardWidgetState extends State<DashboardWidget>
 
                                     final ActivityLabel? sysLabel =
                                         systemActivityLabel(tx);
-                                    final String title = sysLabel != null
-                                        ? sysLabel.title
-                                        : isMerchantPayment
-                                        ? (isOutgoing
-                                              ? 'Sent to $peerWithMerchant'
-                                              : 'Received from $peerWithMerchant')
-                                        : (isOutgoing
-                                              ? 'Sent to $peerUsername'
-                                              : 'Received from $peerUsername');
+                                    final String? qrTitle = merchantQrTitle(tx);
+                                    final String title = qrTitle ??
+                                        (sysLabel != null
+                                            ? sysLabel.title
+                                            : isMerchantPayment
+                                                ? (isOutgoing
+                                                    ? 'Sent to $peerWithMerchant'
+                                                    : 'Received from $peerWithMerchant')
+                                                : (isOutgoing
+                                                    ? 'Sent to $peerUsername'
+                                                    : 'Received from $peerUsername'));
 
                                     final String subtitle =
-                                        '${sysLabel?.type ?? (isMerchantPayment ? 'merchant_payment' : txType)} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
+                                        '${qrTitle ?? sysLabel?.type ?? (isMerchantPayment ? 'merchant_payment' : txType)} • ${_formatTransactionDate(tx['created_at'] ?? tx['createdAt'] ?? tx['timestamp'] ?? tx['date'])}';
 
                                     return Padding(
                                       padding: const EdgeInsets.only(

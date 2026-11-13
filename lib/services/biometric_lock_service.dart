@@ -94,7 +94,7 @@ class BiometricLockService {
     debugPrint('Stored biometric last verified: ${now.toIso8601String()}');
   }
 
-  Future<bool> enableBiometrics() async {
+  Future<bool> enableBiometrics({required String pin}) async {
     try {
       if (!await canUseBiometrics()) {
         throw Exception('Biometrics not available');
@@ -118,6 +118,7 @@ class BiometricLockService {
       // Register with backend (deviceFingerprint key expected)
       final deviceId = await BiometricApiService.enableBiometrics(
         deviceFingerprint: fingerprint,
+        pin: pin,
         biometricType: available.contains(BiometricType.face) ? 'faceID' : 'fingerprint',
       );
 

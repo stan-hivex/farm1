@@ -40,12 +40,12 @@ class _BusinessWalletPageState extends State<BusinessWalletPage> {
     );
     ctrl.dispose();
     if (amount == null || amount <= 0 || !mounted) return;
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Move to personal',
         message: 'Move ${money(amount)} from your business wallet to your personal wallet? No fee.');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final ok = await runBusy(context, () async {
-      await BusinessOpsApi.moveToPersonal(amount, pin);
+      await BusinessOpsApi.moveToPersonal(amount, auth);
       return true;
     }, success: 'Moved to your personal wallet');
     if (ok == true && mounted) setState(() => _key = UniqueKey());
@@ -65,7 +65,7 @@ class _BusinessWalletPageState extends State<BusinessWalletPage> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('Business balance available', style: TextStyle(color: mutedColor(c))),
                   Row(children: [
-                    if ('${w['currency'] ?? 'FARM'}' == 'FARM') ...[const FarmCoinIcon(size: 28), const SizedBox(width: 10)],
+                    if ('${w['currency'] ?? 'FARM'}' == 'FARM') ...[FarmCoinIcon(size: 30, color: goldOn(c)), const SizedBox(width: 8)],
                     Flexible(child: Text(money(w['available_balance'], '${w['currency'] ?? 'FARM'}'),
                       style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: goldOn(c)))),
                   ]),
@@ -112,6 +112,17 @@ class _BusinessWalletPageState extends State<BusinessWalletPage> {
 }
 
 /// The business wallet's own custodial Algorand account (not the owner's personal one).
+String? _balanceLine(Map<String, dynamic> a, String asset) {
+  final direct = a['${asset}_balance'] ?? a['${asset}Balance'];
+  if (direct != null && '$direct'.isNotEmpty) return '$direct';
+  final balances = a['balances'];
+  if (balances is Map && balances[asset] != null) return '${balances[asset]}';
+  if (balances is Map && balances[asset.toUpperCase()] != null) {
+    return '${balances[asset.toUpperCase()]}';
+  }
+  return null;
+}
+
 class _BusinessChainCard extends StatelessWidget {
   const _BusinessChainCard({required this.account});
   final Map<String, dynamic>? account;
@@ -143,11 +154,22 @@ class _BusinessChainCard extends StatelessWidget {
           ),
         const SizedBox(height: 6),
         SelectableText(addr, style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: fgColor(c))),
+        if (ready && _balanceLine(a, 'usdc') != null) KeyValue('USDC', _balanceLine(a, 'usdc')!),
+        if (ready && _balanceLine(a, 'algo') != null) KeyValue('ALGO', _balanceLine(a, 'algo')!),
+        if (a['usdc_status'] != null) KeyValue('USDC', '${a['usdc_status']}'),
+        for (final asset in ((a['assets'] as List?) ?? const []).whereType<Map>())
+          KeyValue(
+            '${asset['symbol'] ?? 'Asset'}',
+            '${asset['status'] ?? ''}${asset['asa_id'] != null ? ' · ${asset['asa_id']}' : ''}',
+          ),
         Text(
           ready
-              ? a['usdc_ready'] == true
-                  ? 'Receive FARM, USDC or ALGO here on Algorand (${a['network'] ?? ''}); it is credited to your business balance. Only send on Algorand; other networks or tokens may be lost. USDC and ALGO convert to FARM at the live rate; FARM is credited 1:1.'
-                  : 'Receive FARM or ALGO here on Algorand (${a['network'] ?? ''}); it is credited to your business balance. USDC is being set up: do not send USDC yet. Only send on Algorand; other networks or tokens may be lost.'
+              ? (a['usdc_ready'] == true || a['usdc_status'] == 'ready'
+                  ? 'Receive ALGO, USDC and FARM at this address on Algorand (${a['network'] ?? ''}). '
+                      'USDC is ready${a['usdc_asa_id'] != null ? ' (asset ${a['usdc_asa_id']})' : ''}. '
+                      'Only send on Algorand.'
+                  : 'Receive FARM at this address on Algorand (${a['network'] ?? ''}). '
+                      'USDC opt-in is ${a['usdc_status'] ?? 'pending'}.')
               : 'Setting up this account. Do not send funds yet.',
           style: TextStyle(fontSize: 11, color: mutedColor(c)),
         ),
@@ -380,19 +402,18 @@ class _RequestPayoutState extends State<RequestPayoutPage> {
   Future<void> _submit() async {
     if (!_form.currentState!.validate()) return;
     final amount = double.parse(_amount.text);
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Confirm payout',
         message: 'Send ${money(amount)} to ${_name.text.trim()} (${_number.text.trim()})?');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final ok = await runBusy(context, () async {
-      await BusinessOpsApi.requestPayout({
+      await BusinessOpsApi.requestPayout(withPaymentAuth({
         'amount': amount,
         'method': _method == 'mobile_money' ? 'MOBILE_MONEY' : 'BANK_TRANSFER',
         'account_name': _name.text.trim(),
         if (_method == 'mobile_money') 'phone_number': _number.text.trim().replaceAll(' ', ''),
         if (_method != 'mobile_money') 'account_number': _number.text.trim(),
-        'pin': pin,
-      });
+      }, auth));
       return true;
     }, success: 'Payout sent');
     if (ok == true && mounted) Navigator.pop(context, true);

@@ -326,20 +326,19 @@ class _OfferDetailsState extends State<_OfferDetails> {
         'phone_number': p.phone.text.trim(),
       });
     }
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Pay ${money(o['price_farm'])}',
         message: 'Book ${_route(o)} with ${o['owner']}?\n\nThe amount is held from your FARM wallet and refunded in full if the airline does not confirm.');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final r = await runBusy(
         context,
-        () => TravelApi.book({
+        () => TravelApi.book(withPaymentAuth({
               'offer_id': o['id'],
               'passengers': passengers,
               'expected_total_farm': o['price_farm'],
-              'pin': pin,
               'idempotency_key': _key,
               if (widget.aiActionId != null) 'ai_action_id': widget.aiActionId,
-            }));
+            }, auth)));
     if (r != null && mounted) {
       Navigator.of(context).pop();
       pushPage(context, TravelBookingPage(id: '${r['id']}'));
