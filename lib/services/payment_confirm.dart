@@ -27,13 +27,21 @@ class PaymentConfirmation {
     if (biometric) {
       return {
         'biometric_auth': true,
-        'device_fingerprint': deviceFingerprint,
-        'pin': null,
+        if (deviceFingerprint != null && deviceFingerprint!.isNotEmpty)
+          'device_fingerprint': deviceFingerprint,
       };
     }
     return {'pin': pin};
   }
 }
+
+/// Merges [auth] into a request body. PIN-only callers must not use this
+/// with a biometric result.
+Map<String, dynamic> withPaymentAuth(
+  Map<String, dynamic> body,
+  PaymentConfirmation auth,
+) =>
+    {...body, ...auth.authFields()};
 
 /// One confirm step. When [biometricSupported] is true and biometrics are on,
 /// the device prompt comes first and the PIN is the fallback. PIN-only

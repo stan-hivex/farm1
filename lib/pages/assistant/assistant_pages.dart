@@ -25,12 +25,12 @@ const _actionLabels = {
 
 /// Confirms a pending AI payment with the transaction PIN. Returns true when sent.
 Future<bool> confirmAiPayment(BuildContext c, Map<String, dynamic> a) async {
-  final pin = await confirmWithPin(c,
+  final auth = await confirmWithPin(c,
       title: 'Confirm payment',
       message: 'Send ${money(a['amount'])} to ${a['recipient_identifier']}?'
-          '${a['description'] != null ? '\n"${a['description']}"' : ''}\n\nMkulima proposed this. Only your PIN sends it.');
-  if (pin == null || !c.mounted) return false;
-  final r = await runBusy(c, () => AiApi.confirm('${a['id']}', pin), success: 'Payment sent');
+          '${a['description'] != null ? '\n"${a['description']}"' : ''}\n\nMkulima proposed this. Biometrics or your PIN sends it.');
+  if (auth == null || !c.mounted) return false;
+  final r = await runBusy(c, () => AiApi.confirm('${a['id']}', auth), success: 'Payment sent');
   return r != null;
 }
 
@@ -97,14 +97,14 @@ class _ActionCard extends StatelessWidget {
 /// Confirms a Mkulima hotel proposal in chat. The server re-prices, checks the PIN and books.
 Future<bool> confirmAiHotel(BuildContext c, Map<String, dynamic> a) async {
   final p = (a['payload'] as Map?) ?? const {};
-  final pin = await confirmWithPin(c,
+  final auth = await confirmWithPin(c,
       title: 'Confirm hotel booking',
       message: 'Book ${a['recipient_identifier']} (${p['checkin'] ?? ''} to ${p['checkout'] ?? ''}) for ${money(a['amount'])}?'
           '${p['refundable'] == false ? '\nThis rate is non-refundable.' : ''}'
           '${p['sandbox'] == true ? '\nSandbox booking (test only).' : ''}'
-          '\n\nGuest details come from your profile. Only your PIN books it.');
-  if (pin == null || !c.mounted) return false;
-  final r = await runBusy(c, () => AiApi.confirm('${a['id']}', pin), success: 'Booking processed');
+          '\n\nGuest details come from your profile. Biometrics or your PIN books it.');
+  if (auth == null || !c.mounted) return false;
+  final r = await runBusy(c, () => AiApi.confirm('${a['id']}', auth), success: 'Booking processed');
   return r != null;
 }
 
@@ -859,14 +859,14 @@ extension on _ActionCard {
               child: ElevatedButton(
                 style: primaryButtonStyle(c),
                 onPressed: () async {
-                  final pin = await confirmWithPin(c,
+                  final auth = await confirmWithPin(c,
                       title: 'Confirm payment',
-                      message: 'Pay ${money(a['amount'])}${a['description'] != null ? ' for "${a['description']}"' : ''}?\n\nMkulima proposed this. Only your PIN sends it.');
-                  if (pin == null || !c.mounted) return;
-                  final r = await runBusy(c, () => AiApi.confirm('${a['id']}', pin), success: 'Payment sent');
+                      message: 'Pay ${money(a['amount'])}${a['description'] != null ? ' for "${a['description']}"' : ''}?\n\nMkulima proposed this. Biometrics or your PIN sends it.');
+                  if (auth == null || !c.mounted) return;
+                  final r = await runBusy(c, () => AiApi.confirm('${a['id']}', auth), success: 'Payment sent');
                   if (r != null) onChanged();
                 },
-                child: const Text('Pay with PIN'),
+                child: const Text('Pay'),
               ),
             ),
           ]),

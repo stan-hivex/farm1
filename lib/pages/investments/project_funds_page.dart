@@ -69,12 +69,12 @@ class _ProjectFundsPageState extends State<ProjectFundsPage> {
     tag.dispose();
     note.dispose();
     if (ok != true || r.isEmpty || !mounted) return;
-    final pin = await confirmWithPin(context,
+    final auth = await confirmWithPin(context,
         title: 'Confirm payment', message: 'Pay ${kind == 'invoice' ? 'invoice' : 'link'} $r from project funds.');
-    if (pin == null || !mounted) return;
+    if (auth == null || !mounted) return;
     final k = _key();
     final res = await runBusy(context,
-        () => InvestmentsApi.spendProjectFunds(widget.projectId, kind: kind, ref: r, pin: pin, tag: t, note: n, key: k),
+        () => InvestmentsApi.spendProjectFunds(widget.projectId, kind: kind, ref: r, auth: auth, tag: t, note: n, key: k),
         success: 'Paid from project funds.');
     if (res != null) _reload();
   }
@@ -107,9 +107,9 @@ class _ProjectFundsPageState extends State<ProjectFundsPage> {
     note.dispose();
     if (ok != true || !mounted) return;
     if (a == null || a < 1) return bizSnack(context, 'Enter at least 1 FARM');
-    final pin = await confirmWithPin(context, title: 'Confirm deposit', message: 'Deposit ${money(a)} into the project.');
-    if (pin == null || !mounted) return;
-    final res = await runBusy(context, () => InvestmentsApi.depositReturns(widget.projectId, a, pin, note: n),
+    final auth = await confirmWithPin(context, title: 'Confirm deposit', message: 'Deposit ${money(a)} into the project.');
+    if (auth == null || !mounted) return;
+    final res = await runBusy(context, () => InvestmentsApi.depositReturns(widget.projectId, a, auth, note: n),
         success: 'Returns deposited.');
     if (res != null) _reload();
   }

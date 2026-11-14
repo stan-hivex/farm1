@@ -104,7 +104,7 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
       if (s('description') != null) 'description': s('description'),
       if (n('target_amount') != null) 'target_amount': n('target_amount'),
       if (n('minimum_investment') != null) 'minimum_investment': n('minimum_investment'),
-      'maximum_investment': n('maximum_investment'),
+      if (n('maximum_investment') != null) 'maximum_investment': n('maximum_investment'),
       if (n('duration_months') != null) 'duration_months': n('duration_months')!.toInt(),
       if (s('use_of_funds') != null) 'use_of_funds': s('use_of_funds'),
       if (s('risk_factors') != null) 'risk_factors': s('risk_factors'),

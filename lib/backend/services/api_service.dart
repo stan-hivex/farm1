@@ -9,6 +9,8 @@ import '/core/app_config.dart';
 import '/app_state.dart';
 import '/services/offline_cache.dart';
 import '/services/auth/refresh_manager.dart';
+import '/services/auth/session_end.dart';
+import '/services/push_session_policy.dart';
 import '/utils/transaction_history_utils.dart';
 
 class ApiServiceException implements Exception {
@@ -419,15 +421,22 @@ class ApiService {
             OfflineCache.write('api:$path', decoded);
           }
         } else {
-          _cache.clear();
+          _invalidateAfterWrite(path);
         }
       } catch (_) {}
       return decoded;
     }
 
-    final message = decoded['message'] is String
-        ? decoded['message'] as String
-        : responseBody;
+    final message = _apiMessage(decoded, responseBody);
+    if (response.statusCode == 401 &&
+        requiresAuth &&
+        (RefreshManager().lastFailureWasTerminal ||
+            isTerminalSessionFailure(
+              message,
+              code: decoded['code'] is String ? decoded['code'] as String : null,
+            ))) {
+      await SessionEnd.forceLocalSignOut('revoked or expired session');
+    }
     if (response.statusCode == 429) {
       final retryAfter = int.tryParse(response.headers['retry-after'] ?? '');
       final waitMessage = retryAfter == null
@@ -677,11 +686,21 @@ class ApiService {
         },
       );
 
-  static Future<void> logout() =>
-      _request(method: 'POST', path: '/auth/logout');
+  static Future<Map<String, dynamic>> logout({String? pushToken}) {
+    final token = pushToken?.trim() ?? '';
+    return _request(
+      method: 'POST',
+      path: '/auth/logout',
+      body: token.isEmpty ? null : {'token': token},
+    );
+  }
 
   static Future<Map<String, dynamic>> getSessions() =>
       _request(method: 'GET', path: '/auth/sessions');
+
+  /// Push registrations for this account. The raw token is never returned.
+  static Future<Map<String, dynamic>> getPushDevices() =>
+      _request(method: 'GET', path: '/auth/devices');
 
   static Future<Map<String, dynamic>> revokeSession({
     required String sessionId,
@@ -860,6 +879,63 @@ class ApiService {
       path == '/wallet' ||
       path == '/users/me' ||
       path.startsWith('/analytics/growth-history');
+
+  /// Nest validation errors arrive as `message: ["field must be ..."]`.
+  static String _apiMessage(dynamic decoded, String raw) {
+    if (decoded is Map) {
+      final message = decoded['message'];
+      if (message is String && message.trim().isNotEmpty) return message.trim();
+      if (message is List) {
+        final joined = message
+            .map((part) => '$part'.trim())
+            .where((part) => part.isNotEmpty)
+            .join(' ');
+        if (joined.isNotEmpty) return joined;
+      }
+    }
+    return raw;
+  }
+
+  /// Drop cached reads for the resource that was just written, plus the
+  /// wallet and notification lists when money moved. Other screens keep
+  /// their cache.
+  static void _invalidateAfterWrite(String path) {
+    final root = path.split('?').first;
+    final parts = root.split('/').where((part) => part.isNotEmpty).toList();
+    final head = parts.isEmpty ? '' : '/${parts.first}';
+    bool related(String key) {
+      final clean = key.split('?').first;
+      if (clean == root || clean.startsWith('$root/')) return true;
+      if (head.isNotEmpty && (clean == head || clean.startsWith('$head/'))) {
+        return true;
+      }
+      return false;
+    }
+
+    _cache.removeWhere((key, _) => related(key));
+    const moneyHeads = {
+      '/wallet',
+      '/withdraw',
+      '/pay',
+      '/business',
+      '/escrow',
+      '/nfc-pay',
+      '/marketplace',
+      '/investments',
+      '/travel',
+      '/agent-payments',
+      '/ai',
+      '/payment-requests',
+      '/transfer-requests',
+      '/qr',
+    };
+    if (moneyHeads.contains(head)) {
+      _cache.remove('/wallet');
+      _cache.removeWhere((key, _) =>
+          key.split('?').first.startsWith('/wallet/') ||
+          key.split('?').first.startsWith('/notifications'));
+    }
+  }
 
   static void invalidateCache([String? path]) {
     if (path == null) {

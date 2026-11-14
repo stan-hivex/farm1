@@ -1,5 +1,8 @@
 import '/services/offline_cache.dart';
 import '/services/payment_confirm.dart';
+
+export '/services/payment_confirm.dart';
+import '/utils/user_error_message.dart';
 import 'package:flutter/material.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '../business_ui.dart';
@@ -180,8 +183,12 @@ class BizAsyncState<T> extends State<BizAsync<T>> {
         child: SingleChildScrollView(
           child: BizMessage(
             icon: Icons.cloud_off_rounded,
-            title: 'Something went wrong',
-            message: _error!,
+            title: _error == kGenericErrorMessage || _error == kServerErrorMessage
+                ? 'Something went wrong'
+                : _error!,
+            message: _error == kGenericErrorMessage || _error == kServerErrorMessage
+                ? _error!
+                : 'Tap Retry to load this again.',
             action: reload,
             actionLabel: 'Retry',
           ),
@@ -346,17 +353,21 @@ Future<bool> confirmAction(BuildContext c,
   return r ?? false;
 }
 
-/// PIN confirm for routes that do not accept biometric authorization.
-/// Biometric-capable payments should call [confirmPayment] directly.
-Future<String?> confirmWithPin(BuildContext c,
-    {required String title, required String message}) async {
-  final result = await confirmPayment(
+/// Shared confirm. Biometrics first when [biometricSupported] is true.
+/// API keys and webhook secrets pass false and still require the PIN.
+Future<PaymentConfirmation?> confirmWithPin(
+  BuildContext c, {
+  required String title,
+  required String message,
+  bool biometricSupported = true,
+}) {
+  return confirmPayment(
     c,
     title: title,
     message: message,
-    biometricSupported: false,
+    biometricSupported: biometricSupported,
+    localizedReason: title,
   );
-  return result?.pin;
 }
 
 /// Runs [action] with a blocking spinner and reports errors.

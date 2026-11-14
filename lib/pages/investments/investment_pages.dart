@@ -272,15 +272,15 @@ Future<bool?> startInvest(BuildContext c, Map<String, dynamic> p) async {
   final rule = await runBusy(c, () => FeesApi.rule('investment'));
   if (rule == null || !c.mounted) return null;
   final fee = rule.feeFor(amount);
-  final pin = await confirmWithPin(c,
+  final auth = await confirmWithPin(c,
       title: 'Confirm investment',
       message: 'Invest ${money(amount)} in ${p['project_name']}.\n'
           'Marketplace fee (${rule.percentLabel}): ${money(fee)}\n'
           'Total from your wallet: ${money(amount + fee)}\n'
           'You could lose this money.');
-  if (pin == null || !c.mounted) return null;
+  if (auth == null || !c.mounted) return null;
   final r = await runBusy(c,
-      () => InvestmentsApi.invest('${p['id']}', amount: amount, pin: pin, disclosureVersion: '${disc['version']}'),
+      () => InvestmentsApi.invest('${p['id']}', amount: amount, auth: auth, disclosureVersion: '${disc['version']}'),
       success: 'Investment recorded');
   return r != null;
 }
@@ -581,9 +581,9 @@ class _TokensTabState extends State<TokensTab> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enter a recipient and 1 to $max tokens')));
       return;
     }
-    final pin = await confirmWithPin(context, title: 'Send tokens', message: 'Send $units tokens to $to.');
-    if (pin == null || !mounted) return;
-    final r = await runBusy(context, () => InvestmentsApi.sendTokens('${a['id']}', to, units, pin), success: 'Tokens sent.');
+    final auth = await confirmWithPin(context, title: 'Send tokens', message: 'Send $units tokens to $to.');
+    if (auth == null || !mounted) return;
+    final r = await runBusy(context, () => InvestmentsApi.sendTokens('${a['id']}', to, units, auth), success: 'Tokens sent.');
     if (r != null) _key.currentState?.reload();
   }
 
