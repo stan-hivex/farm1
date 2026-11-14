@@ -122,8 +122,8 @@ class AppSessionManager {
     }
 
     try {
-      // Force token rotation on app resume; routine refreshes only renew tokens
-      // when they are close to expiry.
+      // Refresh only when the access token is close to expiry. App resume must
+      // not rotate a still-valid refresh token unnecessarily.
       try {
         final refreshed = await RefreshManager()
             .refreshIfNeeded(force: forceAuthRefresh);

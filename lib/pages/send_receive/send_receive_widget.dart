@@ -694,20 +694,10 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
       setState(() => isRequesting = true);
       final amount = enteredAmount;
 
-      final expiresAt = DateTime.now()
-          .toUtc()
-          .add(const Duration(hours: 12))
-          .toIso8601String();
-
-      await ApiService.request(
-        method: 'POST',
-        path: '/payment-requests/request',
-        body: {
-          'recipient_identifier': recipientController.text.trim(),
-          'amount': amount,
-          'description': descriptionController.text.trim(),
-          'expires_at': expiresAt,
-        },
+      await PaymentRequestApiService.requestPayment(
+        recipientIdentifier: recipientController.text.trim(),
+        amount: amount,
+        description: descriptionController.text.trim(),
       );
 
       successController.forward();
@@ -1900,8 +1890,19 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                       const SizedBox(
                                         height: 12,
                                       ),
-                                      Row(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [FarmCoinIcon(size: 32, color: FlutterFlowTheme.of(context).brandAccentText), const SizedBox(width: 8), Flexible(child: Text(
-                                        '${balance.toStringAsFixed(2)} FARM',
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          FarmCoinIcon(
+                                            size: 32,
+                                            color: FlutterFlowTheme.of(context)
+                                                .brandAccentText,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                        balance.toStringAsFixed(2),
                                         style: FlutterFlowTheme.of(context)
                                             .headlineLarge
                                             .override(
@@ -1910,7 +1911,10 @@ class _SendReceiveWidgetState extends State<SendReceiveWidget>
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                      ))]),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ],
                                   ),
                                 ),

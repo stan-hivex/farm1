@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '/backend/services/api_service.dart';
@@ -7,10 +9,11 @@ import 'business_ui.dart';
 /// "Verify business" step: opens Didit's hosted KYB link, like personal KYC.
 /// Didit is the only KYB path.
 class BusinessKybStep extends StatefulWidget {
-  const BusinessKybStep({super.key, this.initialStatus});
+  const BusinessKybStep({super.key, this.initialStatus, this.onStatusChanged});
 
   /// Normalised Didit KYB status from `/business/me` (`didit_kyb_status`).
   final String? initialStatus;
+  final ValueChanged<String?>? onStatusChanged;
 
   @override
   State<BusinessKybStep> createState() => _BusinessKybStepState();
@@ -20,6 +23,22 @@ class _BusinessKybStepState extends State<BusinessKybStep> {
   late KybUiState _state = kybStateFor(widget.initialStatus);
   bool _busy = false;
   String? _error;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refresh(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _refresh() async {
     setState(() {
@@ -30,7 +49,9 @@ class _BusinessKybStepState extends State<BusinessKybStep> {
       final resp = await ApiService.getDiditKybStatus();
       final data = resp['data'] is Map ? resp['data'] as Map : resp;
       if (mounted) {
-        setState(() => _state = kybStateFor(data['status']?.toString()));
+        final status = data['status']?.toString();
+        setState(() => _state = kybStateFor(status));
+        widget.onStatusChanged?.call(status);
       }
     } catch (e) {
       if (mounted) setState(() => _error = kybErrorMessage(e));
@@ -40,6 +61,30 @@ class _BusinessKybStepState extends State<BusinessKybStep> {
   }
 
   Future<void> _start() async {
+    final consent = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Before you continue'),
+        content: const Text(
+          'FARM will open Didit, our business-verification provider. '
+          'Information you enter in Didit will be processed for KYB. '
+          'Didit’s signed decision controls whether this business is approved. '
+          'Continue only if you are authorized to verify this business.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('I consent and continue'),
+          ),
+        ],
+      ),
+    );
+    if (consent != true || !mounted) return;
+
     setState(() {
       _busy = true;
       _error = null;
@@ -55,7 +100,10 @@ class _BusinessKybStepState extends State<BusinessKybStep> {
         mode: LaunchMode.externalApplication,
       );
       if (!opened) throw Exception('could not open Didit');
-      if (mounted) setState(() => _state = KybUiState.pending);
+      if (mounted) {
+        setState(() => _state = KybUiState.pending);
+        widget.onStatusChanged?.call('pending');
+      }
     } catch (e) {
       if (mounted) setState(() => _error = kybErrorMessage(e));
     } finally {
@@ -64,12 +112,12 @@ class _BusinessKybStepState extends State<BusinessKybStep> {
   }
 
   IconData get _icon => switch (_state) {
-        KybUiState.verified => Icons.verified_outlined,
-        KybUiState.declined => Icons.cancel_outlined,
-        KybUiState.inReview || KybUiState.pending => Icons.hourglass_top,
-        KybUiState.actionNeeded => Icons.info_outline,
-        KybUiState.notStarted => Icons.domain_verification_outlined,
-      };
+    KybUiState.verified => Icons.verified_outlined,
+    KybUiState.declined => Icons.cancel_outlined,
+    KybUiState.inReview || KybUiState.pending => Icons.hourglass_top,
+    KybUiState.actionNeeded => Icons.info_outline,
+    KybUiState.notStarted => Icons.domain_verification_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +200,11 @@ class _BusinessKybStepState extends State<BusinessKybStep> {
         const SizedBox(height: 12),
         Text(
           'This step is required. FARM verifies the business only through Didit.',
-          style: TextStyle(color: mutedColor(context), fontSize: 12, height: 1.5),
+          style: TextStyle(
+            color: mutedColor(context),
+            fontSize: 12,
+            height: 1.5,
+          ),
         ),
       ],
     );

@@ -631,7 +631,7 @@ class _KycManagementPageState extends State<KycManagementPage>
           width: 104,
           child: Text('$label:',
               style: GoogleFonts.plusJakartaSans(
-                  color: context.onBackground.withOpacity(0.87),
+                  color: context.onBackground.withValues(alpha: 0.87),
                   fontSize: 12,
                   fontWeight: FontWeight.w600)),
         ),

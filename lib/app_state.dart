@@ -51,13 +51,14 @@ class FFAppState extends ChangeNotifier {
 
   Future<void> initializePersistedState() async {
     final prefs = await SharedPreferences.getInstance();
-    final normalizedStoredRole =
-        (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+    final normalizedStoredRole = (await AuthSessionStore.readActiveRole() ?? '')
+        .toLowerCase();
 
     final adminSession = await AuthSessionStore.readAdminSession();
     final superAdminSession = await AuthSessionStore.readSuperAdminSession();
     final userSession = await AuthSessionStore.readUserSession();
-    final secureAccessToken = await SecureStorageService.readAccessToken() ?? '';
+    final secureAccessToken =
+        await SecureStorageService.readAccessToken() ?? '';
     final secureRefreshToken =
         await SecureStorageService.readRefreshToken() ?? '';
     final secureUserId = await SecureStorageService.readUserId() ?? '';
@@ -68,7 +69,8 @@ class FFAppState extends ChangeNotifier {
       _refreshToken = adminSession.refreshToken;
       _userId = adminSession.userId;
       _role = adminSession.role;
-      _isLoggedIn = adminSession.accessToken.isNotEmpty ||
+      _isLoggedIn =
+          adminSession.accessToken.isNotEmpty ||
           adminSession.refreshToken.isNotEmpty;
     } else if (normalizedStoredRole == 'super_admin' &&
         superAdminSession != null) {
@@ -76,14 +78,16 @@ class FFAppState extends ChangeNotifier {
       _refreshToken = superAdminSession.refreshToken;
       _userId = superAdminSession.userId;
       _role = superAdminSession.role;
-      _isLoggedIn = superAdminSession.accessToken.isNotEmpty ||
+      _isLoggedIn =
+          superAdminSession.accessToken.isNotEmpty ||
           superAdminSession.refreshToken.isNotEmpty;
     } else if (normalizedStoredRole == 'user' && userSession != null) {
       _accessToken = userSession.accessToken;
       _refreshToken = userSession.refreshToken;
       _userId = userSession.userId;
       _role = userSession.role;
-      _isLoggedIn = userSession.accessToken.isNotEmpty ||
+      _isLoggedIn =
+          userSession.accessToken.isNotEmpty ||
           userSession.refreshToken.isNotEmpty;
     } else if (normalizedStoredRole.isNotEmpty &&
         (secureAccessToken.isNotEmpty ||
@@ -95,8 +99,8 @@ class FFAppState extends ChangeNotifier {
       _role = normalizedStoredRole;
       _isLoggedIn =
           secureAccessToken.isNotEmpty ||
-              secureRefreshToken.isNotEmpty ||
-              secureIsLoggedIn;
+          secureRefreshToken.isNotEmpty ||
+          secureIsLoggedIn;
     } else {
       _accessToken = '';
       _refreshToken = '';
@@ -114,11 +118,22 @@ class FFAppState extends ChangeNotifier {
       );
     }
 
-    _firstName = prefs.getString('firstName') ?? '';
-    _userName = prefs.getString('userName') ?? '';
-    _phone = prefs.getString('phone') ?? '';
-    _email = prefs.getString('email') ?? '';
-    _kycStatus = prefs.getString('kycStatus') ?? '';
+    _userData = _isLoggedIn && _role.isNotEmpty
+        ? (await AuthSessionStore.readRoleSession(_role))?.userData ??
+              <String, dynamic>{}
+        : <String, dynamic>{};
+    _firstName =
+        _userData['first_name']?.toString() ??
+        prefs.getString('firstName') ??
+        '';
+    _userName =
+        _userData['username']?.toString() ?? prefs.getString('userName') ?? '';
+    _phone = _userData['phone']?.toString() ?? prefs.getString('phone') ?? '';
+    _email = _userData['email']?.toString() ?? prefs.getString('email') ?? '';
+    _kycStatus =
+        _userData['kyc_status']?.toString() ??
+        prefs.getString('kycStatus') ??
+        '';
     // Authentication is restored only from the selected role session. Legacy
     // SharedPreferences auth keys must never resurrect a different session.
     _biometricsEnabled = prefs.getBool('biometricsEnabled') ?? false;
@@ -158,7 +173,8 @@ class FFAppState extends ChangeNotifier {
     final themeModeString =
         prefs.getString('themeMode') ?? prefs.getString('__theme_mode__');
     final legacyDarkMode = prefs.getBool('__theme_mode__');
-    _themeMode = themeModeString == ThemeMode.dark.name ||
+    _themeMode =
+        themeModeString == ThemeMode.dark.name ||
             (themeModeString == null && legacyDarkMode == true)
         ? ThemeMode.dark
         : ThemeMode.light;
@@ -171,7 +187,8 @@ class FFAppState extends ChangeNotifier {
 
     // Diagnostic auth restore log
     debugPrint(
-        '[AUTH STARTUP] Restored role=$_role accessTokenPresent=${_accessToken.isNotEmpty} refreshTokenPresent=${_refreshToken.isNotEmpty} authenticated=$_isLoggedIn');
+      '[AUTH STARTUP] Restored role=$_role accessTokenPresent=${_accessToken.isNotEmpty} refreshTokenPresent=${_refreshToken.isNotEmpty} authenticated=$_isLoggedIn',
+    );
   }
 
   bool _suspendNotifications = false;
@@ -219,8 +236,9 @@ class FFAppState extends ChangeNotifier {
     }
 
     final normalizedRole = _role.toLowerCase();
-    final persistedSession =
-        await AuthSessionStore.readRoleSession(normalizedRole);
+    final persistedSession = await AuthSessionStore.readRoleSession(
+      normalizedRole,
+    );
     final persistedToken = persistedSession?.accessToken ?? '';
     if (persistedToken.isNotEmpty) {
       // Lazily restore in-memory token from persisted role session without
@@ -463,10 +481,19 @@ class FFAppState extends ChangeNotifier {
   String _role = '';
   String get role => _role;
   set role(String value) {
-    if (_role == value) return;
-    _role = value;
+    final normalizedRole = AuthSessionStore.normalizeRole(value);
+    if (_role == normalizedRole) return;
+    _role = normalizedRole;
     notifyListeners();
-    unawaited(SecureStorageService.writeRole(value));
+    unawaited(SecureStorageService.writeRole(normalizedRole));
+  }
+
+  Map<String, dynamic> _userData = <String, dynamic>{};
+  Map<String, dynamic> get userData =>
+      Map<String, dynamic>.unmodifiable(_userData);
+  set userData(Map<String, dynamic> value) {
+    _userData = Map<String, dynamic>.from(value);
+    notifyListeners();
   }
 
   bool get isUser => _role.toLowerCase() == 'user';
@@ -557,7 +584,8 @@ class FFAppState extends ChangeNotifier {
   }
 
   Future<void> clearAuthCredentials([String? reason]) async {
-    final msg = '[FFAppState] clearAuthCredentials called' +
+    final msg =
+        '[FFAppState] clearAuthCredentials called' +
         (reason != null ? ' reason=$reason' : '');
     debugPrint(msg);
     debugPrint(StackTrace.current.toString());
@@ -570,6 +598,7 @@ class FFAppState extends ChangeNotifier {
     userName = '';
     phone = '';
     email = '';
+    userData = <String, dynamic>{};
     kycStatus = '';
     emailVerified = false;
     isLoggedIn = false;

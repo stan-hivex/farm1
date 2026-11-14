@@ -4,6 +4,9 @@ import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/pages/dashboard/dashboard_widget.dart';
 import '/pages/biometric_unlock_page/biometric_unlock_page_widget.dart';
+import '/pages/loginpage/loginpage_widget.dart';
+import '/pages/registerpage/registerpage_widget.dart';
+import '/pages/settings/legal_document_page.dart';
 import '/services/auth/route_guard_service.dart';
 import '/services/biometric_lock_service.dart';
 import '/admin/core/admin_guard.dart';
@@ -37,9 +40,6 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
   void initState() {
     super.initState();
     _model = createModel(context, () => OnboardingModel());
-    // Always show onboarding for a short duration on cold start so users
-    // briefly see the intro before automatic navigation when already
-    // authenticated (2-4 seconds). Adjust `displayDuration` to change duration.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _runStartupAuthCheck();
@@ -389,6 +389,8 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                   icon_present: false,
                                   icon_end_present: false,
                                   on_tap: 'navigate:loginpage',
+                                  onTapCallback: () =>
+                                      context.go(LoginpageWidget.routePath),
                                   color: Colors.black,
                                   variant: 'primary',
                                   size: 'large',
@@ -411,8 +413,9 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                                     SizedBox(
                                       width: double.infinity,
                                       child: OutlinedButton(
-                                        onPressed: () =>
-                                            context.pushNamed('registerpage'),
+                                        onPressed: () => context.push(
+                                          RegisterpageWidget.routePath,
+                                        ),
                                         style: OutlinedButton.styleFrom(
                                           side: const BorderSide(
                                             color: Color(0xFF111111),
@@ -477,7 +480,9 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                             ),
                             GestureDetector(
                               onTap: () {
-                                context.pushNamed('TermsOfServicePage');
+                                context.push(
+                                  LegalDocumentPageWidget.termsRoutePath,
+                                );
                               },
                               child: Text(
                                 'onboarding.terms'.tr(),
@@ -507,7 +512,10 @@ class _OnboardingWidgetState extends State<OnboardingWidget> {
                             ),
                             GestureDetector(
                               onTap: () {
-                                context.pushNamed('PrivacyPolicyPage');
+                                context.push(
+                                  LegalDocumentPageWidget
+                                      .privacyPolicyRoutePath,
+                                );
                               },
                               child: Text(
                                 'onboarding.privacy'.tr(),

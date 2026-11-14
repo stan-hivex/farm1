@@ -30,6 +30,15 @@
     avoid_unnecessary_containers: false
     sized_box_for_whitespace: false
     unnecessary_non_null_assertion: false
+    analyzer:
+      exclude:
+        - build/**
+        - android/**
+        - ios/**
+        - web/**
+        - windows/**
+        - macos/**
+        - linux/**
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

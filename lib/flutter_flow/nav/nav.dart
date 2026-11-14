@@ -85,7 +85,7 @@ GoRouter createRouter(
   AppStateNotifier appStateNotifier, {
   String? initialLocation,
 }) => GoRouter(
-  initialLocation: initialLocation ?? OnboardingWidget.routePath,
+  initialLocation: initialLocation ?? SplashPage.routePath,
   debugLogDiagnostics: true,
   refreshListenable: Listenable.merge([appStateNotifier, FFAppState()]),
   navigatorKey: appNavigatorKey,
@@ -94,6 +94,7 @@ GoRouter createRouter(
   redirect: (context, state) {
     final authState = FFAppState();
     final path = state.uri.path;
+    if (path == SplashPage.routePath) return null;
     if (path == '/pay/success') return null;
     final documentCheckout = classifyFarmpayPath(path);
     final documentLocation =
@@ -113,7 +114,6 @@ GoRouter createRouter(
           ? null
           : OnboardingWidget.routePath;
     }
-
     if (authState.loginPreferencesPending &&
         (path == '/login' ||
             path == '/loginpage' ||
@@ -346,11 +346,10 @@ GoRouter createRouter(
     FFRoute(
       name: PayBusinessPage.routeName,
       path: PayBusinessPage.routePath,
-      builder: (context, params) =>
-          PayBusinessPage(
-            initialCode: params.getParam('code', ParamType.String),
-            initialInvoice: params.getParam('invoice', ParamType.String),
-          ),
+      builder: (context, params) => PayBusinessPage(
+        initialCode: params.getParam('code', ParamType.String),
+        initialInvoice: params.getParam('invoice', ParamType.String),
+      ),
     ),
     FFRoute(
       name: TapReceivePage.routeName,

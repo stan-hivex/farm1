@@ -54,6 +54,7 @@ class _BusinessHubState extends State<BusinessHub> {
       cacheKey: 'dashboard',
       builder: (ctx, d, reload) {
         final w = d['wallet'] as Map?;
+        final currency = '${w?['currency'] ?? 'FARM'}';
         final m = d['last_30_days'] as Map?;
         final inv = (d['open_invoices'] as Map?) ?? {};
         final recent = (d['recent_payments'] as List?) ?? const [];
@@ -75,8 +76,8 @@ class _BusinessHubState extends State<BusinessHub> {
                   Text(w['kind'] == 'business' ? 'Business balance' : 'Available balance', style: TextStyle(color: mutedColor(ctx))),
                   const SizedBox(height: 4),
                   Row(children: [
-                    if ('${w['currency'] ?? 'FARM'}' == 'FARM') ...[FarmCoinIcon(size: 28, color: fgColor(ctx)), const SizedBox(width: 8)],
-                    Flexible(child: Text(money(w['available_balance'], '${w['currency'] ?? 'FARM'}'),
+                    if (currency == 'FARM') ...[FarmCoinIcon(size: 28, color: fgColor(ctx)), const SizedBox(width: 8)],
+                    Flexible(child: Text(money(w['available_balance'], currency == 'FARM' ? '' : currency),
                       style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: fgColor(ctx)))),
                   ]),
                 ],

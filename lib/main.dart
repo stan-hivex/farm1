@@ -21,9 +21,11 @@ import 'services/biometric_lock_service.dart';
 import 'services/notification_service.dart';
 import 'services/socket_service.dart';
 import 'services/auth/startup_authenticator.dart';
+import 'services/secure_storage_service.dart';
 import 'pages/biometric_unlock_page/biometric_unlock_page_widget.dart';
 import 'pages/all_transactions/all_transactions_widget.dart';
 import 'pages/dashboard/dashboard_widget.dart';
+import 'pages/merchant_dashboard/merchant_dashboard_widget.dart';
 import 'admin/pages/admin_password_reset_page.dart';
 import 'utils/farmpay_checkout.dart';
 import 'utils/merchant_qr_parser.dart';
@@ -54,8 +56,8 @@ void main() async {
     FlutterError.dumpErrorToConsole(details);
   };
 
-  ErrorWidget.builder =
-      (FlutterErrorDetails details) => buildSafeErrorWidget(details);
+  ErrorWidget.builder = (FlutterErrorDetails details) =>
+      buildSafeErrorWidget(details);
 
   // Only local, fast work happens before the first frame. Independent steps
   // run in parallel; nothing here waits on the network.
@@ -65,6 +67,7 @@ void main() async {
     Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform),
     FlutterFlowTheme.initialize(),
     () async {
+      await SecureStorageService.prepareInstallScope();
       debugPrint('Restoring the persisted secure login session...');
       await FFAppState().initializePersistedState();
       // Restore the session from local storage only; the token refresh and
@@ -79,7 +82,8 @@ void main() async {
 
   final prefs = await prefsFuture;
   final savedLanguage = prefs.getString('language');
-  final languageCode = FFAppState().isLoggedIn &&
+  final languageCode =
+      FFAppState().isLoggedIn &&
           AppLocaleService.supportedLocales
               .map((locale) => locale.languageCode)
               .contains(savedLanguage)
@@ -95,8 +99,8 @@ void main() async {
           .verifySession()
           .then((_) => AppSessionManager().refreshAppData())
           .catchError((e) {
-        debugPrint('[Main] Initial app refresh failed: $e');
-      });
+            debugPrint('[Main] Initial app refresh failed: $e');
+          });
     });
   } else {
     WidgetsBinding.instance.addPostFrameCallback(
@@ -107,38 +111,39 @@ void main() async {
   configureUrlStrategy();
 
   // Run the app inside a guarded zone to capture uncaught errors with stack traces
-  runZonedGuarded(() {
-    runApp(
-      EasyLocalization(
-        startLocale: Locale(languageCode),
-        supportedLocales: AppLocaleService.supportedLocales,
-        path: 'assets/translations',
-        fallbackLocale: const Locale('en'),
-        child: MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => FFAppState()),
-          ],
-          child: const MyApp(),
+  runZonedGuarded(
+    () {
+      runApp(
+        EasyLocalization(
+          startLocale: Locale(languageCode),
+          supportedLocales: AppLocaleService.supportedLocales,
+          path: 'assets/translations',
+          fallbackLocale: const Locale('en'),
+          child: MultiProvider(
+            providers: [ChangeNotifierProvider(create: (_) => FFAppState())],
+            child: const MyApp(),
+          ),
         ),
-      ),
-    );
+      );
 
-    // These services are optional at launch. They must not prevent the first
-    // frame when device permissions or the backend are unavailable.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => unawaited(_initializeOptionalServices()),
-    );
-  }, (error, stack) {
-    // Print uncaught errors to console so they appear in the browser devtools
-    // and in the terminal running `flutter run`.
-    // Use debugPrint if available at runtime.
-    try {
-      // ignore: avoid_print
-      print('Uncaught error: $error');
-      // ignore: avoid_print
-      print(stack.toString());
-    } catch (_) {}
-  });
+      // These services are optional at launch. They must not prevent the first
+      // frame when device permissions or the backend are unavailable.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => unawaited(_initializeOptionalServices()),
+      );
+    },
+    (error, stack) {
+      // Print uncaught errors to console so they appear in the browser devtools
+      // and in the terminal running `flutter run`.
+      // Use debugPrint if available at runtime.
+      try {
+        // ignore: avoid_print
+        print('Uncaught error: $error');
+        // ignore: avoid_print
+        print(stack.toString());
+      } catch (_) {}
+    },
+  );
 }
 
 Future<void> _initializeOptionalServices() async {
@@ -181,6 +186,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? _pendingPasswordResetCode;
   String? _activePasswordResetCode;
   Timer? _refreshTimer;
+  bool _backgroundLockRecorded = false;
 
   ThemeMode _effectiveThemeMode(String currentLocation) {
     return FFAppState().themeMode;
@@ -202,8 +208,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     final RouteMatch lastMatch = routeMatch ?? routeConfig.last;
 
-    final RouteMatchList matchList =
-        lastMatch is ImperativeRouteMatch ? lastMatch.matches : routeConfig;
+    final RouteMatchList matchList = lastMatch is ImperativeRouteMatch
+        ? lastMatch.matches
+        : routeConfig;
 
     if (matchList.uri.path.isEmpty) {
       return '';
@@ -298,9 +305,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       final encodedPayload = uri.queryParameters['qr'];
       try {
         final payload = encodedPayload != null && encodedPayload.isNotEmpty
-            ? utf8.decode(
-                base64Url.decode(base64Url.normalize(encodedPayload)),
-              )
+            ? utf8.decode(base64Url.decode(base64Url.normalize(encodedPayload)))
             : uri.queryParameters['qrPayload']?.trim();
         final merchantId = uri.queryParameters['merchantId']?.trim();
         final businessName = uri.queryParameters['businessName']?.trim();
@@ -316,14 +321,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           );
           return;
         }
-        _router.go(Uri(
-          path: '/merchantPayment',
-          queryParameters: {
-            'merchantId': resolvedMerchantId,
-            'businessName': resolvedBusinessName,
-            'qrPayload': payload ?? '',
-          },
-        ).toString());
+        _router.go(
+          Uri(
+            path: '/merchantPayment',
+            queryParameters: {
+              'merchantId': resolvedMerchantId,
+              'businessName': resolvedBusinessName,
+              'qrPayload': payload ?? '',
+            },
+          ).toString(),
+        );
       } catch (error) {
         debugPrint('[APP LINKS] Invalid merchant payment link: $error');
       }
@@ -334,11 +341,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final continueUri = continueUrl == null ? null : Uri.tryParse(continueUrl);
     final isPasswordResetContinuation =
         continueUri?.host == 'farmapp-e2145.firebaseapp.com' &&
-            continueUri?.path == '/admin-reset-password';
-    final isPasswordResetHost = uri.path == '/admin-reset-password' &&
+        continueUri?.path == '/admin-reset-password';
+    final isPasswordResetHost =
+        uri.path == '/admin-reset-password' &&
         (uri.host == 'farmapp.africa' ||
             uri.host == 'farmapp-e2145.firebaseapp.com');
-    final isFirebaseActionHost = uri.host == 'farmapp-e2145.firebaseapp.com' &&
+    final isFirebaseActionHost =
+        uri.host == 'farmapp-e2145.firebaseapp.com' &&
         uri.path.startsWith('/__/auth/action') &&
         isPasswordResetContinuation;
     final code = uri.queryParameters['oobCode'];
@@ -378,16 +387,29 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[APP] Resumed - forcing a fresh auth/data sync');
+      _backgroundLockRecorded = false;
+      debugPrint('[APP] Resumed - refreshing app data and checking token expiry');
       _startPeriodicRefresh();
-      unawaited(_refreshAppState(forceAuthRefresh: true));
+      unawaited(_refreshAppState());
       unawaited(_handleResumeLock());
     } else if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       debugPrint('[APP] Backgrounded - session preserved');
       _refreshTimer?.cancel();
+      if (!_backgroundLockRecorded) {
+        _backgroundLockRecorded = true;
+        unawaited(_recordBiometricBackground());
+      }
+    }
+  }
+
+  Future<void> _recordBiometricBackground() async {
+    try {
+      await BiometricLockService().markAppBackgrounded();
+    } catch (error, stackTrace) {
+      debugPrint('[APP] Could not persist biometric background time: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
@@ -400,7 +422,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final lockService = BiometricLockService();
     if (lockService.isAuthenticating) {
       debugPrint(
-          '[Main] Biometric auth already in progress; skipping resume lock check.');
+        '[Main] Biometric auth already in progress; skipping resume lock check.',
+      );
       return;
     }
 
@@ -477,19 +500,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop && !kIsWeb) {
             debugPrint('[APP] Android back - preserving session');
-            if (_router.routeInformationProvider.value.uri.path ==
-                AllTransactionsWidget.routePath) {
+            final currentPath = _router.routeInformationProvider.value.uri.path;
+            if (currentPath == BiometricUnlockPageWidget.routePath) return;
+            if (currentPath == AllTransactionsWidget.routePath ||
+                currentPath == MerchantDashboardWidget.routePath) {
               _router.go(DashboardWidget.routePath);
             } else {
               SystemNavigator.pop();
             }
           }
         },
-        child: Stack(
-          children: [
-            child ?? const SizedBox.shrink(),
-          ],
-        ),
+        child: Stack(children: [child ?? const SizedBox.shrink()]),
       ),
     );
   }

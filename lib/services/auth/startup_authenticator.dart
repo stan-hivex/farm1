@@ -9,8 +9,8 @@ import 'refresh_manager.dart';
 /// Behavior:
 /// - Reads role-specific persisted session from `AuthSessionStore`.
 /// - Restores in-memory `FFAppState()` fields if missing.
-/// - Attempts a forced refresh using `RefreshManager().refreshIfNeeded(force: true)`
-///   when a persisted session exists.
+/// - Refreshes expired access tokens using
+///   `RefreshManager().refreshIfNeeded()` when a persisted session exists.
 /// - If refresh is temporarily unavailable, keeps the persisted session intact.
 class StartupAuthenticator {
   static final StartupAuthenticator _instance =
@@ -30,8 +30,8 @@ class StartupAuthenticator {
     state.setAuthStartupState(AuthStartupState.initializing);
     debugPrint('[AUTH STARTUP] Beginning session restoration');
     try {
-      final role =
-          (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+      final role = (await AuthSessionStore.readActiveRole() ?? '')
+          .toLowerCase();
       if (role.isEmpty) {
         state.setAuthStartupState(AuthStartupState.unauthenticated);
         return;
@@ -77,24 +77,27 @@ class StartupAuthenticator {
   bool _pendingVerify = false;
   Future<void>? _verifying;
 
-  /// Background half of [restoreSession]: forced refresh + profile identity
-  /// check. Safe to call more than once; runs at most once at a time.
+  /// Background half of [restoreSession]: expiry-based refresh + profile
+  /// identity check. Safe to call more than once; runs at most once at a time.
   Future<void> verifySession() {
     if (!_pendingVerify) return _verifying ?? Future.value();
     _pendingVerify = false;
     return _verifying ??= _verify()
-        .catchError((Object e) => debugPrint('[AUTH STARTUP] Background verify failed: $e'))
+        .catchError(
+          (Object e) =>
+              debugPrint('[AUTH STARTUP] Background verify failed: $e'),
+        )
         .whenComplete(() => _verifying = null);
   }
 
   Future<void> _verify() async {
     final state = FFAppState();
     {
-      // Forced refresh to ensure tokens are valid. If refresh succeeds,
-      // the RefreshManager will update persisted session tokens as needed.
+      // Refresh only if the access token is expired or close to expiry.
+      // If refresh succeeds, persist the rotated tokens.
       bool refreshed = false;
       try {
-        refreshed = await RefreshManager().refreshIfNeeded(force: true);
+        refreshed = await RefreshManager().refreshIfNeeded();
         debugPrint('[AUTH STARTUP] Refresh result=$refreshed');
       } catch (e) {
         debugPrint('[AUTH STARTUP] Refresh temporarily unavailable: $e');
@@ -130,7 +133,8 @@ class StartupAuthenticator {
 
       if (!refreshed) {
         debugPrint(
-            '[AUTH STARTUP] Preserving persisted session after temporary refresh failure');
+          '[AUTH STARTUP] Preserving persisted session after temporary refresh failure',
+        );
       }
       if (state.isLoggedIn) {
         state.setAuthStartupState(AuthStartupState.authenticated);
@@ -145,7 +149,8 @@ class StartupAuthenticator {
         state.isLoggedIn = true;
         state.setAuthStartupState(AuthStartupState.authenticated);
         debugPrint(
-            '[AUTH STARTUP] Restoration temporarily unavailable; session preserved');
+          '[AUTH STARTUP] Restoration temporarily unavailable; session preserved',
+        );
       } else {
         state.setAuthStartupState(AuthStartupState.unauthenticated);
         debugPrint('[StartupAuthenticator] restoreSession error: $e');

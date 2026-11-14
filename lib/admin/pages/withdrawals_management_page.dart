@@ -521,7 +521,7 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                       borderRadius: BorderRadius.circular(18),
                                       border: Border.all(
                                           color: context.onSurface
-                                              .withOpacity(0.1)),
+                                              .withValues(alpha: 0.1)),
                                     ),
                                     child: Column(
                                         crossAxisAlignment:
@@ -592,8 +592,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         13,
                                                                     fontWeight:
@@ -604,8 +604,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         13,
                                                                     fontWeight:
@@ -616,8 +616,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         13,
                                                                     fontWeight:
@@ -628,8 +628,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         12,
                                                                     fontWeight:
@@ -640,8 +640,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         12,
                                                                     fontWeight:
@@ -652,8 +652,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         12,
                                                                     fontWeight:
@@ -664,8 +664,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         11)),
                                                             Text(
@@ -673,8 +673,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         11)),
                                                             Text(
@@ -682,8 +682,8 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                                                 style: GoogleFonts.plusJakartaSans(
                                                                     color: context
                                                                         .onSurface
-                                                                        .withOpacity(
-                                                                            0.54),
+                                                                        .withValues(
+                                                                            alpha: 0.54),
                                                                     fontSize:
                                                                         11)),
                                                           ]),
@@ -717,7 +717,7 @@ class _WithdrawalsManagementPageState extends State<WithdrawalsManagementPage>
                                               style:
                                                   GoogleFonts.plusJakartaSans(
                                                       color: context.onSurface
-                                                          .withOpacity(0.7),
+                                                          .withValues(alpha: 0.7),
                                                       fontSize: 12)),
                                           if ((w['rejectionReason'] ?? '')
                                               .toString()

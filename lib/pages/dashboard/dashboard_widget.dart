@@ -57,9 +57,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
   final scaffoldKey = GlobalKey<ScaffoldState>();
 
   double walletBalance = 0.0;
-  /// Separate business (merchant) balance, shown under personal when the backend has BUSINESS_WALLET_ENABLED.
-  double? businessBalance;
-  String? businessName;
   double kesEquivalent = 0.0;
   bool isBalanceLoading = true;
 
@@ -94,7 +91,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
     final wallet = ApiService.getCached('/wallet');
     if (wallet != null) {
       isBalanceLoading = false;
-      _applyBusinessWallet(wallet);
     }
     if (OfflineCache.has('recentTransactions') ||
         app.recentTransactions.isNotEmpty) {
@@ -104,17 +100,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
     }
     final growth = ApiService.getCached(_growthPath);
     if (growth != null) _applyGrowth(growth);
-  }
-
-  void _applyBusinessWallet(Map<String, dynamic> response) {
-    final data = response['data'] is Map
-        ? Map<String, dynamic>.from(response['data'] as Map)
-        : response;
-    final biz = data['business_wallet'];
-    businessBalance = biz is Map
-        ? double.tryParse('${biz['available_balance'] ?? biz['balance'] ?? 0}')
-        : null;
-    businessName = biz is Map ? '${biz['name'] ?? 'Business'}' : null;
   }
 
   @override
@@ -238,8 +223,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
         transactions = FFAppState().recentTransactions
             .where(isPersonalActivity)
             .toList();
-        final wallet = ApiService.getCached('/wallet');
-        if (wallet != null) _applyBusinessWallet(wallet);
         isBalanceLoading = false;
         isTransactionsLoading = false;
       });
@@ -279,11 +262,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
             0.0;
         kesEquivalent =
             double.tryParse((data['kes_equivalent'] ?? 0).toString()) ?? 0.0;
-        final biz = data['business_wallet'];
-        businessBalance = biz is Map
-            ? double.tryParse('${biz['available_balance'] ?? biz['balance'] ?? 0}')
-            : null;
-        businessName = biz is Map ? '${biz['name'] ?? 'Business'}' : null;
         isBalanceLoading = false;
       });
     } catch (e) {
@@ -1361,13 +1339,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                         CrossAxisAlignment
                                                             .center,
                                                     children: [
-                                                      FarmCoinIcon(
-                                                        size: 14,
-                                                        color: Theme.of(context).brightness == Brightness.dark
-                                                            ? Colors.white70
-                                                            : FlutterFlowTheme.of(context).onPrimary70,
-                                                      ),
-                                                      const SizedBox(width: 6.0),
                                                       Text(
                                                         'FARM BALANCE',
                                                         style: FlutterFlowTheme.of(context).labelSmall.override(
@@ -1441,25 +1412,6 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                                       ),
                                                     ],
                                                   ),
-                                                  if (!isBalanceLoading &&
-                                                      businessBalance != null)
-                                                    Padding(
-                                                      padding:
-                                                          const EdgeInsets.only(
-                                                            top: 4.0,
-                                                          ),
-                                                      child: Text(
-                                                        '${businessName ?? 'Business'} (merchant): ${businessBalance!.toStringAsFixed(2)} FARM',
-                                                        overflow:
-                                                            TextOverflow.ellipsis,
-                                                        style: const TextStyle(
-                                                          color: Colors.white70,
-                                                          fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
                                                   Padding(
                                                     padding:
                                                         const EdgeInsets.only(
@@ -2126,7 +2078,7 @@ class _DashboardWidgetState extends State<DashboardWidget>
                                         tx['is_outgoing'] == true;
 
                                     final String amount =
-                                        '${isOutgoing ? '-' : '+'}${double.parse(tx['amount'].toString()).toStringAsFixed(2)} FARM';
+                                        '${isOutgoing ? '-' : '+'}${double.parse(tx['amount'].toString()).toStringAsFixed(2)}';
 
                                     final String status =
                                         tx['status'] ?? 'Completed';

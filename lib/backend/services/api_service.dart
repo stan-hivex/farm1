@@ -45,25 +45,19 @@ class ApiService {
     Map<String, dynamic>? body,
     bool requiresAuth = true,
     int timeoutSeconds = 20,
-  }) =>
-      _request(
-        method: method,
-        path: path,
-        body: body,
-        requiresAuth: requiresAuth,
-        timeoutSeconds: timeoutSeconds,
-      );
+  }) => _request(
+    method: method,
+    path: path,
+    body: body,
+    requiresAuth: requiresAuth,
+    timeoutSeconds: timeoutSeconds,
+  );
 
   static Future<List<String>> uploadImages({
     required List<Uint8List> files,
     required List<String> filenames,
     required List<String> mimeTypes,
-  }) =>
-      _uploadImages(
-        files: files,
-        filenames: filenames,
-        mimeTypes: mimeTypes,
-      );
+  }) => _uploadImages(files: files, filenames: filenames, mimeTypes: mimeTypes);
 
   /// Business document upload: PDF, JPG, PNG or WebP up to 10 MB.
   /// The server re-validates type (magic bytes) and size.
@@ -82,15 +76,20 @@ class ApiService {
     }
     final token = await FFAppState().getActiveAccessToken();
     final parts = mimeType.split('/');
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('${AppConfig.api}/ai/voice'),
-    )..headers.addAll({
-        'Accept': 'application/json',
-        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-      });
-    request.files.add(http.MultipartFile.fromBytes('audio', bytes,
-        filename: filename, contentType: MediaType(parts[0], parts.length > 1 ? parts[1] : 'webm')));
+    final request =
+        http.MultipartRequest('POST', Uri.parse('${AppConfig.api}/ai/voice'))
+          ..headers.addAll({
+            'Accept': 'application/json',
+            if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+          });
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'audio',
+        bytes,
+        filename: filename,
+        contentType: MediaType(parts[0], parts.length > 1 ? parts[1] : 'webm'),
+      ),
+    );
     final response = await http.Response.fromStream(
       await _client.send(request).timeout(const Duration(seconds: 60)),
     );
@@ -104,14 +103,22 @@ class ApiService {
       final refreshed = await RefreshManager().refreshIfNeeded(force: true);
       if (refreshed) {
         return transcribeVoice(
-            bytes: bytes, filename: filename, mimeType: mimeType, isRetry: true);
+          bytes: bytes,
+          filename: filename,
+          mimeType: mimeType,
+          isRetry: true,
+        );
       }
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final m = decoded['message'];
-      throw Exception(m is String ? m : 'Could not transcribe (${response.statusCode})');
+      throw Exception(
+        m is String ? m : 'Could not transcribe (${response.statusCode})',
+      );
     }
-    final d = decoded['data'] is Map ? Map<String, dynamic>.from(decoded['data'] as Map) : decoded;
+    final d = decoded['data'] is Map
+        ? Map<String, dynamic>.from(decoded['data'] as Map)
+        : decoded;
     return d;
   }
 
@@ -137,15 +144,23 @@ class ApiService {
       throw ArgumentError('Only PDF, JPG, PNG and WebP files are supported.');
     }
     final token = await FFAppState().getActiveAccessToken();
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('${AppConfig.api}/uploads/document'),
-    )..headers.addAll({
-        'Accept': 'application/json',
-        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-      });
-    request.files.add(http.MultipartFile.fromBytes('file', bytes,
-        filename: filename, contentType: type));
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse('${AppConfig.api}/uploads/document'),
+          )
+          ..headers.addAll({
+            'Accept': 'application/json',
+            if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+          });
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+        contentType: type,
+      ),
+    );
     final response = await http.Response.fromStream(
       await _client.send(request).timeout(const Duration(seconds: 120)),
     );
@@ -193,24 +208,28 @@ class ApiService {
     }
 
     final token = await FFAppState().getActiveAccessToken();
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('${AppConfig.api}/uploads/multiple'),
-    )..headers.addAll({
-        'Accept': 'application/json',
-        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-      });
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse('${AppConfig.api}/uploads/multiple'),
+          )
+          ..headers.addAll({
+            'Accept': 'application/json',
+            if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+          });
     for (var index = 0; index < files.length; index++) {
       final mimeParts = mimeTypes[index].split('/');
       if (mimeParts.length != 2 || mimeParts.first != 'image') {
         throw ArgumentError('Only image uploads are supported.');
       }
-      request.files.add(http.MultipartFile.fromBytes(
-        'images',
-        files[index],
-        filename: filenames[index],
-        contentType: MediaType(mimeParts[0], mimeParts[1]),
-      ));
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'images',
+          files[index],
+          filename: filenames[index],
+          contentType: MediaType(mimeParts[0], mimeParts[1]),
+        ),
+      );
     }
 
     final response = await http.Response.fromStream(
@@ -329,29 +348,35 @@ class ApiService {
     try {
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await _client.get(uri, headers: headers).timeout(
-                Duration(seconds: timeoutSeconds),
-              );
+          response = await _client
+              .get(uri, headers: headers)
+              .timeout(Duration(seconds: timeoutSeconds));
           break;
         case 'POST':
           response = await _client
-              .post(uri,
-                  headers: headers,
-                  body: body != null ? jsonEncode(body) : null)
+              .post(
+                uri,
+                headers: headers,
+                body: body != null ? jsonEncode(body) : null,
+              )
               .timeout(Duration(seconds: timeoutSeconds));
           break;
         case 'PUT':
           response = await _client
-              .put(uri,
-                  headers: headers,
-                  body: body != null ? jsonEncode(body) : null)
+              .put(
+                uri,
+                headers: headers,
+                body: body != null ? jsonEncode(body) : null,
+              )
               .timeout(Duration(seconds: timeoutSeconds));
           break;
         case 'PATCH':
           response = await _client
-              .patch(uri,
-                  headers: headers,
-                  body: body != null ? jsonEncode(body) : null)
+              .patch(
+                uri,
+                headers: headers,
+                body: body != null ? jsonEncode(body) : null,
+              )
               .timeout(Duration(seconds: timeoutSeconds));
           break;
         case 'DELETE':
@@ -369,16 +394,19 @@ class ApiService {
     } catch (e) {
       final duration = DateTime.now().difference(start);
       debugPrint(
-          '[ApiService] ERROR $method $path after ${duration.inMilliseconds}ms -> $e');
+        '[ApiService] ERROR $method $path after ${duration.inMilliseconds}ms -> $e',
+      );
       rethrow;
     }
 
     final duration = DateTime.now().difference(start);
     debugPrint(
-        '[ApiService] END $method $path status=${response.statusCode} duration=${duration.inMilliseconds}ms');
+      '[ApiService] END $method $path status=${response.statusCode} duration=${duration.inMilliseconds}ms',
+    );
     if (duration.inMilliseconds > 1000) {
       debugPrint(
-          '[ApiService] SLOW_ENDPOINT $method $path took ${duration.inMilliseconds}ms');
+        '[ApiService] SLOW_ENDPOINT $method $path took ${duration.inMilliseconds}ms',
+      );
     }
 
     if (response.statusCode == 401 &&
@@ -477,9 +505,9 @@ class ApiService {
         data: decoded,
       );
     }
-    throw Exception(message.isNotEmpty
-        ? message
-        : 'Request failed (${response.statusCode})');
+    throw Exception(
+      message.isNotEmpty ? message : 'Request failed (${response.statusCode})',
+    );
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -489,21 +517,17 @@ class ApiService {
     String? turnstileToken,
     String? countryCode,
     Map<String, dynamic>? device,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/login',
-        body: attachTurnstileToken(
-          {
-            'identifier': identifier,
-            'password': password,
-            if (device != null) 'device': device,
-          },
-          turnstileToken: turnstileToken,
-        ),
-        requiresAuth: false,
-        timeoutSeconds: 60,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/login',
+    body: attachTurnstileToken({
+      'identifier': identifier,
+      'password': password,
+      if (device != null) 'device': device,
+    }, turnstileToken: turnstileToken),
+    requiresAuth: false,
+    timeoutSeconds: 60,
+  );
 
   static Future<Map<String, dynamic>> completeFirebaseLogin({
     required String identifier,
@@ -511,34 +535,27 @@ class ApiService {
     String? countryCode,
     String? turnstileToken,
     Map<String, dynamic>? device,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/firebase-login',
-        body: attachTurnstileToken(
-          {
-            'identifier': identifier,
-            'firebaseIdToken': firebaseToken,
-            if (device != null) 'device': device,
-          },
-          turnstileToken: turnstileToken,
-        ),
-        requiresAuth: false,
-        timeoutSeconds: 60,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/firebase-login',
+    body: attachTurnstileToken({
+      'identifier': identifier,
+      'firebaseIdToken': firebaseToken,
+      if (device != null) 'device': device,
+    }, turnstileToken: turnstileToken),
+    requiresAuth: false,
+    timeoutSeconds: 60,
+  );
 
   static Future<Map<String, dynamic>> verifyPhone({
     required String firebaseIdToken,
     required String pendingLoginId,
     String? turnstileToken,
   }) {
-    final body = attachTurnstileToken(
-      {
-        'firebaseIdToken': firebaseIdToken,
-        'pendingLoginId': pendingLoginId,
-      },
-      turnstileToken: turnstileToken,
-    );
+    final body = attachTurnstileToken({
+      'firebaseIdToken': firebaseIdToken,
+      'pendingLoginId': pendingLoginId,
+    }, turnstileToken: turnstileToken);
 
     return _request(
       method: 'POST',
@@ -559,26 +576,22 @@ class ApiService {
     String? country,
     String? referralCode,
     String? turnstileToken,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/register',
-        body: attachTurnstileToken(
-          {
-            'first_name': firstName,
-            'last_name': lastName,
-            'username': username,
-            'phone': phone,
-            'password': password,
-            if (email != null && email.isNotEmpty) 'email': email,
-            if (country != null && country.isNotEmpty) 'country': country,
-            if (referralCode != null && referralCode.isNotEmpty)
-              'referral_code': referralCode,
-          },
-          turnstileToken: turnstileToken,
-        ),
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/register',
+    body: attachTurnstileToken({
+      'first_name': firstName,
+      'last_name': lastName,
+      'username': username,
+      'phone': phone,
+      'password': password,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (country != null && country.isNotEmpty) 'country': country,
+      if (referralCode != null && referralCode.isNotEmpty)
+        'referral_code': referralCode,
+    }, turnstileToken: turnstileToken),
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> checkRegistrationAvailability({
     String? username,
@@ -606,85 +619,85 @@ class ApiService {
     required String phone,
     required String otpCode,
     String purpose = 'phone_verification',
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/verify-otp',
-        body: {'phone': phone, 'otp_code': otpCode, 'purpose': purpose},
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/verify-otp',
+    body: {'phone': phone, 'otp_code': otpCode, 'purpose': purpose},
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> forgotPassword({
     required String email,
     String? turnstileToken,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/forgot-password',
-        body: attachTurnstileToken({'email': email},
-            turnstileToken: turnstileToken),
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/forgot-password',
+    body: attachTurnstileToken({
+      'email': email,
+    }, turnstileToken: turnstileToken),
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> resetPassword({
     required String token,
     required String email,
     required String password,
     required String confirmPassword,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/reset-password',
-        body: {
-          'token': token,
-          'email': email,
-          'password': password,
-          'confirm_password': confirmPassword,
-        },
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/reset-password',
+    body: {
+      'token': token,
+      'email': email,
+      'password': password,
+      'confirm_password': confirmPassword,
+    },
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> setPin({
     required String pin,
     required String confirmPin,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/set-pin',
-        body: {'pin': pin, 'confirm_pin': confirmPin},
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/set-pin',
+    body: {'pin': pin, 'confirm_pin': confirmPin},
+  );
 
   static Future<Map<String, dynamic>> changePin({
-    required String currentPin,
+    required String oldPin,
     required String newPin,
     required String confirmPin,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/change-pin',
-        body: {
-          'current_pin': currentPin,
-          'new_pin': newPin,
-          'confirm_pin': confirmPin,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/change-pin',
+    body: {
+      'old_pin': oldPin,
+      'new_pin': newPin,
+      'confirm_pin': confirmPin,
+    },
+  );
 
   static Future<Map<String, dynamic>> resetForgottenPin({
     required String phone,
     required String password,
+    required String otp,
     required String newPin,
     required String confirmPin,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/forgot-pin',
-        body: {
-          'phone': phone,
-          'password': password,
-          'new_pin': newPin,
-          'confirm_pin': confirmPin,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/forgot-pin',
+    body: {
+      'phone': phone,
+      'password': password,
+      'otp': otp,
+      'new_pin': newPin,
+      'confirm_pin': confirmPin,
+    },
+  );
+
+  static Future<Map<String, dynamic>> requestForgotPinOtp() =>
+      _request(method: 'POST', path: '/auth/forgot-pin/request-otp');
 
   static Future<Map<String, dynamic>> logout({String? pushToken}) {
     final token = pushToken?.trim() ?? '';
@@ -704,11 +717,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> revokeSession({
     required String sessionId,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/sessions/$sessionId/revoke',
-      );
+  }) => _request(method: 'POST', path: '/auth/sessions/$sessionId/revoke');
 
   static Future<Map<String, dynamic>> revokeOtherSessions() =>
       _request(method: 'POST', path: '/auth/sessions/revoke-others');
@@ -720,52 +729,49 @@ class ApiService {
     required String currentPassword,
     required String newPassword,
     required String confirmPassword,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/change-password',
-        body: {
-          'current_password': currentPassword,
-          'new_password': newPassword,
-          'confirm_password': confirmPassword,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/change-password',
+    body: {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+      'confirm_password': confirmPassword,
+    },
+  );
 
   static Future<Map<String, dynamic>> refreshToken({
     required String refreshToken,
     String? deviceId,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/refresh',
-        body: {
-          'refresh_token': refreshToken,
-          if (deviceId != null) 'device_id': deviceId,
-        },
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/refresh',
+    body: {
+      'refresh_token': refreshToken,
+      if (deviceId != null) 'device_id': deviceId,
+    },
+    requiresAuth: false,
+  );
 
   // ── Device binding ────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> deviceChallenge({
     required String deviceId,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/device/challenge',
-        body: {'device_id': deviceId},
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/device/challenge',
+    body: {'device_id': deviceId},
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> pendingDeviceStatus({
     required String pendingDeviceId,
     required String deviceId,
-  }) =>
-      _request(
-        method: 'GET',
-        path: '/auth/device/pending/$pendingDeviceId'
-            '?device_id=${Uri.encodeQueryComponent(deviceId)}',
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'GET',
+    path:
+        '/auth/device/pending/$pendingDeviceId'
+        '?device_id=${Uri.encodeQueryComponent(deviceId)}',
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> listTrustedDevices() =>
       _request(method: 'GET', path: '/auth/device/list');
@@ -774,73 +780,63 @@ class ApiService {
   static Future<Map<String, dynamic>> decideDevice({
     required String id,
     required String action,
-  }) =>
-      _request(method: 'POST', path: '/auth/device/$id/$action');
+  }) => _request(method: 'POST', path: '/auth/device/$id/$action');
 
   static Future<Map<String, dynamic>> startDeviceRecovery({
     required String pendingDeviceId,
     required String deviceId,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/device/recovery/start',
-        body: {'pending_device_id': pendingDeviceId, 'device_id': deviceId},
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/device/recovery/start',
+    body: {'pending_device_id': pendingDeviceId, 'device_id': deviceId},
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> verifyDeviceRecoveryOtp({
     required String recoveryId,
     required String deviceId,
     required String otp,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/device/recovery/verify-otp',
-        body: {'recovery_id': recoveryId, 'device_id': deviceId, 'otp': otp},
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/device/recovery/verify-otp',
+    body: {'recovery_id': recoveryId, 'device_id': deviceId, 'otp': otp},
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> deviceRecoveryStatus({
     required String recoveryId,
     required String deviceId,
-  }) =>
-      _request(
-        method: 'GET',
-        path: '/auth/device/recovery/$recoveryId'
-            '?device_id=${Uri.encodeQueryComponent(deviceId)}',
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'GET',
+    path:
+        '/auth/device/recovery/$recoveryId'
+        '?device_id=${Uri.encodeQueryComponent(deviceId)}',
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> completeDeviceRecovery({
     required String recoveryId,
     required String deviceId,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/device/recovery/complete',
-        body: {'recovery_id': recoveryId, 'device_id': deviceId},
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/device/recovery/complete',
+    body: {'recovery_id': recoveryId, 'device_id': deviceId},
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> registerDeviceToken({
     required String token,
     String? platform,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/device-token',
-        body: {
-          'token': token,
-          if (platform != null) 'platform': platform,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/device-token',
+    body: {'token': token, if (platform != null) 'platform': platform},
+  );
 
   static Future<Map<String, dynamic>> resendOtp() =>
       _request(method: 'POST', path: '/auth/resend-otp');
 
-  static Future<Map<String, dynamic>> verifyEmail({
-    required String token,
-  }) =>
+  static Future<Map<String, dynamic>> verifyEmail({required String token}) =>
       _request(
         method: 'POST',
         path: '/auth/verify-email',
@@ -850,18 +846,16 @@ class ApiService {
 
   static Future<Map<String, dynamic>> resendEmailVerification({
     required String email,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/auth/resend-email-verification',
-        body: {'email': email},
-        requiresAuth: false,
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/auth/resend-email-verification',
+    body: {'email': email},
+    requiresAuth: false,
+  );
 
   static Future<Map<String, dynamic>> deleteAccount({
     Map<String, dynamic>? body,
-  }) =>
-      _request(method: 'DELETE', path: '/auth/delete-account', body: body);
+  }) => _request(method: 'DELETE', path: '/auth/delete-account', body: body);
 
   // ── Wallet ────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getWallet({int timeoutSeconds = 20}) =>
@@ -950,17 +944,16 @@ class ApiService {
     required double amount,
     required String pin,
     String? description,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/wallet/send',
-        body: {
-          'recipient_identifier': recipientIdentifier,
-          'amount': amount,
-          'pin': pin,
-          if (description != null) 'description': description,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/wallet/send',
+    body: {
+      'recipient_identifier': recipientIdentifier,
+      'amount': amount,
+      'pin': pin,
+      if (description != null) 'description': description,
+    },
+  );
 
   static Future<Map<String, dynamic>> getTransactions({
     String? type,
@@ -971,7 +964,8 @@ class ApiService {
   }) async {
     final response = await _request(
       method: 'GET',
-      path: '/transactions?page=$page&limit=$limit'
+      path:
+          '/transactions?page=$page&limit=$limit'
           '${type != null ? "&type=$type" : ""}'
           '${status != null ? "&status=$status" : ""}',
       timeoutSeconds: timeoutSeconds,
@@ -986,51 +980,39 @@ class ApiService {
   static Future<Map<String, dynamic>> getReceipts({
     int page = 1,
     int limit = 50,
-  }) =>
-      _request(
-        method: 'GET',
-        path: '/receipts?page=$page&limit=$limit',
-      );
+  }) => _request(method: 'GET', path: '/receipts?page=$page&limit=$limit');
 
-  static Future<Map<String, dynamic>> getReceipt(String receiptId) =>
-      _request(
-        method: 'GET',
-        path: '/receipts/${Uri.encodeComponent(receiptId)}',
-      );
+  static Future<Map<String, dynamic>> getReceipt(String receiptId) => _request(
+    method: 'GET',
+    path: '/receipts/${Uri.encodeComponent(receiptId)}',
+  );
 
-  static Future<Map<String, dynamic>> getReceiptDownloadUrl(
-    String receiptId,
-  ) =>
+  static Future<Map<String, dynamic>> getReceiptDownloadUrl(String receiptId) =>
       _request(
         method: 'GET',
         path: '/receipts/${Uri.encodeComponent(receiptId)}/download',
       );
 
   static Future<Map<String, dynamic>> getTransactionDetails(String id) =>
-      _request(
-        method: 'GET',
-        path: '/transactions/${Uri.encodeComponent(id)}',
-      );
+      _request(method: 'GET', path: '/transactions/${Uri.encodeComponent(id)}');
 
   static Future<Map<String, dynamic>> getGrowthHistory({
     required int days,
     int timeoutSeconds = 20,
-  }) =>
-      _request(
-        method: 'GET',
-        path: '/analytics/growth-history?days=$days',
-        timeoutSeconds: timeoutSeconds,
-      );
+  }) => _request(
+    method: 'GET',
+    path: '/analytics/growth-history?days=$days',
+    timeoutSeconds: timeoutSeconds,
+  );
 
   // ── Merchant ──────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getMerchantQr({
     int timeoutSeconds = 20,
-  }) =>
-      _request(
-        method: 'GET',
-        path: '/merchant/qr',
-        timeoutSeconds: timeoutSeconds,
-      );
+  }) => _request(
+    method: 'GET',
+    path: '/merchant/qr',
+    timeoutSeconds: timeoutSeconds,
+  );
 
   static Future<Map<String, dynamic>> regenerateMerchantQr() =>
       _request(method: 'POST', path: '/merchant/qr/regenerate');
@@ -1039,12 +1021,11 @@ class ApiService {
   static Future<Map<String, dynamic>> initiateDeposit({
     required double amountFiat,
     required String currency,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/payments/deposit',
-        body: {'amount_fiat': amountFiat, 'currency': currency},
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/payments/deposit',
+    body: {'amount_fiat': amountFiat, 'currency': currency},
+  );
 
   static Future<Map<String, dynamic>> getDepositHistory() async {
     final response = await _request(method: 'GET', path: '/payments/deposits');
@@ -1065,18 +1046,17 @@ class ApiService {
     required String method,
     required String destination,
     required String pin,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/payments/withdraw',
-        body: {
-          'amount_farm': amountFarm,
-          'currency_fiat': currencyFiat,
-          'method': method,
-          'destination': destination,
-          'pin': pin,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/payments/withdraw',
+    body: {
+      'amount_farm': amountFarm,
+      'currency_fiat': currencyFiat,
+      'method': method,
+      'destination': destination,
+      'pin': pin,
+    },
+  );
 
   static Future<Map<String, dynamic>> getWithdrawalHistory() =>
       _request(method: 'GET', path: '/payments/withdrawals');
@@ -1086,9 +1066,9 @@ class ApiService {
 
   // ── Escrow ────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getEscrows({String? status}) => _request(
-        method: 'GET',
-        path: '/escrow${status != null ? "?status=$status" : ""}',
-      );
+    method: 'GET',
+    path: '/escrow${status != null ? "?status=$status" : ""}',
+  );
 
   static Future<Map<String, dynamic>> createEscrow({
     required String sellerIdentifier,
@@ -1097,19 +1077,18 @@ class ApiService {
     required String pin,
     String? description,
     int autoReleaseDays = 7,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/escrow',
-        body: {
-          'seller_identifier': sellerIdentifier,
-          'amount': amount,
-          'title': title,
-          'pin': pin,
-          if (description != null) 'description': description,
-          'auto_release_days': autoReleaseDays,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/escrow',
+    body: {
+      'seller_identifier': sellerIdentifier,
+      'amount': amount,
+      'title': title,
+      'pin': pin,
+      if (description != null) 'description': description,
+      'auto_release_days': autoReleaseDays,
+    },
+  );
 
   static Future<Map<String, dynamic>> releaseEscrow(String escrowId) =>
       _request(method: 'POST', path: '/escrow/$escrowId/release');
@@ -1120,18 +1099,16 @@ class ApiService {
     String? attachmentBase64,
     String? attachmentMimeType,
     String? attachmentUrl,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/escrow/$escrowId/dispute',
-        body: {
-          'reason': reason,
-          if (attachmentBase64 != null) 'attachmentBase64': attachmentBase64,
-          if (attachmentMimeType != null)
-            'attachmentMimeType': attachmentMimeType,
-          if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/escrow/$escrowId/dispute',
+    body: {
+      'reason': reason,
+      if (attachmentBase64 != null) 'attachmentBase64': attachmentBase64,
+      if (attachmentMimeType != null) 'attachmentMimeType': attachmentMimeType,
+      if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+    },
+  );
 
   static Future<Map<String, dynamic>> cancelEscrow(String escrowId) =>
       _request(method: 'POST', path: '/escrow/$escrowId/cancel');
@@ -1150,12 +1127,11 @@ class ApiService {
     required String projectId,
     required double amount,
     required String pin,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/investments/$projectId/invest',
-        body: {'amount': amount, 'pin': pin},
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/investments/$projectId/invest',
+    body: {'amount': amount, 'pin': pin},
+  );
 
   static Future<Map<String, dynamic>> getMyInvestments() =>
       _request(method: 'GET', path: '/investments/my');
@@ -1165,10 +1141,10 @@ class ApiService {
       _request(method: 'GET', path: '/merchant/dashboard');
 
   static Future<Map<String, dynamic>> validateQr(String qrPayload) => _request(
-        method: 'POST',
-        path: '/qr/validate',
-        body: {'qr_payload': qrPayload},
-      );
+    method: 'POST',
+    path: '/qr/validate',
+    body: {'qr_payload': qrPayload},
+  );
 
   static Future<Map<String, dynamic>> merchantPay({
     required String qrPayload,
@@ -1176,45 +1152,43 @@ class ApiService {
     String? pin,
     bool? biometricAuth,
     String? deviceFingerprint,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/qr/merchant-pay',
-        body: {
-          'qr_payload': qrPayload,
-          'amount': amount,
-          if (pin != null) 'pin': pin,
-          if (biometricAuth == true) 'biometric_auth': true,
-          if (deviceFingerprint != null)
-            'device_fingerprint': deviceFingerprint,
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/qr/merchant-pay',
+    body: {
+      'qr_payload': qrPayload,
+      'amount': amount,
+      if (pin != null) 'pin': pin,
+      if (biometricAuth == true) 'biometric_auth': true,
+      if (deviceFingerprint != null) 'device_fingerprint': deviceFingerprint,
+    },
+  );
 
   // ── KYC ───────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> createDiditSession() => _request(
-        method: 'POST',
-        path: '/verify/create-session',
-        body: const {},
-        timeoutSeconds: 20,
-        useUnversionedApi: true,
-      );
+    method: 'POST',
+    path: '/verify/create-session',
+    body: const {},
+    timeoutSeconds: 20,
+    useUnversionedApi: true,
+  );
 
   // ── KYB (Didit business verification) ─────────────────────────────────────
   /// Returns `{url, session_id}`. 503 when the backend has no KYB workflow.
   static Future<Map<String, dynamic>> createDiditKybSession() => _request(
-        method: 'POST',
-        path: '/verify/business/create-session',
-        body: const {},
-        timeoutSeconds: 20,
-        useUnversionedApi: true,
-      );
+    method: 'POST',
+    path: '/verify/business/create-session',
+    body: const {},
+    timeoutSeconds: 20,
+    useUnversionedApi: true,
+  );
 
   /// Returns `{data: {configured, status, entity_status, ...}}`.
   static Future<Map<String, dynamic>> getDiditKybStatus() => _request(
-        method: 'GET',
-        path: '/verify/business/status',
-        useUnversionedApi: true,
-      );
+    method: 'GET',
+    path: '/verify/business/status',
+    useUnversionedApi: true,
+  );
 
   // Manual KYC submission (/kyc/submit) was removed: KYC is Didit-only.
 
@@ -1224,7 +1198,10 @@ class ApiService {
   // ── Profile ───────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getProfile({int timeoutSeconds = 20}) =>
       _request(
-          method: 'GET', path: '/users/me', timeoutSeconds: timeoutSeconds);
+        method: 'GET',
+        path: '/users/me',
+        timeoutSeconds: timeoutSeconds,
+      );
 
   static Future<Map<String, dynamic>> updateProfile({
     String? firstName,
@@ -1233,38 +1210,37 @@ class ApiService {
     String? country,
     String? city,
     String? username,
-  }) =>
-      _request(
-        method: 'PUT',
-        path: '/users/me',
-        body: {
-          if (firstName != null) 'first_name': firstName,
-          if (lastName != null) 'last_name': lastName,
-          if (bio != null) 'bio': bio,
-          if (country != null) 'country': country,
-          if (city != null) 'city': city,
-          if (username != null && username.isNotEmpty) 'username': username,
-        },
-      );
+  }) => _request(
+    method: 'PUT',
+    path: '/users/me',
+    body: {
+      if (firstName != null) 'first_name': firstName,
+      if (lastName != null) 'last_name': lastName,
+      if (bio != null) 'bio': bio,
+      if (country != null) 'country': country,
+      if (city != null) 'city': city,
+      if (username != null && username.isNotEmpty) 'username': username,
+    },
+  );
 
   static Future<Map<String, dynamic>> updateEmailOrPhone({
     String? email,
     String? phone,
     required String currentPassword,
-  }) =>
-      _request(
-        method: 'PUT',
-        path: '/users/me',
-        body: {
-          if (email != null && email.isNotEmpty) 'email': email,
-          if (phone != null && phone.isNotEmpty) 'phone': phone,
-          'current_password': currentPassword,
-        },
-      );
+  }) => _request(
+    method: 'PUT',
+    path: '/users/me',
+    body: {
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      'current_password': currentPassword,
+    },
+  );
 
   static Future<Map<String, dynamic>> searchUsers(String query) => _request(
-      method: 'GET',
-      path: '/users/search?q=${Uri.encodeQueryComponent(query)}');
+    method: 'GET',
+    path: '/users/search?q=${Uri.encodeQueryComponent(query)}',
+  );
 
   static Future<Map<String, dynamic>> getContacts() =>
       _request(method: 'GET', path: '/users/contacts');
@@ -1272,60 +1248,44 @@ class ApiService {
   static Future<Map<String, dynamic>> addContact({
     required String identifier,
     String? nickname,
-  }) =>
-      _request(
-        method: 'POST',
-        path: '/users/contacts',
-        body: {
-          'identifier': identifier,
-          if (nickname != null) 'nickname': nickname
-        },
-      );
+  }) => _request(
+    method: 'POST',
+    path: '/users/contacts',
+    body: {
+      'identifier': identifier,
+      if (nickname != null) 'nickname': nickname,
+    },
+  );
 
   static Future<Map<String, dynamic>> getNotifications({
     int timeoutSeconds = 20,
     int page = 1,
     int limit = 100,
-  }) =>
-      _request(
-        method: 'GET',
-        path: '/notifications?page=$page&limit=$limit',
-        timeoutSeconds: timeoutSeconds,
-      );
+  }) => _request(
+    method: 'GET',
+    path: '/notifications?page=$page&limit=$limit',
+    timeoutSeconds: timeoutSeconds,
+  );
 
   static Future<Map<String, dynamic>> markNotificationRead({
     required String notificationId,
-  }) =>
-      _request(
-        method: 'PATCH',
-        path: '/notifications/$notificationId/read',
-      );
+  }) => _request(method: 'PATCH', path: '/notifications/$notificationId/read');
 
-  static Future<Map<String, dynamic>> markAllNotificationsRead() => _request(
-        method: 'PATCH',
-        path: '/notifications/read-all',
-      );
+  static Future<Map<String, dynamic>> markAllNotificationsRead() =>
+      _request(method: 'PATCH', path: '/notifications/read-all');
 
   static Future<Map<String, dynamic>> deleteNotification({
     required String notificationId,
-  }) =>
-      _request(
-        method: 'DELETE',
-        path: '/notifications/$notificationId',
-      );
+  }) => _request(method: 'DELETE', path: '/notifications/$notificationId');
 
-  static Future<Map<String, dynamic>> deleteAllNotifications() => _request(
-        method: 'DELETE',
-        path: '/notifications',
-      );
+  static Future<Map<String, dynamic>> deleteAllNotifications() =>
+      _request(method: 'DELETE', path: '/notifications');
 
   // ── Health check ──────────────────────────────────────────────────────────
   static Future<bool> isBackendAlive() async {
     try {
       final res = await http
-          .get(
-            Uri.parse('${AppConfig.baseUrl}/health'),
-          )
+          .get(Uri.parse('${AppConfig.baseUrl}/health'))
           .timeout(const Duration(seconds: 10));
       return res.statusCode == 200;
     } catch (_) {

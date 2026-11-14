@@ -26,8 +26,6 @@ import '/widgets/common/back_chevron.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'profile_settings_model.dart';
 import '/pages/chain_wallet/wallet_address_page.dart';
-import '/pages/travel/travel_pages.dart';
-import '/pages/agent_payments/agent_payments_pages.dart';
 import '/utils/user_error_message.dart';
 export 'profile_settings_model.dart';
 
@@ -132,7 +130,7 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      unawaited(fetchProfile(forceAuthRefresh: true));
+      unawaited(fetchProfile());
       fetchSecuritySettings();
     }
   }
@@ -989,36 +987,6 @@ class _ProfileSettingsWidgetState extends State<ProfileSettingsWidget>
                                         .primaryText,
                                   ),
                                   label: 'Devices & sessions',
-                                ),
-                              ),
-                              // TRAVEL
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.of(context).push(MaterialPageRoute(
-                                      builder: (_) => const TravelHomePage()));
-                                },
-                                child: SettingsActionTileWidget(
-                                  icon: Icon(
-                                    Icons.flight_outlined,
-                                    color: FlutterFlowTheme.of(context)
-                                        .primaryText,
-                                  ),
-                                  label: 'Travel',
-                                ),
-                              ),
-                              // AGENT PAYMENTS
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.of(context).push(MaterialPageRoute(
-                                      builder: (_) => const AgentPaymentsHomePage()));
-                                },
-                                child: SettingsActionTileWidget(
-                                  icon: Icon(
-                                    Icons.verified_user_outlined,
-                                    color: FlutterFlowTheme.of(context)
-                                        .primaryText,
-                                  ),
-                                  label: 'Agent payments',
                                 ),
                               ),
                               // NOTIFICATIONS

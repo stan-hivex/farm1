@@ -255,7 +255,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                       borderRadius: BorderRadius.circular(18),
                                       border: Border.all(
                                           color: context.onSurface
-                                              .withOpacity(0.1)),
+                                              .withValues(alpha: 0.1)),
                                     ),
                                     child: Row(children: [
                                       if (_selectedTransactions.isNotEmpty)
@@ -303,7 +303,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context
                                                             .onSurface
-                                                            .withOpacity(0.78),
+                                                            .withValues(alpha: 0.78),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -311,7 +311,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.78),
+                                                            .withValues(alpha: 0.78),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -319,7 +319,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.78),
+                                                            .withValues(alpha: 0.78),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -327,7 +327,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.7),
+                                                            .withValues(alpha: 0.7),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -335,7 +335,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.54),
+                                                            .withValues(alpha: 0.54),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -343,7 +343,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.54),
+                                                            .withValues(alpha: 0.54),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -351,7 +351,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.54),
+                                                            .withValues(alpha: 0.54),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -359,7 +359,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.54),
+                                                            .withValues(alpha: 0.54),
                                                         fontSize: 13,
                                                         fontWeight:
                                                             FontWeight.w600)),
@@ -367,7 +367,7 @@ class _DepositsManagementPageState extends State<DepositsManagementPage>
                                                 style:
                                                     GoogleFonts.plusJakartaSans(
                                                         color: context.onSurface
-                                                            .withOpacity(0.54),
+                                                            .withValues(alpha: 0.54),
                                                         fontSize: 12,
                                                         fontWeight:
                                                             FontWeight.w500)),

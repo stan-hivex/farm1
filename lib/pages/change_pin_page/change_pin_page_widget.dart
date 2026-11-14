@@ -126,7 +126,7 @@ class _ChangePinPageWidgetState
 
     try {
       final data = await ApiService.changePin(
-        currentPin: oldPin,
+        oldPin: oldPin,
         newPin: newPin,
         confirmPin: confirmPin,
       );

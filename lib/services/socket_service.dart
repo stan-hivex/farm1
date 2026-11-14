@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import '/core/config/env.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '/flutter_flow/flutter_flow_util.dart';
 import '/backend/services/api_service.dart';
-import '/core/config/env.dart';
 import '/services/app_session_manager.dart';
 
 class SocketService {

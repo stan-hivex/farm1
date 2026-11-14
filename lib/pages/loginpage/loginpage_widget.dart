@@ -59,7 +59,6 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
   final List<Map<String, String>> _africanCountries = kAfricanPhoneCountries;
 
 
-
   final String baseUrl = '${AppConfig.api}/auth';
 
   @override
@@ -99,70 +98,46 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
     final payload = response['data'] is Map<String, dynamic>
         ? response['data'] as Map<String, dynamic>
         : response['data'] is Map
-            ? Map<String, dynamic>.from(response['data'] as Map)
-            : response;
+        ? Map<String, dynamic>.from(response['data'] as Map)
+        : response;
 
-    final accessToken = (payload['access_token'] as String? ??
-            payload['farmJwt'] as String? ??
-            '')
-        .trim();
-    final refreshToken = (payload['refresh_token'] as String? ??
-            payload['refreshToken'] as String? ??
-            '')
-        .trim();
+    final accessToken =
+        (payload['access_token'] as String? ??
+                payload['farmJwt'] as String? ??
+                '')
+            .trim();
+    final refreshToken =
+        (payload['refresh_token'] as String? ??
+                payload['refreshToken'] as String? ??
+                '')
+            .trim();
     final data = payload['user'] is Map<String, dynamic>
         ? payload['user'] as Map<String, dynamic>
         : payload['user'] is Map
-            ? Map<String, dynamic>.from(payload['user'] as Map)
-            : null;
+        ? Map<String, dynamic>.from(payload['user'] as Map)
+        : null;
 
     if (accessToken.isNotEmpty && data != null) {
-      final role = (data['role'] ?? '').toString().toLowerCase();
-      final normalizedRole = role.isEmpty ? 'user' : role;
-      FFAppState().role = normalizedRole;
+      final normalizedRole = AuthSessionStore.normalizeRole(
+        (data['role'] ?? 'user').toString(),
+      );
+      await AuthService().saveSession(
+        authToken: accessToken,
+        refreshToken: refreshToken,
+        userRole: normalizedRole,
+        userId: (data['id'] ?? data['user_id'])?.toString() ?? '',
+        userData: data,
+      );
 
       final prefs = await SharedPreferences.getInstance();
 
       if (normalizedRole == 'user') {
-        FFAppState().accessToken = accessToken;
-        FFAppState().refreshToken = refreshToken;
-        FFAppState().userId = data['id'] ?? '';
-        FFAppState().firstName = data['first_name'] ?? '';
-        FFAppState().userName = data['username'] ?? '';
-        FFAppState().phone = data['phone'] ?? '';
-        FFAppState().kycStatus = data['kyc_status'] ?? '';
-        FFAppState().emailVerified = data['email_verified'] == true;
-        FFAppState().isLoggedIn = true;
-
-        await AuthSessionStore.saveUserSession(
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-          role: normalizedRole,
-          userId: data['id'] ?? '',
-        );
-
         await prefs.remove('adminToken');
         await prefs.remove('adminRefreshToken');
         await prefs.remove('adminRole');
         await prefs.remove('adminName');
       } else {
-        FFAppState().accessToken = accessToken;
-        FFAppState().refreshToken = refreshToken;
-        FFAppState().userId = data['id'] ?? '';
-        FFAppState().firstName = data['first_name'] ?? '';
-        FFAppState().userName = data['username'] ?? '';
-        FFAppState().phone = data['phone'] ?? '';
-        FFAppState().isLoggedIn = true;
-
         await prefs.setString('adminName', data['first_name'] ?? 'Admin');
-        if (normalizedRole == 'admin' || normalizedRole == 'super_admin') {
-          await AuthSessionStore.saveRoleSession(
-            role: normalizedRole,
-            accessToken: accessToken,
-            refreshToken: refreshToken,
-            userId: data['id']?.toString() ?? '',
-          );
-        }
       }
     }
 
@@ -173,36 +148,31 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
       ),
     );
 
-    Future.delayed(
-      const Duration(seconds: 1),
-      () {
-        final role = FFAppState().role;
-        if (role == 'super_admin') {
-          print('Navigating to ${SuperadminDashboardPage.routePath}');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const SuperadminDashboardPage(),
-            ),
-          );
-        } else if (role == 'admin') {
-          print('Navigating to /admin-shell');
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminShell()),
-          );
-        } else {
-          print('Navigating to Dashboard');
-          final paymentRoute = FFAppState().pendingMerchantPaymentRoute;
-          if (paymentRoute.startsWith('/merchantPayment')) {
-            FFAppState().pendingMerchantPaymentRoute = '';
-            context.go(paymentRoute);
-            return;
-          }
-          context.goNamed('Dashboard');
+    Future.delayed(const Duration(seconds: 1), () {
+      final role = FFAppState().role;
+      if (role == 'super_admin') {
+        print('Navigating to ${SuperadminDashboardPage.routePath}');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SuperadminDashboardPage()),
+        );
+      } else if (role == 'admin') {
+        print('Navigating to /admin-shell');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminShell()),
+        );
+      } else {
+        print('Navigating to Dashboard');
+        final paymentRoute = FFAppState().pendingMerchantPaymentRoute;
+        if (paymentRoute.startsWith('/merchantPayment')) {
+          FFAppState().pendingMerchantPaymentRoute = '';
+          context.go(paymentRoute);
+          return;
         }
-      },
-    );
+        context.goNamed('Dashboard');
+      }
+    });
   }
 
   /// Login with email or phone/password
@@ -244,7 +214,8 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         final verifiedPhone = loginData['phone']?.toString() ?? identifier;
         if (pendingLoginId.isEmpty) {
           throw Exception(
-              'Unable to start phone verification. Please try again.');
+            'Unable to start phone verification. Please try again.',
+          );
         }
         if (FFAppState().biometricsEnabled && mounted) {
           try {
@@ -288,16 +259,19 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
     } catch (e) {
       if (mounted) {
         final errorMsg = e.toString();
-        final isNetworkIssue = errorMsg.contains('Connection closed') ||
+        final isNetworkIssue =
+            errorMsg.contains('Connection closed') ||
             errorMsg.contains('ERR_CONNECTION_CLOSED') ||
             errorMsg.contains('SocketException') ||
             errorMsg.contains('Failed host lookup') ||
             errorMsg.contains('Network');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(isNetworkIssue
-                ? 'common.network_error'.tr()
-                : 'common.login_failed'.tr()),
+            content: Text(
+              isNetworkIssue
+                  ? 'common.network_error'.tr()
+                  : 'common.login_failed'.tr(),
+            ),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -324,14 +298,16 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
 
       if (!response['success']) {
         throw Exception(
-            response['message'] ?? 'Biometric authentication failed');
+          response['message'] ?? 'Biometric authentication failed',
+        );
       }
 
       final user = response['user'] as Map<String, dynamic>? ?? {};
       final role = (user['role'] ?? 'user').toString();
 
       debugPrint(
-          '[BiometricLogin] Biometric login successful, routing to dashboard...');
+        '[BiometricLogin] Biometric login successful, routing to dashboard...',
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -340,31 +316,26 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
         ),
       );
 
-      Future.delayed(
-        const Duration(seconds: 1),
-        () {
-          if (!mounted) return;
+      Future.delayed(const Duration(seconds: 1), () {
+        if (!mounted) return;
 
-          if (role == 'super_admin') {
-            print('Navigating to ${SuperadminDashboardPage.routePath}');
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const SuperadminDashboardPage(),
-              ),
-            );
-          } else if (role == 'admin') {
-            print('Navigating to /admin-shell');
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const AdminShell()),
-            );
-          } else {
-            print('Navigating to Dashboard');
-            context.goNamed('Dashboard');
-          }
-        },
-      );
+        if (role == 'super_admin') {
+          print('Navigating to ${SuperadminDashboardPage.routePath}');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const SuperadminDashboardPage()),
+          );
+        } else if (role == 'admin') {
+          print('Navigating to /admin-shell');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminShell()),
+          );
+        } else {
+          print('Navigating to Dashboard');
+          context.goNamed('Dashboard');
+        }
+      });
     } catch (e) {
       if (mounted) {
         final errorMsg = e.toString();
@@ -388,9 +359,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
   InputDecoration inputDecoration(BuildContext context, String hint) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(
-        color: FlutterFlowTheme.of(context).secondaryText,
-      ),
+      hintStyle: TextStyle(color: FlutterFlowTheme.of(context).secondaryText),
       filled: true,
       fillColor: FlutterFlowTheme.of(context).secondaryBackground,
       contentPadding: const EdgeInsets.symmetric(
@@ -413,17 +382,11 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14.0),
-        borderSide: const BorderSide(
-          color: Colors.red,
-          width: 1.0,
-        ),
+        borderSide: const BorderSide(color: Colors.red, width: 1.0),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14.0),
-        borderSide: const BorderSide(
-          color: Colors.red,
-          width: 1.5,
-        ),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
       ),
     );
   }
@@ -455,23 +418,23 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                     const SizedBox(height: 16.0),
                     Text(
                       'FARM',
-                      style:
-                          FlutterFlowTheme.of(context).headlineLarge.override(
-                                font: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.w900,
-                                ),
-                                color: FlutterFlowTheme.of(context).primaryText,
-                                letterSpacing: 0.0,
-                                fontWeight: FontWeight.w900,
-                              ),
+                      style: FlutterFlowTheme.of(context).headlineLarge
+                          .override(
+                            font: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.w900,
+                            ),
+                            color: FlutterFlowTheme.of(context).primaryText,
+                            letterSpacing: 0.0,
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                     const SizedBox(height: 4.0),
                     Text(
                       'auth.sign_in_title'.tr(),
                       style: FlutterFlowTheme.of(context).bodyMedium.override(
-                            font: GoogleFonts.inter(),
-                            color: FlutterFlowTheme.of(context).secondaryText,
-                          ),
+                        font: GoogleFonts.inter(),
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                      ),
                     ),
                   ],
                 ),
@@ -490,8 +453,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       children: [
                         Text(
                           'common.phone'.tr(),
-                          style: FlutterFlowTheme.of(context)
-                              .labelLarge
+                          style: FlutterFlowTheme.of(context).labelLarge
                               .override(
                                 font: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.w600,
@@ -506,8 +468,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                               onTap: () async {
                                 final searchController =
                                     TextEditingController();
-                                final selected = await showModalBottomSheet<
-                                    Map<String, String>>(
+                                final selected = await showModalBottomSheet<Map<String, String>>(
                                   context: context,
                                   isScrollControlled: true,
                                   builder: (sheetContext) => StatefulBuilder(
@@ -516,45 +477,56 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                           .trim()
                                           .toLowerCase();
                                       final matches = _africanCountries
-                                          .where((country) =>
-                                              (country['name'] ?? '')
-                                                  .toLowerCase()
-                                                  .contains(query) ||
-                                              (country['code'] ?? '')
-                                                  .toLowerCase()
-                                                  .contains(query))
+                                          .where(
+                                            (country) =>
+                                                (country['name'] ?? '')
+                                                    .toLowerCase()
+                                                    .contains(query) ||
+                                                (country['code'] ?? '')
+                                                    .toLowerCase()
+                                                    .contains(query),
+                                          )
                                           .toList();
 
                                       return SafeArea(
                                         child: Padding(
                                           padding: EdgeInsets.only(
                                             bottom: MediaQuery.viewInsetsOf(
-                                                    sheetContext)
-                                                .bottom,
+                                              sheetContext,
+                                            ).bottom,
                                           ),
                                           child: SizedBox(
                                             height:
-                                                MediaQuery.sizeOf(sheetContext)
-                                                        .height *
-                                                    0.7,
+                                                MediaQuery.sizeOf(
+                                                  sheetContext,
+                                                ).height *
+                                                0.7,
                                             child: Column(
                                               children: [
                                                 Padding(
                                                   padding:
                                                       const EdgeInsets.fromLTRB(
-                                                          16, 16, 16, 8),
+                                                        16,
+                                                        16,
+                                                        16,
+                                                        8,
+                                                      ),
                                                   child: Text(
                                                     'common.select_country'
                                                         .tr(),
                                                     style: FlutterFlowTheme.of(
-                                                            context)
-                                                        .titleMedium,
+                                                      context,
+                                                    ).titleMedium,
                                                   ),
                                                 ),
                                                 Padding(
                                                   padding:
                                                       const EdgeInsets.fromLTRB(
-                                                          16, 8, 16, 12),
+                                                        16,
+                                                        8,
+                                                        16,
+                                                        12,
+                                                      ),
                                                   child: TextField(
                                                     controller:
                                                         searchController,
@@ -564,12 +536,13 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                                       hintText:
                                                           'Search country or code',
                                                       prefixIcon: const Icon(
-                                                          Icons.search),
-                                                      border:
-                                                          OutlineInputBorder(
+                                                        Icons.search,
+                                                      ),
+                                                      border: OutlineInputBorder(
                                                         borderRadius:
-                                                            BorderRadius
-                                                                .circular(12),
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
                                                       ),
                                                       isDense: true,
                                                     ),
@@ -585,29 +558,32 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                                       : ListView.builder(
                                                           itemCount:
                                                               matches.length,
-                                                          itemBuilder:
-                                                              (ctx, i) {
+                                                          itemBuilder: (ctx, i) {
                                                             final country =
                                                                 matches[i];
                                                             return ListTile(
                                                               leading: Text(
-                                                                  country['flag'] ??
-                                                                      ''),
+                                                                country['flag'] ??
+                                                                    '',
+                                                              ),
                                                               title: Text(
                                                                 country['name'] ??
                                                                     '',
-                                                                style: FlutterFlowTheme.of(
-                                                                        context)
-                                                                    .bodyMedium,
+                                                                style:
+                                                                    FlutterFlowTheme.of(
+                                                                      context,
+                                                                    ).bodyMedium,
                                                               ),
                                                               trailing: Text(
-                                                                  country['code'] ??
-                                                                      ''),
+                                                                country['code'] ??
+                                                                    '',
+                                                              ),
                                                               onTap: () =>
                                                                   Navigator.of(
-                                                                          ctx)
-                                                                      .pop(
-                                                                          country),
+                                                                    ctx,
+                                                                  ).pop(
+                                                                    country,
+                                                                  ),
                                                             );
                                                           },
                                                         ),
@@ -630,14 +606,19 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                               },
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 14),
+                                  horizontal: 12,
+                                  vertical: 14,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: FlutterFlowTheme.of(context)
-                                      .secondaryBackground,
+                                  color: FlutterFlowTheme.of(
+                                    context,
+                                  ).secondaryBackground,
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                      color: FlutterFlowTheme.of(context)
-                                          .alternate),
+                                    color: FlutterFlowTheme.of(
+                                      context,
+                                    ).alternate,
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
@@ -646,8 +627,9 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                     Flexible(
                                       child: Text(
                                         '${_selectedCountry['iso'] ?? ''} ${_selectedCountry['code'] ?? ''}',
-                                        style: FlutterFlowTheme.of(context)
-                                            .bodyMedium,
+                                        style: FlutterFlowTheme.of(
+                                          context,
+                                        ).bodyMedium,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -662,7 +644,9 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                               child: TextFormField(
                                 controller: phoneController,
                                 decoration: inputDecoration(
-                                    context, 'auth.enter_phone'.tr()),
+                                  context,
+                                  'auth.enter_phone'.tr(),
+                                ),
                                 keyboardType: TextInputType.phone,
                               ),
                             ),
@@ -680,8 +664,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       children: [
                         Text(
                           'common.password'.tr(),
-                          style: FlutterFlowTheme.of(context)
-                              .labelLarge
+                          style: FlutterFlowTheme.of(context).labelLarge
                               .override(
                                 font: GoogleFonts.plusJakartaSans(
                                   fontWeight: FontWeight.w600,
@@ -692,21 +675,24 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         const SizedBox(height: 8.0),
                         TextFormField(
                           controller: passwordController,
-                          decoration: inputDecoration(
-                                  context, 'auth.enter_password'.tr())
-                              .copyWith(
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                passwordVisible
-                                    ? Icons.visibility
-                                    : Icons.visibility_off,
+                          decoration:
+                              inputDecoration(
+                                context,
+                                'auth.enter_password'.tr(),
+                              ).copyWith(
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    passwordVisible
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                  ),
+                                  onPressed: () {
+                                    setState(
+                                      () => passwordVisible = !passwordVisible,
+                                    );
+                                  },
+                                ),
                               ),
-                              onPressed: () {
-                                setState(
-                                    () => passwordVisible = !passwordVisible);
-                              },
-                            ),
-                          ),
                           obscureText: !passwordVisible,
                         ),
                       ],
@@ -725,11 +711,11 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                         height: 56.0,
                         padding: const EdgeInsets.symmetric(vertical: 0.0),
                         color: AppTheme.accent,
-                        textStyle:
-                            FlutterFlowTheme.of(context).titleSmall.override(
-                                  color: AppTheme.onAccent,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                        textStyle: FlutterFlowTheme.of(context).titleSmall
+                            .override(
+                              color: AppTheme.onAccent,
+                              fontWeight: FontWeight.w600,
+                            ),
                         borderSide: const BorderSide(
                           color: Colors.transparent,
                           width: 1.0,
@@ -753,15 +739,16 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                                 ),
                               ),
                               Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8.0),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8.0,
+                                ),
                                 child: Text(
                                   'common.or'.tr(),
-                                  style: FlutterFlowTheme.of(context)
-                                      .bodySmall
+                                  style: FlutterFlowTheme.of(context).bodySmall
                                       .override(
-                                        color: FlutterFlowTheme.of(context)
-                                            .secondaryText,
+                                        color: FlutterFlowTheme.of(
+                                          context,
+                                        ).secondaryText,
                                       ),
                                 ),
                               ),
@@ -779,15 +766,17 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                             options: FFButtonOptions(
                               width: double.infinity,
                               height: 56.0,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 0.0),
-                              color: FlutterFlowTheme.of(context)
-                                  .secondaryBackground,
-                              textStyle: FlutterFlowTheme.of(context)
-                                  .titleSmall
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 0.0,
+                              ),
+                              color: FlutterFlowTheme.of(
+                                context,
+                              ).secondaryBackground,
+                              textStyle: FlutterFlowTheme.of(context).titleSmall
                                   .override(
-                                    color: FlutterFlowTheme.of(context)
-                                        .primaryText,
+                                    color: FlutterFlowTheme.of(
+                                      context,
+                                    ).primaryText,
                                     fontWeight: FontWeight.w600,
                                   ),
                               borderSide: BorderSide(
@@ -807,10 +796,10 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                       child: Text(
                         'common.forgot_password'.tr(),
                         style: FlutterFlowTheme.of(context).bodySmall.override(
-                              color: FlutterFlowTheme.of(context).primary,
-                              fontWeight: FontWeight.w600,
-                              decoration: TextDecoration.underline,
-                            ),
+                          color: FlutterFlowTheme.of(context).primary,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                        ),
                       ),
                     ),
 
@@ -826,8 +815,7 @@ class _LoginpageWidgetState extends State<LoginpageWidget> {
                           onTap: () => context.pushNamed('registerpage'),
                           child: Text(
                             'common.sign_up'.tr(),
-                            style: FlutterFlowTheme.of(context)
-                                .bodySmall
+                            style: FlutterFlowTheme.of(context).bodySmall
                                 .override(
                                   color: FlutterFlowTheme.of(context).primary,
                                   fontWeight: FontWeight.w600,

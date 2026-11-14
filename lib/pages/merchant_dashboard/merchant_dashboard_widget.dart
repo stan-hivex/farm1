@@ -40,6 +40,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
   bool regeneratingQr = false;
   bool applyingMerchant = false;
   bool merchantNotFound = false;
+  bool _initialApplicationPrompted = false;
   String merchantStatus = 'active';
   String? merchantStatusMessage;
 
@@ -183,6 +184,9 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
           merchantNotFound = status == 'not_submitted';
           loading = false;
         });
+        if (status == 'not_submitted') {
+          _promptForBusinessDetails();
+        }
         return;
       }
 
@@ -217,6 +221,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
               'Welcome to the Merchant Portal. Submit your business details to get started.';
           loading = false;
         });
+        _promptForBusinessDetails();
         return;
       }
       if (message.toLowerCase().contains('full kyc')) {
@@ -705,14 +710,22 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Create Merchant Account',
+                  'Business verification (KYB)',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  'Enter these six business details to submit your application for admin review.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: FlutterFlowTheme.of(context).secondaryText,
+                  ),
+                ),
                 const SizedBox(height: 28),
-                buildInput(businessNameController, 'Business Name'),
+                buildInput(businessNameController, 'Business name'),
                 const SizedBox(height: 18),
                 buildInput(businessTypeController, 'Business Type'),
                 const SizedBox(height: 18),
@@ -749,6 +762,14 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
         );
       },
     );
+  }
+
+  void _promptForBusinessDetails() {
+    if (_initialApplicationPrompted) return;
+    _initialApplicationPrompted = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && merchantNotFound) openApplyMerchantModal();
+    });
   }
 
   void openPayoutModal() {
@@ -1171,7 +1192,7 @@ class _MerchantDashboardWidgetState extends State<MerchantDashboardWidget> {
                                 ],
                               ),
                               Text(
-                                '${formatAmount(stats?['total_revenue'])} FARM',
+                                formatAmount(stats?['total_revenue']),
                                 style: FlutterFlowTheme.of(context)
                                     .bodyMedium
                                     .override(

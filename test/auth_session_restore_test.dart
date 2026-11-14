@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:farm/admin/core/admin_guard.dart';
 import 'package:farm/app_state.dart';
 import 'package:farm/services/auth/route_guard_service.dart';
+import 'package:farm/services/auth/auth_service.dart';
 import 'package:farm/services/auth/session_store_service.dart';
 import 'package:farm/services/secure_storage_service.dart';
 
@@ -14,7 +16,8 @@ String _makeJwt({required int expiresInSeconds}) {
   final header = base64Url.encode(utf8.encode('{"alg":"HS256","typ":"JWT"}'));
   final payload = base64Url.encode(
     utf8.encode(
-        '{"exp":${DateTime.now().toUtc().add(Duration(seconds: expiresInSeconds)).millisecondsSinceEpoch ~/ 1000}}'),
+      '{"exp":${DateTime.now().toUtc().add(Duration(seconds: expiresInSeconds)).millisecondsSinceEpoch ~/ 1000}}',
+    ),
   );
   return '$header.$payload.signature';
 }
@@ -29,121 +32,152 @@ void main() {
     FFAppState.reset();
   });
 
-  test(
-      'initializePersistedState restores the admin session from the role-specific store',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('role', 'user');
-    await prefs.setString('authInstallId', 'install-123');
-    await prefs.setBool('hasCompletedLogin', true);
-    await prefs.setString('accessToken', 'legacy-user-token');
-    await prefs.setString('refreshToken', 'legacy-refresh-token');
-    await prefs.setString('userId', 'legacy-user');
-    await prefs.setBool('isLoggedIn', true);
-
-    final adminToken = _makeJwt(expiresInSeconds: 3600);
-    await AuthSessionStore.saveAdminSession(
-      accessToken: adminToken,
-      refreshToken: 'admin-refresh-token',
-      role: 'admin',
-      userId: 'admin-id',
-    );
-
-    final state = FFAppState();
-    await state.initializePersistedState();
-
-    expect(state.role, 'admin');
-    expect(state.accessToken, adminToken);
-    expect(state.refreshToken, 'admin-refresh-token');
-    expect(state.userId, 'admin-id');
-    expect(state.isLoggedIn, isTrue);
+  tearDown(() {
+    debugDefaultTargetPlatformOverride = null;
   });
 
   test(
-      'initializePersistedState preserves a persisted user session when the token is expired',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('role', 'user');
-    await prefs.setString('authInstallId', 'install-456');
-    await prefs.setBool('hasCompletedLogin', true);
-    await prefs.setString('accessToken', 'expired-token');
-    await prefs.setString('refreshToken', 'refresh-token');
-    await prefs.setString('userId', 'user-id');
-    await prefs.setBool('isLoggedIn', false);
+    'preserves login after restart but clears a keychain session on reinstall',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      await SecureStorageService.prepareInstallScope();
+      await AuthSessionStore.saveUserSession(
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+        role: 'user',
+        userId: 'user-id',
+      );
 
-    final userToken = _makeJwt(expiresInSeconds: 3600);
-    await AuthSessionStore.saveUserSession(
-      accessToken: userToken,
-      refreshToken: 'refresh-token',
-      role: 'user',
-      userId: 'user-id',
-    );
+      await SecureStorageService.prepareInstallScope();
+      expect(await AuthSessionStore.readRoleSession('user'), isNotNull);
 
-    final state = FFAppState();
-    await state.initializePersistedState();
+      SharedPreferences.setMockInitialValues({});
+      await SecureStorageService.prepareInstallScope();
 
-    expect(state.role, 'user');
-    expect(state.accessToken, userToken);
-    expect(state.refreshToken, 'refresh-token');
-    expect(state.userId, 'user-id');
-    expect(state.isLoggedIn, isTrue);
-  });
+      expect(await AuthSessionStore.readRoleSession('user'), isNull);
+      expect(await SecureStorageService.readRefreshToken(), isNull);
+    },
+  );
 
   test(
-      'initializePersistedState keeps a persisted session when the access token is expired but refresh token exists',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('authInstallId', 'install-123');
-    await prefs.setString('role', 'user');
-    await prefs.setString('accessToken', 'expired-token');
-    await prefs.setString('refreshToken', 'refresh-token');
-    await prefs.setString('userId', 'user-id');
-    await prefs.setBool('isLoggedIn', false);
+    'initializePersistedState restores the admin session from the role-specific store',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('role', 'user');
+      await prefs.setString('authInstallId', 'install-123');
+      await prefs.setBool('hasCompletedLogin', true);
+      await prefs.setString('accessToken', 'legacy-user-token');
+      await prefs.setString('refreshToken', 'legacy-refresh-token');
+      await prefs.setString('userId', 'legacy-user');
+      await prefs.setBool('isLoggedIn', true);
 
-    await AuthSessionStore.saveUserSession(
-      accessToken: _makeJwt(expiresInSeconds: -60),
-      refreshToken: 'refresh-token',
-      role: 'user',
-      userId: 'user-id',
-    );
+      final adminToken = _makeJwt(expiresInSeconds: 3600);
+      await AuthSessionStore.saveAdminSession(
+        accessToken: adminToken,
+        refreshToken: 'admin-refresh-token',
+        role: 'admin',
+        userId: 'admin-id',
+      );
 
-    final state = FFAppState();
-    await state.initializePersistedState();
+      final state = FFAppState();
+      await state.initializePersistedState();
 
-    expect(state.role, 'user');
-    expect(state.isLoggedIn, isTrue);
-    expect(state.refreshToken, 'refresh-token');
-  });
+      expect(state.role, 'admin');
+      expect(state.accessToken, adminToken);
+      expect(state.refreshToken, 'admin-refresh-token');
+      expect(state.userId, 'admin-id');
+      expect(state.isLoggedIn, isTrue);
+    },
+  );
 
   test(
-      'initializePersistedState does not restore auth without an active session marker',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('authInstallId');
-    await prefs.setString('role', 'admin');
-    await prefs.setString('accessToken', 'legacy-token');
-    await prefs.setString('refreshToken', 'legacy-refresh');
-    await prefs.setString('userId', 'legacy-user');
-    await prefs.setBool('isLoggedIn', true);
+    'initializePersistedState preserves a persisted user session when the token is expired',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('role', 'user');
+      await prefs.setString('authInstallId', 'install-456');
+      await prefs.setBool('hasCompletedLogin', true);
+      await prefs.setString('accessToken', 'expired-token');
+      await prefs.setString('refreshToken', 'refresh-token');
+      await prefs.setString('userId', 'user-id');
+      await prefs.setBool('isLoggedIn', false);
 
-    await AuthSessionStore.saveAdminSession(
-      accessToken: _makeJwt(expiresInSeconds: 3600),
-      refreshToken: 'legacy-refresh',
-      role: 'admin',
-      userId: 'legacy-user',
-    );
-    await SecureStorageService.deleteValue('user_role');
-    await SecureStorageService.deleteValue('active_auth_role');
-    await prefs.remove('role');
-    await prefs.remove('active_auth_role');
+      final userToken = _makeJwt(expiresInSeconds: 3600);
+      await AuthSessionStore.saveUserSession(
+        accessToken: userToken,
+        refreshToken: 'refresh-token',
+        role: 'user',
+        userId: 'user-id',
+      );
 
-    final state = FFAppState();
-    await state.initializePersistedState();
+      final state = FFAppState();
+      await state.initializePersistedState();
 
-    expect(state.isLoggedIn, isFalse);
-    expect(state.role, isEmpty);
-    expect(state.accessToken, isEmpty);
-  });
+      expect(state.role, 'user');
+      expect(state.accessToken, userToken);
+      expect(state.refreshToken, 'refresh-token');
+      expect(state.userId, 'user-id');
+      expect(state.isLoggedIn, isTrue);
+    },
+  );
+
+  test(
+    'initializePersistedState keeps a persisted session when the access token is expired but refresh token exists',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('authInstallId', 'install-123');
+      await prefs.setString('role', 'user');
+      await prefs.setString('accessToken', 'expired-token');
+      await prefs.setString('refreshToken', 'refresh-token');
+      await prefs.setString('userId', 'user-id');
+      await prefs.setBool('isLoggedIn', false);
+
+      await AuthSessionStore.saveUserSession(
+        accessToken: _makeJwt(expiresInSeconds: -60),
+        refreshToken: 'refresh-token',
+        role: 'user',
+        userId: 'user-id',
+      );
+
+      final state = FFAppState();
+      await state.initializePersistedState();
+
+      expect(state.role, 'user');
+      expect(state.isLoggedIn, isTrue);
+      expect(state.refreshToken, 'refresh-token');
+    },
+  );
+
+  test(
+    'initializePersistedState does not restore auth without an active session marker',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('authInstallId');
+      await prefs.setString('role', 'admin');
+      await prefs.setString('accessToken', 'legacy-token');
+      await prefs.setString('refreshToken', 'legacy-refresh');
+      await prefs.setString('userId', 'legacy-user');
+      await prefs.setBool('isLoggedIn', true);
+
+      await AuthSessionStore.saveAdminSession(
+        accessToken: _makeJwt(expiresInSeconds: 3600),
+        refreshToken: 'legacy-refresh',
+        role: 'admin',
+        userId: 'legacy-user',
+      );
+      await SecureStorageService.deleteValue('user_role');
+      await SecureStorageService.deleteValue('active_auth_role');
+      await prefs.remove('role');
+      await prefs.remove('active_auth_role');
+
+      final state = FFAppState();
+      await state.initializePersistedState();
+
+      expect(state.isLoggedIn, isFalse);
+      expect(state.role, isEmpty);
+      expect(state.accessToken, isEmpty);
+    },
+  );
 
   test('RouteGuardService treats admin sessions as authenticated', () async {
     final state = FFAppState();
@@ -159,33 +193,34 @@ void main() {
   });
 
   test(
-      'RouteGuardService recognizes persisted admin sessions without app-state token',
-      () async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('adminToken');
-    await prefs.remove('adminRole');
+    'RouteGuardService recognizes persisted admin sessions without app-state token',
+    () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('adminToken');
+      await prefs.remove('adminRole');
 
-    final persistedAdminToken = _makeJwt(expiresInSeconds: 3600);
-    await AuthSessionStore.saveAdminSession(
-      accessToken: persistedAdminToken,
-      refreshToken: 'persisted-admin-refresh-token',
-      role: 'admin',
-      userId: 'admin-id',
-    );
+      final persistedAdminToken = _makeJwt(expiresInSeconds: 3600);
+      await AuthSessionStore.saveAdminSession(
+        accessToken: persistedAdminToken,
+        refreshToken: 'persisted-admin-refresh-token',
+        role: 'admin',
+        userId: 'admin-id',
+      );
 
-    await FFAppState().initializePersistedState();
+      await FFAppState().initializePersistedState();
 
-    final guard = RouteGuardService();
-    final hasBackendJwt = await guard.hasValidBackendJwt();
-    final authenticated = await guard.isUserAuthenticated();
-    final adminAuthenticated = await AdminGuard.isAuthenticated();
+      final guard = RouteGuardService();
+      final hasBackendJwt = await guard.hasValidBackendJwt();
+      final authenticated = await guard.isUserAuthenticated();
+      final adminAuthenticated = await AdminGuard.isAuthenticated();
 
-    expect(FFAppState().role, 'admin');
-    expect(FFAppState().accessToken, persistedAdminToken);
-    expect(hasBackendJwt, isTrue);
-    expect(authenticated, isTrue);
-    expect(adminAuthenticated, isTrue);
-  });
+      expect(FFAppState().role, 'admin');
+      expect(FFAppState().accessToken, persistedAdminToken);
+      expect(hasBackendJwt, isTrue);
+      expect(authenticated, isTrue);
+      expect(adminAuthenticated, isTrue);
+    },
+  );
 
   test('secure role session restores across an app-state restart', () async {
     final token = _makeJwt(expiresInSeconds: 3600);
@@ -198,8 +233,10 @@ void main() {
 
     final prefs = await SharedPreferences.getInstance();
     expect(await SecureStorageService.readAccessToken(), token);
-    expect(await SecureStorageService.readRefreshToken(),
-        'long-lived-refresh-token');
+    expect(
+      await SecureStorageService.readRefreshToken(),
+      'long-lived-refresh-token',
+    );
     expect(await SecureStorageService.readRole(), 'super_admin');
     expect(await SecureStorageService.readUserId(), 'super-admin-user');
     expect(await SecureStorageService.readIsLoggedIn(), isTrue);
@@ -218,46 +255,89 @@ void main() {
   });
 
   test(
-      'FFAppState resolves a super-admin token from the persisted session store',
-      () async {
-    final state = FFAppState();
-    state.role = 'super_admin';
-    state.accessToken = '';
+    'AuthService persists secure session data for each supported role',
+    () async {
+      final service = AuthService();
+      final accessToken = _makeJwt(expiresInSeconds: 3600);
+      for (final (inputRole, expectedRole) in [
+        ('user', 'user'),
+        ('admin', 'admin'),
+        ('superadmin', 'super_admin'),
+      ]) {
+        final userId = '$expectedRole-id';
+        final userData = {
+          'id': userId,
+          'role': inputRole,
+          'first_name': 'Farm Admin',
+        };
 
-    final superAdminToken = _makeJwt(expiresInSeconds: 3600);
-    await AuthSessionStore.saveSuperAdminSession(
-      accessToken: superAdminToken,
-      refreshToken: 'super-admin-refresh-token',
-      role: 'super_admin',
-      userId: 'super-admin-id',
-    );
+        await service.saveSession(
+          authToken: accessToken,
+          refreshToken: 'refresh-token',
+          userRole: inputRole,
+          userId: userId,
+          userData: userData,
+        );
 
-    final resolvedToken = await state.getActiveAccessToken();
+        expect(await service.isLoggedIn(), isTrue);
+        expect(await SecureStorageService.readAccessToken(), accessToken);
+        expect(await SecureStorageService.readRefreshToken(), 'refresh-token');
+        expect(await SecureStorageService.readRole(), expectedRole);
+        expect(await SecureStorageService.readUserId(), userId);
+        expect(await SecureStorageService.readUserData(), userData);
 
-    expect(resolvedToken, superAdminToken);
-  });
+        FFAppState.reset();
+        await FFAppState().initializePersistedState();
+        expect(FFAppState().role, expectedRole);
+        expect(FFAppState().userData, userData);
+      }
+    },
+  );
 
-  test('RouteGuardService restores role from a persisted super-admin session',
-      () async {
-    final state = FFAppState();
-    state.role = '';
-    state.accessToken = '';
-    state.refreshToken = '';
-    state.isLoggedIn = false;
+  test(
+    'FFAppState resolves a super-admin token from the persisted session store',
+    () async {
+      final state = FFAppState();
+      state.role = 'super_admin';
+      state.accessToken = '';
 
-    final persistedSuperAdminToken = _makeJwt(expiresInSeconds: 3600);
-    await AuthSessionStore.saveSuperAdminSession(
-      accessToken: persistedSuperAdminToken,
-      refreshToken: 'persisted-super-admin-refresh-token',
-      role: 'super_admin',
-      userId: 'super-admin-id',
-    );
+      final superAdminToken = _makeJwt(expiresInSeconds: 3600);
+      await AuthSessionStore.saveSuperAdminSession(
+        accessToken: superAdminToken,
+        refreshToken: 'super-admin-refresh-token',
+        role: 'super_admin',
+        userId: 'super-admin-id',
+      );
 
-    final guard = RouteGuardService();
-    final authenticated = await guard.isUserAuthenticated();
+      final resolvedToken = await state.getActiveAccessToken();
 
-    expect(authenticated, isTrue);
-    expect(state.role, 'super_admin');
-    expect(state.isLoggedIn, isTrue);
-  });
+      expect(resolvedToken, superAdminToken);
+    },
+  );
+
+  test(
+    'RouteGuardService restores role from a persisted super-admin session',
+    () async {
+      final state = FFAppState();
+      state.role = '';
+      state.accessToken = '';
+      state.refreshToken = '';
+      state.isLoggedIn = false;
+
+      final persistedSuperAdminToken = _makeJwt(expiresInSeconds: 3600);
+      await AuthSessionStore.saveSuperAdminSession(
+        accessToken: persistedSuperAdminToken,
+        refreshToken: 'persisted-super-admin-refresh-token',
+        role: 'super_admin',
+        userId: 'super-admin-id',
+      );
+
+      final guard = RouteGuardService();
+      final authenticated = await guard.isUserAuthenticated();
+
+      expect(authenticated, isTrue);
+      expect(state.role, 'super_admin');
+      expect(state.isLoggedIn, isTrue);
+    },
+  );
 }

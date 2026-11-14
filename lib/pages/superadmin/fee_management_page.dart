@@ -281,20 +281,20 @@ class _FeeManagementPageState extends State<FeeManagementPage>
                                       hintText: 'Percent (0–100)',
                                       hintStyle: GoogleFonts.plusJakartaSans(
                                           color: context.onSurface
-                                              .withOpacity(0.38)),
+                                              .withValues(alpha: 0.38)),
                                       filled: true,
                                       fillColor: const Color(0xFF0F1724),
                                       border: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(14),
                                         borderSide: BorderSide(
                                             color: context.onSurface
-                                                .withOpacity(0.1)),
+                                                .withValues(alpha: 0.1)),
                                       ),
                                       enabledBorder: OutlineInputBorder(
                                         borderRadius: BorderRadius.circular(14),
                                         borderSide: BorderSide(
                                             color: context.onSurface
-                                                .withOpacity(0.1)),
+                                                .withValues(alpha: 0.1)),
                                       ),
                                       contentPadding:
                                           const EdgeInsets.symmetric(

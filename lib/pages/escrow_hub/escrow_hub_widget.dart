@@ -1338,7 +1338,7 @@ class _EscrowHubWidgetState extends State<EscrowHubWidget> {
                                           ),
                                         ),
                                         Text(
-                                          '${protectedAmount.toStringAsFixed(2)} FARM',
+                                          protectedAmount.toStringAsFixed(2),
                                           style: FlutterFlowTheme.of(context)
                                               .titleLarge
                                               .override(

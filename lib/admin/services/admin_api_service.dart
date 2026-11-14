@@ -8,6 +8,7 @@ import '/services/auth/session_end.dart';
 import '/services/auth/session_store_service.dart';
 import '/services/notification_service.dart';
 import '/services/push_session_policy.dart';
+import '/services/auth/device_identity.dart';
 import '../core/admin_config.dart';
 
 class AdminApiService {
@@ -19,8 +20,8 @@ class AdminApiService {
   static const int _maxBackoffSeconds = 30;
 
   static Future<AuthSession?> _getActiveSession() async {
-    var activeRole =
-        (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+    var activeRole = (await AuthSessionStore.readActiveRole() ?? '')
+        .toLowerCase();
     final stateRole = FFAppState().role.toLowerCase();
     if ((stateRole == 'admin' || stateRole == 'super_admin') &&
         activeRole != stateRole) {
@@ -43,6 +44,7 @@ class AdminApiService {
           refreshToken: refreshToken,
           role: activeRole,
           userId: FFAppState().userId,
+          userData: FFAppState().userData,
           expiresAt: '',
           loggedInAt: '',
         );
@@ -57,14 +59,15 @@ class AdminApiService {
     final token = session?.accessToken ?? '';
     final role = session?.role ?? '';
     debugPrint(
-        'Resolved session role=$role tokenPresent=${token.isNotEmpty} tokenLength=${token.length}');
+      'Resolved session role=$role tokenPresent=${token.isNotEmpty} tokenLength=${token.length}',
+    );
     return token;
   }
 
   static Map<String, String> _headers(String token) => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-      };
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $token',
+  };
 
   static Future<String> _getRefreshToken() async {
     final session = await _getActiveSession();
@@ -84,7 +87,8 @@ class AdminApiService {
       return true;
     }
     return expiry.isBefore(
-        DateTime.now().add(const Duration(seconds: _expiryThresholdSeconds)));
+      DateTime.now().add(const Duration(seconds: _expiryThresholdSeconds)),
+    );
   }
 
   static Future<String> getValidAccessToken({bool force = false}) async {
@@ -93,8 +97,8 @@ class AdminApiService {
     final session = await _getActiveSession();
     final token = session?.accessToken ?? '';
     if (session != null && token.isNotEmpty) {
-      final activeRole =
-          (await AuthSessionStore.readActiveRole() ?? '').toLowerCase();
+      final activeRole = (await AuthSessionStore.readActiveRole() ?? '')
+          .toLowerCase();
       if (activeRole != session.role.toLowerCase()) {
         await AuthSessionStore.saveRoleSession(
           role: session.role,
@@ -136,7 +140,8 @@ class AdminApiService {
       final nextAllowed = _nextAllowedRefreshTime;
       if (nextAllowed != null && DateTime.now().isBefore(nextAllowed)) {
         debugPrint(
-            '[AdminApiService] Refresh backoff active until $_nextAllowedRefreshTime. Skipping refresh.');
+          '[AdminApiService] Refresh backoff active until $_nextAllowedRefreshTime. Skipping refresh.',
+        );
         _refreshCompleter!.complete(false);
         return false;
       }
@@ -151,23 +156,31 @@ class AdminApiService {
 
       _consecutiveFailures++;
       final backoffSeconds =
-          (_initialBackoffSeconds * (1 << (_consecutiveFailures - 1)))
-              .clamp(_initialBackoffSeconds, _maxBackoffSeconds);
-      _nextAllowedRefreshTime =
-          DateTime.now().add(Duration(seconds: backoffSeconds));
+          (_initialBackoffSeconds * (1 << (_consecutiveFailures - 1))).clamp(
+            _initialBackoffSeconds,
+            _maxBackoffSeconds,
+          );
+      _nextAllowedRefreshTime = DateTime.now().add(
+        Duration(seconds: backoffSeconds),
+      );
       debugPrint(
-          '[AdminApiService] Refresh failed. Applying backoff for $backoffSeconds seconds.');
+        '[AdminApiService] Refresh failed. Applying backoff for $backoffSeconds seconds.',
+      );
       _refreshCompleter!.complete(false);
       return false;
     } catch (e) {
       _consecutiveFailures++;
       final backoffSeconds =
-          (_initialBackoffSeconds * (1 << (_consecutiveFailures - 1)))
-              .clamp(_initialBackoffSeconds, _maxBackoffSeconds);
-      _nextAllowedRefreshTime =
-          DateTime.now().add(Duration(seconds: backoffSeconds));
+          (_initialBackoffSeconds * (1 << (_consecutiveFailures - 1))).clamp(
+            _initialBackoffSeconds,
+            _maxBackoffSeconds,
+          );
+      _nextAllowedRefreshTime = DateTime.now().add(
+        Duration(seconds: backoffSeconds),
+      );
       debugPrint(
-          '[AdminApiService] Exception during refresh: $e. Backoff $backoffSeconds seconds.');
+        '[AdminApiService] Exception during refresh: $e. Backoff $backoffSeconds seconds.',
+      );
       if (!_refreshCompleter!.isCompleted) _refreshCompleter!.complete(false);
       return false;
     } finally {
@@ -182,6 +195,14 @@ class AdminApiService {
     }
 
     try {
+      String? deviceId;
+      try {
+        deviceId = await DeviceIdentity.instance.deviceId();
+      } catch (error) {
+        debugPrint(
+          '[AdminApiService] Device id unavailable for refresh: $error',
+        );
+      }
       final resp = await http
           .post(
             Uri.parse('${AdminConfig.api}/auth/refresh'),
@@ -189,7 +210,10 @@ class AdminApiService {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({'refresh_token': refreshToken}),
+            body: jsonEncode({
+              'refresh_token': refreshToken,
+              if (deviceId != null) 'device_id': deviceId,
+            }),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -254,14 +278,18 @@ class AdminApiService {
       final map = jsonDecode(decoded) as Map<String, dynamic>;
       final exp = map['exp'];
       if (exp is int) {
-        return DateTime.fromMillisecondsSinceEpoch(exp * 1000, isUtc: true)
-            .toLocal();
+        return DateTime.fromMillisecondsSinceEpoch(
+          exp * 1000,
+          isUtc: true,
+        ).toLocal();
       }
       if (exp is String) {
         final expInt = int.tryParse(exp);
         if (expInt != null) {
-          return DateTime.fromMillisecondsSinceEpoch(expInt * 1000, isUtc: true)
-              .toLocal();
+          return DateTime.fromMillisecondsSinceEpoch(
+            expInt * 1000,
+            isUtc: true,
+          ).toLocal();
         }
       }
     } catch (e) {
@@ -295,19 +323,25 @@ class AdminApiService {
         res = await http.get(uri, headers: _headers(token));
         break;
       case 'POST':
-        res = await http.post(uri,
-            headers: _headers(token),
-            body: body != null ? jsonEncode(body) : null);
+        res = await http.post(
+          uri,
+          headers: _headers(token),
+          body: body != null ? jsonEncode(body) : null,
+        );
         break;
       case 'PUT':
-        res = await http.put(uri,
-            headers: _headers(token),
-            body: body != null ? jsonEncode(body) : null);
+        res = await http.put(
+          uri,
+          headers: _headers(token),
+          body: body != null ? jsonEncode(body) : null,
+        );
         break;
       case 'PATCH':
-        res = await http.patch(uri,
-            headers: _headers(token),
-            body: body != null ? jsonEncode(body) : null);
+        res = await http.patch(
+          uri,
+          headers: _headers(token),
+          body: body != null ? jsonEncode(body) : null,
+        );
         break;
       case 'DELETE':
         res = await http.delete(uri, headers: _headers(token));
@@ -339,7 +373,9 @@ class AdminApiService {
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login(
-      String identifier, String password) async {
+    String identifier,
+    String password,
+  ) async {
     final res = await http.post(
       Uri.parse('${AdminConfig.api}/auth/login'),
       headers: {'Content-Type': 'application/json'},
@@ -348,18 +384,22 @@ class AdminApiService {
     final decoded = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode == 200) {
       final roleValue = decoded['data']?['user']?['role'];
-      if (roleValue != 'admin' && roleValue != 'super_admin') {
+      final role = AuthSessionStore.normalizeRole(roleValue?.toString() ?? '');
+      if (role != 'admin' && role != 'super_admin') {
         throw Exception('Access denied. Admin account required.');
       }
       final accessToken = decoded['data']['access_token']?.toString() ?? '';
       final refreshToken = decoded['data']['refresh_token']?.toString() ?? '';
-      final role = roleValue?.toString() ?? '';
-      final userId = decoded['data']['user']['id']?.toString() ?? '';
+      final userData = Map<String, dynamic>.from(
+        decoded['data']['user'] as Map,
+      );
+      final userId = (userData['id'] ?? userData['user_id'])?.toString() ?? '';
       await AuthSessionStore.saveRoleSession(
         role: role,
         accessToken: accessToken,
         refreshToken: refreshToken,
         userId: userId,
+        userData: userData,
       );
       FFAppState().accessToken = accessToken;
       FFAppState().refreshToken = refreshToken;
@@ -450,7 +490,10 @@ class AdminApiService {
   ) {
     if (action != 'suspend' && action != 'approve') {
       throw ArgumentError.value(
-          action, 'action', 'Expected suspend or approve');
+        action,
+        'action',
+        'Expected suspend or approve',
+      );
     }
     return _req(
       method: 'PATCH',
@@ -459,9 +502,9 @@ class AdminApiService {
   }
 
   static Future<Map<String, dynamic>> deleteAdmin(String adminId) => _req(
-        method: 'DELETE',
-        path: '/admin/admins/${Uri.encodeComponent(adminId)}',
-      );
+    method: 'DELETE',
+    path: '/admin/admins/${Uri.encodeComponent(adminId)}',
+  );
 
   static Future<Map<String, dynamic>> getSuperadmins() =>
       _req(method: 'GET', path: '/admin/superadmin/list');
@@ -474,40 +517,35 @@ class AdminApiService {
     required String email,
     required String country,
     required String password,
-  }) =>
-      _req(
-        method: 'POST',
-        path: '/auth/admin/create',
-        body: {
-          'first_name': firstName,
-          'last_name': lastName,
-          'username': username,
-          'phone': phone,
-          'email': email,
-          'country': country,
-          'password': password,
-        },
-      );
+  }) => _req(
+    method: 'POST',
+    path: '/auth/admin/create',
+    body: {
+      'first_name': firstName,
+      'last_name': lastName,
+      'username': username,
+      'phone': phone,
+      'email': email,
+      'country': country,
+      'password': password,
+    },
+  );
 
   static Future<Map<String, dynamic>> requestPasswordReset(String email) =>
-      _publicReq(
-        path: '/auth/request-password-reset',
-        body: {'email': email},
-      );
+      _publicReq(path: '/auth/request-password-reset', body: {'email': email});
 
   static Future<Map<String, dynamic>> completePasswordReset({
     required String firebaseIdToken,
     required String password,
     required String confirmPassword,
-  }) =>
-      _publicReq(
-        path: '/auth/password-reset/complete',
-        body: {
-          'firebase_id_token': firebaseIdToken,
-          'password': password,
-          'confirm_password': confirmPassword,
-        },
-      );
+  }) => _publicReq(
+    path: '/auth/password-reset/complete',
+    body: {
+      'firebase_id_token': firebaseIdToken,
+      'password': password,
+      'confirm_password': confirmPassword,
+    },
+  );
 
   static Future<Map<String, dynamic>> getSupportTickets() =>
       _req(method: 'GET', path: '/admin/support/tickets');
@@ -515,12 +553,11 @@ class AdminApiService {
   static Future<Map<String, dynamic>> replyToSupportTicket(
     String ticketId,
     String message,
-  ) =>
-      _req(
-        method: 'POST',
-        path: '/admin/support/tickets/${Uri.encodeComponent(ticketId)}/reply',
-        body: {'message': message},
-      );
+  ) => _req(
+    method: 'POST',
+    path: '/admin/support/tickets/${Uri.encodeComponent(ticketId)}/reply',
+    body: {'message': message},
+  );
 
   // ── Users ─────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getUsers({
@@ -528,40 +565,45 @@ class AdminApiService {
     String? search,
     String? role,
     String? kycStatus,
-  }) =>
-      _req(
-        method: 'GET',
-        path: '/admin/users?page=$page'
-            '${search != null ? "&search=${Uri.encodeQueryComponent(search)}" : ""}'
-            '${role != null ? "&role=$role" : ""}'
-            '${kycStatus != null ? "&kyc_status=$kycStatus" : ""}',
-      );
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/users?page=$page'
+        '${search != null ? "&search=${Uri.encodeQueryComponent(search)}" : ""}'
+        '${role != null ? "&role=$role" : ""}'
+        '${kycStatus != null ? "&kyc_status=$kycStatus" : ""}',
+  );
 
   static Future<Map<String, dynamic>> getUserDetail(String userId) =>
       _req(method: 'GET', path: '/admin/users/$userId');
 
   static Future<Map<String, dynamic>> updateUserStatus(
-          String userId, Map<String, dynamic> data) =>
-      _req(method: 'PATCH', path: '/admin/users/$userId/status', body: data);
+    String userId,
+    Map<String, dynamic> data,
+  ) => _req(method: 'PATCH', path: '/admin/users/$userId/status', body: data);
 
   // ── KYC ───────────────────────────────────────────────────────────────────
-  static Future<
-      Map<String,
-          dynamic>> getKycQueue({int page = 1, String? status}) => _req(
-      method: 'GET',
-      path:
-          '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}');
+  static Future<Map<String, dynamic>> getKycQueue({
+    int page = 1,
+    String? status,
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/kyc/queue?page=$page${status != null ? "&status=$status" : ""}',
+  );
 
-  static Future<Map<String, dynamic>> reviewKyc(String docId, String status,
-          {String? rejectionReason}) =>
-      _req(
-        method: 'POST',
-        path: '/admin/kyc/$docId/review',
-        body: {
-          'status': status,
-          if (rejectionReason != null) 'rejection_reason': rejectionReason,
-        },
-      );
+  static Future<Map<String, dynamic>> reviewKyc(
+    String docId,
+    String status, {
+    String? rejectionReason,
+  }) => _req(
+    method: 'POST',
+    path: '/admin/kyc/$docId/review',
+    body: {
+      'status': status,
+      if (rejectionReason != null) 'rejection_reason': rejectionReason,
+    },
+  );
 
   // ── Transactions ──────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getTransactions({
@@ -569,129 +611,136 @@ class AdminApiService {
     String? type,
     String? status,
     String? search,
-  }) =>
-      _req(
-        method: 'GET',
-        path: '/admin/transactions?page=$page'
-            '${type != null ? "&transaction_type=$type" : ""}'
-            '${status != null ? "&status=$status" : ""}'
-            '${search != null ? "&search=${Uri.encodeQueryComponent(search)}" : ""}',
-      );
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/transactions?page=$page'
+        '${type != null ? "&transaction_type=$type" : ""}'
+        '${status != null ? "&status=$status" : ""}'
+        '${search != null ? "&search=${Uri.encodeQueryComponent(search)}" : ""}',
+  );
 
   static Future<Map<String, dynamic>> getTransactionDetails(String id) => _req(
-        method: 'GET',
-        path: '/admin/transactions/${Uri.encodeComponent(id)}',
-      );
+    method: 'GET',
+    path: '/admin/transactions/${Uri.encodeComponent(id)}',
+  );
 
   // ── Escrow ────────────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getEscrows(
-          {int page = 1, String? status}) =>
-      _req(
-        method: 'GET',
-        path: '/admin/escrow?page=$page'
-            '${status != null ? "&status=$status" : ""}',
-      );
+  static Future<Map<String, dynamic>> getEscrows({
+    int page = 1,
+    String? status,
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/escrow?page=$page'
+        '${status != null ? "&status=$status" : ""}',
+  );
 
   static Future<Map<String, dynamic>> resolveDispute(
-          String escrowId, String winner, String note) =>
-      _req(
-        method: 'POST',
-        path: '/admin/escrow/$escrowId/resolve',
-        body: {'winner': winner, 'note': note},
-      );
+    String escrowId,
+    String winner,
+    String note,
+  ) => _req(
+    method: 'POST',
+    path: '/admin/escrow/$escrowId/resolve',
+    body: {'winner': winner, 'note': note},
+  );
 
   // ── Deposits ──────────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getDeposits(
-          {int page = 1, String? status}) =>
-      _req(
-        method: 'GET',
-        path: '/admin/transactions?page=$page&transaction_type=deposit'
-            '${status != null ? "&status=$status" : ""}',
-      );
+  static Future<Map<String, dynamic>> getDeposits({
+    int page = 1,
+    String? status,
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/transactions?page=$page&transaction_type=deposit'
+        '${status != null ? "&status=$status" : ""}',
+  );
 
   // ── Withdrawals ───────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getWithdrawals(
-          {int page = 1, String? status}) =>
-      _req(
-        method: 'GET',
-        path: '/admin/withdrawals?page=$page'
-            '${status != null ? "&status=$status" : ""}',
-      );
+  static Future<Map<String, dynamic>> getWithdrawals({
+    int page = 1,
+    String? status,
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/withdrawals?page=$page'
+        '${status != null ? "&status=$status" : ""}',
+  );
 
   static Future<Map<String, dynamic>> processWithdrawal(
     String txId,
     String action, {
     String? reason,
-  }) =>
-      _req(
-        method: 'POST',
-        path: '/admin/withdrawals/${Uri.encodeComponent(txId)}/process',
-        body: {
-          'status': action,
-          if (reason != null && reason.trim().isNotEmpty)
-            'reason': reason.trim(),
-        },
-      );
+  }) => _req(
+    method: 'POST',
+    path: '/admin/withdrawals/${Uri.encodeComponent(txId)}/process',
+    body: {
+      'status': action,
+      if (reason != null && reason.trim().isNotEmpty) 'reason': reason.trim(),
+    },
+  );
 
-  static Future<Map<String, dynamic>> getNowpaymentsCryptoWithdrawals() => _req(
-        method: 'GET',
-        path: '/admin/crypto-withdrawals/pending',
-      );
+  static Future<Map<String, dynamic>> getNowpaymentsCryptoWithdrawals() =>
+      _req(method: 'GET', path: '/admin/crypto-withdrawals/pending');
 
   static Future<Map<String, dynamic>> approveNowpaymentsCryptoWithdrawal(
-          String reference) =>
-      _req(
-        method: 'POST',
-        path:
-            '/admin/crypto-withdrawals/${Uri.encodeComponent(reference)}/approve',
-      );
+    String reference,
+  ) => _req(
+    method: 'POST',
+    path: '/admin/crypto-withdrawals/${Uri.encodeComponent(reference)}/approve',
+  );
 
   static Future<Map<String, dynamic>> verifyNowpaymentsCryptoWithdrawal(
     String reference,
     String verificationCode,
-  ) =>
-      _req(
-        method: 'POST',
-        path:
-            '/admin/crypto-withdrawals/${Uri.encodeComponent(reference)}/verify',
-        body: {'verification_code': verificationCode},
-      );
+  ) => _req(
+    method: 'POST',
+    path: '/admin/crypto-withdrawals/${Uri.encodeComponent(reference)}/verify',
+    body: {'verification_code': verificationCode},
+  );
 
-  static Future<
-      Map<String,
-          dynamic>> getPayouts({int page = 1, String? status}) => _req(
-      method: 'GET',
-      path:
-          '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}');
+  static Future<Map<String, dynamic>> getPayouts({
+    int page = 1,
+    String? status,
+  }) => _req(
+    method: 'GET',
+    path: '/admin/payouts?page=$page${status != null ? "&status=$status" : ""}',
+  );
 
   static Future<Map<String, dynamic>> processPayout(
-          String payoutId, String status) =>
-      _req(
-          method: 'POST',
-          path: '/admin/payouts/$payoutId/process',
-          body: {'status': status});
+    String payoutId,
+    String status,
+  ) => _req(
+    method: 'POST',
+    path: '/admin/payouts/$payoutId/process',
+    body: {'status': status},
+  );
 
   // ── Merchants ─────────────────────────────────────────────────────────────
-  static Future<Map<String, dynamic>> getMerchants(
-          {int page = 1, String? status}) =>
-      _req(
-        method: 'GET',
-        path: '/admin/merchants?page=$page'
-            '${status != null ? "&status=$status" : ""}',
-      );
+  static Future<Map<String, dynamic>> getMerchants({
+    int page = 1,
+    String? status,
+  }) => _req(
+    method: 'GET',
+    path:
+        '/admin/merchants?page=$page'
+        '${status != null ? "&status=$status" : ""}',
+  );
 
   static Future<Map<String, dynamic>> decideMerchant(
-          String merchantId, String status,
-          {String? rejectionReason}) =>
-      _req(
-        method: 'POST',
-        path: '/admin/merchants/$merchantId/decision',
-        body: {
-          'status': status,
-          if (rejectionReason != null && rejectionReason.trim().isNotEmpty)
-            'rejection_reason': rejectionReason.trim(),
-        },
-      );
+    String merchantId,
+    String status, {
+    String? rejectionReason,
+  }) => _req(
+    method: 'POST',
+    path: '/admin/merchants/$merchantId/decision',
+    body: {
+      'status': status,
+      if (rejectionReason != null && rejectionReason.trim().isNotEmpty)
+        'rejection_reason': rejectionReason.trim(),
+    },
+  );
 
   static Future<Map<String, dynamic>> getMerchant(String merchantId) =>
       _req(method: 'GET', path: '/admin/merchants/$merchantId');
@@ -701,8 +750,8 @@ class AdminApiService {
 
   // ── Notifications ─────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> sendNotification(
-          Map<String, dynamic> data) =>
-      _req(method: 'POST', path: '/admin/notifications/broadcast', body: data);
+    Map<String, dynamic> data,
+  ) => _req(method: 'POST', path: '/admin/notifications/broadcast', body: data);
 
   // ── Settings ──────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getSettings() =>

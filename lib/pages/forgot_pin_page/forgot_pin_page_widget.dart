@@ -18,47 +18,88 @@ class ForgotPinPageWidget extends StatefulWidget {
 
 class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
   final _contactController = TextEditingController();
+  final _otpController = TextEditingController();
   final _newPinController = TextEditingController();
   final _confirmPinController = TextEditingController();
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isRequestingOtp = false;
   bool _obscurePassword = true;
 
   @override
   void dispose() {
     _contactController.dispose();
+    _otpController.dispose();
     _newPinController.dispose();
     _confirmPinController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
+  Future<void> requestOtp() async {
+    if (_contactController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter your phone number')));
+      return;
+    }
+
+    setState(() => _isRequestingOtp = true);
+    try {
+      final response = await ApiService.requestForgotPinOtp();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            response['message']?.toString() ??
+                'Recovery code sent to your registered phone',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(userErrorMessage(e))));
+    } finally {
+      if (mounted) setState(() => _isRequestingOtp = false);
+    }
+  }
+
   Future<void> submit() async {
     final phone = _contactController.text.trim();
+    final otp = _otpController.text.trim();
     final newPin = _newPinController.text.trim();
     final confirmPin = _confirmPinController.text.trim();
     final password = _passwordController.text;
 
     if (phone.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter your phone number')));
+      return;
+    }
+
+    if (!RegExp(r'^\d{6}$').hasMatch(otp)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter your phone number')),
+        const SnackBar(content: Text('Enter the 6-digit recovery code')),
       );
       return;
     }
 
     if (!RegExp(r'^\d{4,6}$').hasMatch(newPin) ||
         !RegExp(r'^\d{4,6}$').hasMatch(confirmPin)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('PIN must be 4 to 6 digits'),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('PIN must be 4 to 6 digits')),
+      );
       return;
     }
 
     if (newPin != confirmPin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('PINs do not match')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('PINs do not match')));
       return;
     }
 
@@ -75,24 +116,30 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
       final response = await ApiService.resetForgottenPin(
         phone: phone,
         password: password,
+        otp: otp,
         newPin: newPin,
         confirmPin: confirmPin,
       );
 
       if (!mounted) return;
 
-      final message = response['message']?.toString() ??
+      final message =
+          response['message']?.toString() ??
           response['error']?.toString() ??
           'PIN updated successfully';
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       Navigator.of(context).maybePop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to update PIN right now: ${userErrorMessage(e)}')),
+        SnackBar(
+          content: Text(
+            'Unable to update PIN right now: ${userErrorMessage(e)}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -122,7 +169,7 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Enter the phone number registered to your account and your password to replace your transaction PIN. This also unlocks a PIN locked after failed attempts.',
+              'Request a recovery code to your registered phone, then enter it with your password to replace your transaction PIN. This also unlocks a PIN locked after failed attempts.',
               style: theme.bodyMedium,
             ),
             const SizedBox(height: 20),
@@ -141,6 +188,37 @@ class _ForgotPinPageWidgetState extends State<ForgotPinPageWidget> {
                         labelText: 'Phone number',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.contact_phone_outlined),
+                      ),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _isRequestingOtp ? null : requestOtp,
+                        icon: _isRequestingOtp
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.sms_outlined),
+                        label: Text(
+                          _isRequestingOtp
+                              ? 'Sending code...'
+                              : 'Send recovery code',
+                        ),
+                      ),
+                    ),
+                    TextField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: '6-digit recovery code',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.sms_outlined),
                       ),
                     ),
                     const SizedBox(height: 15),

@@ -7,8 +7,8 @@ import 'business_ui.dart';
 import 'business_onboarding_page.dart';
 
 /// KYB status screen: Draft / Under Review / More Information Required /
-/// Approved / Rejected, plus the review history. Read-only; decisions are
-/// made by admins on the backend.
+/// Approved / Rejected, plus the verification history. Decisions come from
+/// signed Didit webhooks.
 class BusinessStatusPage extends StatefulWidget {
   const BusinessStatusPage({super.key});
 
@@ -232,7 +232,7 @@ class _BusinessStatusPageState extends State<BusinessStatusPage> {
   String _headline(String? s) {
     switch (s) {
       case BusinessStatus.underReview:
-        return 'We are reviewing your business';
+        return 'Didit is verifying your business';
       case BusinessStatus.moreInfo:
         return 'More information needed';
       case BusinessStatus.approved:
@@ -247,13 +247,13 @@ class _BusinessStatusPageState extends State<BusinessStatusPage> {
   String _explain(String? s) {
     switch (s) {
       case BusinessStatus.underReview:
-        return 'Our compliance team is checking your details and documents. You will get a notification when a decision is made.';
+        return 'Didit is checking your business. Your status will update automatically when Didit sends its signed decision.';
       case BusinessStatus.moreInfo:
-        return 'Please update your application with the requested information and submit it again.';
+        return 'Didit needs more information. Update your application and start verification again.';
       case BusinessStatus.approved:
         return 'You can now switch to your Business account at any time without logging out.';
       case BusinessStatus.rejected:
-        return 'You can update your details and submit a new application.';
+        return 'Didit could not verify this business. You can update your details and start verification again.';
       default:
         return 'Your application has not been submitted yet.';
     }

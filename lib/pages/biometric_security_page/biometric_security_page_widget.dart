@@ -194,11 +194,11 @@ class _BiometricSecurityPageWidgetState
         color: context.surface,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: context.onSurface.withOpacity(0.08),
+          color: context.onSurface.withValues(alpha: 0.08),
         ),
         boxShadow: [
           BoxShadow(
-            color: context.onSurface.withOpacity(0.02),
+            color: context.onSurface.withValues(alpha: 0.02),
             blurRadius: 40,
             spreadRadius: 0,
             offset: const Offset(0, 20),
@@ -213,10 +213,10 @@ class _BiometricSecurityPageWidgetState
               width: 58,
               height: 58,
               decoration: BoxDecoration(
-                color: context.onSurface.withOpacity(0.06),
+                color: context.onSurface.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: context.onSurface.withOpacity(0.08),
+                  color: context.onSurface.withValues(alpha: 0.08),
                 ),
               ),
               child: Icon(
@@ -243,7 +243,7 @@ class _BiometricSecurityPageWidgetState
                   Text(
                     subtitle,
                     style: GoogleFonts.inter(
-                      color: context.onSurface.withOpacity(0.7),
+                      color: context.onSurface.withValues(alpha: 0.7),
                       fontSize: 13,
                       height: 1.6,
                     ),
@@ -268,7 +268,7 @@ class _BiometricSecurityPageWidgetState
           color: context.surface,
           borderRadius: BorderRadius.circular(28),
           border: Border.all(
-            color: context.onSurface.withOpacity(0.06),
+            color: context.onSurface.withValues(alpha: 0.06),
           ),
         ),
         child: Padding(
@@ -290,7 +290,7 @@ class _BiometricSecurityPageWidgetState
                 label,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  color: context.onSurface.withOpacity(0.7),
+                  color: context.onSurface.withValues(alpha: 0.7),
                   fontSize: 12,
                   height: 1.4,
                 ),
@@ -368,7 +368,7 @@ class _BiometricSecurityPageWidgetState
                               Text(
                                 "SECURE DIGITAL BANKING",
                                 style: GoogleFonts.inter(
-                                  color: context.onSurface.withOpacity(0.54),
+                                  color: context.onSurface.withValues(alpha: 0.54),
                                   fontSize: 10,
                                   letterSpacing: 2,
                                 ),
@@ -385,12 +385,12 @@ class _BiometricSecurityPageWidgetState
                         ),
                         decoration: BoxDecoration(
                           color: context.onSurface
-                              .withOpacity(0.06),
+                              .withValues(alpha: 0.06),
                           borderRadius:
                               BorderRadius.circular(20),
                           border: Border.all(
                             color: context.onSurface
-                                .withOpacity(0.08),
+                                .withValues(alpha: 0.08),
                           ),
                         ),
                         child: Row(
@@ -438,9 +438,9 @@ class _BiometricSecurityPageWidgetState
                         gradient: RadialGradient(
                           colors: [
                             context.onSurface
-                                .withOpacity(0.12),
+                                .withValues(alpha: 0.12),
                             context.onSurface
-                                .withOpacity(0.03),
+                                .withValues(alpha: 0.03),
                             Colors.transparent,
                           ],
                         ),
@@ -455,7 +455,7 @@ class _BiometricSecurityPageWidgetState
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: context.onSurface
-                                    .withOpacity(0.06),
+                                    .withValues(alpha: 0.06),
                               ),
                             ),
                           ),
@@ -466,7 +466,7 @@ class _BiometricSecurityPageWidgetState
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: context.onSurface
-                                    .withOpacity(0.08),
+                                    .withValues(alpha: 0.08),
                               ),
                             ),
                           ),
@@ -480,12 +480,12 @@ class _BiometricSecurityPageWidgetState
                               shape: BoxShape.circle,
                               border: Border.all(
                                 color: context.onSurface
-                                    .withOpacity(0.12),
+                                    .withValues(alpha: 0.12),
                               ),
                               boxShadow: [
                                 BoxShadow(
                                   color: context.onSurface
-                                      .withOpacity(0.03),
+                                      .withValues(alpha: 0.03),
                                   blurRadius: 40,
                                   spreadRadius: 10,
                                 ),
@@ -528,7 +528,7 @@ class _BiometricSecurityPageWidgetState
                     'Secure your FARM account using advanced biometric authentication technology. Protect transactions, wallet access, savings vaults, investments, transfers, and sensitive financial operations with Face ID and fingerprint verification.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
-                      color: context.onSurface.withOpacity(0.7),
+                      color: context.onSurface.withValues(alpha: 0.7),
                       fontSize: 16,
                       height: 1.9,
                     ),
@@ -633,7 +633,7 @@ class _BiometricSecurityPageWidgetState
                           BorderRadius.circular(32),
                       border: Border.all(
                         color:
-                            context.onSurface.withOpacity(0.08),
+                            context.onSurface.withValues(alpha: 0.08),
                       ),
                     ),
                     child: Padding(
@@ -648,7 +648,7 @@ class _BiometricSecurityPageWidgetState
                                 height: 54,
                                 decoration: BoxDecoration(
                                   color: context.onSurface
-                                      .withOpacity(0.06),
+                                      .withValues(alpha: 0.06),
                                   borderRadius:
                                       BorderRadius.circular(
                                     18,
@@ -689,7 +689,7 @@ class _BiometricSecurityPageWidgetState
                                           GoogleFonts
                                               .inter(
                                         color:
-                                            context.onSurface.withOpacity(0.7),
+                                            context.onSurface.withValues(alpha: 0.7),
                                         fontSize: 13,
                                         height: 1.6,
                                       ),
@@ -713,8 +713,8 @@ class _BiometricSecurityPageWidgetState
                                   decoration:
                                       BoxDecoration(
                                     color: context.onSurface
-                                        .withOpacity(
-                                      0.03,
+                                        .withValues(
+                                      alpha: 0.03,
                                     ),
                                     borderRadius:
                                         BorderRadius
@@ -762,8 +762,8 @@ class _BiometricSecurityPageWidgetState
                                   decoration:
                                       BoxDecoration(
                                     color: context.onSurface
-                                        .withOpacity(
-                                      0.03,
+                                        .withValues(
+                                      alpha: 0.03,
                                     ),
                                     borderRadius:
                                         BorderRadius
@@ -817,7 +817,7 @@ class _BiometricSecurityPageWidgetState
                       color: const Color(0xFF0F0F0F),
                       borderRadius: BorderRadius.circular(28),
                       border: Border.all(
-                        color: context.onSurface.withOpacity(0.08),
+                        color: context.onSurface.withValues(alpha: 0.08),
                       ),
                     ),
                     child: Padding(
@@ -837,7 +837,7 @@ class _BiometricSecurityPageWidgetState
                           Text(
                             'Select the unlock method you want to enroll for this device. The app will save the fallback reference and use it for future re-auth after inactivity.',
                             style: GoogleFonts.inter(
-                              color: context.onSurface.withOpacity(0.7),
+                              color: context.onSurface.withValues(alpha: 0.7),
                               fontSize: 13,
                               height: 1.6,
                             ),
@@ -851,7 +851,7 @@ class _BiometricSecurityPageWidgetState
                                 label: Text('Face ID'),
                                 selected: selectedBiometricMethod == 'faceID',
                                 selectedColor: AppTheme.accent,
-                                backgroundColor: context.onSurface.withOpacity(0.06),
+                                backgroundColor: context.onSurface.withValues(alpha: 0.06),
                                 labelStyle: TextStyle(
                                   color: selectedBiometricMethod == 'faceID'
                                       ? AppTheme.onAccent
@@ -868,7 +868,7 @@ class _BiometricSecurityPageWidgetState
                                 label: Text('Fingerprint'),
                                 selected: selectedBiometricMethod == 'fingerprint',
                                 selectedColor: AppTheme.accent,
-                                backgroundColor: context.onSurface.withOpacity(0.06),
+                                backgroundColor: context.onSurface.withValues(alpha: 0.06),
                                 labelStyle: TextStyle(
                                   color: selectedBiometricMethod == 'fingerprint'
                                       ? AppTheme.onAccent
@@ -889,7 +889,7 @@ class _BiometricSecurityPageWidgetState
                                 ? 'Face ID will be used when available on this device.'
                                 : 'Fingerprint will be used when available on this device.',
                             style: GoogleFonts.inter(
-                              color: context.onSurface.withOpacity(0.54),
+                              color: context.onSurface.withValues(alpha: 0.54),
                               fontSize: 12,
                               height: 1.6,
                             ),
@@ -985,7 +985,7 @@ class _BiometricSecurityPageWidgetState
                           OutlinedButton.styleFrom(
                         side: BorderSide(
                           color: context.onSurface
-                              .withOpacity(0.12),
+                              .withValues(alpha: 0.12),
                         ),
                         shape:
                             RoundedRectangleBorder(
@@ -1014,7 +1014,7 @@ class _BiometricSecurityPageWidgetState
                     'Biometric settings can be updated anytime from your security dashboard.',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.inter(
-                      color: context.onSurface.withOpacity(0.38),
+                      color: context.onSurface.withValues(alpha: 0.38),
                       fontSize: 12,
                       height: 1.7,
                     ),

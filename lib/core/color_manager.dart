@@ -33,8 +33,8 @@ class ColorManager {
   static Color divider(BuildContext context) => context.dividerColor;
   static Color shadow(BuildContext context) {
     return context.isDarkMode
-        ? Colors.black.withOpacity(0.3)
-        : Colors.black.withOpacity(0.1);
+        ? Colors.black.withValues(alpha: 0.3)
+        : Colors.black.withValues(alpha: 0.1);
   }
   
   /// === STATUS COLORS ===
@@ -90,8 +90,8 @@ class ColorManager {
   static Color cardBorder(BuildContext context) => context.borderColor;
   static Color cardShadow(BuildContext context) {
     return context.isDarkMode
-        ? Colors.black.withOpacity(0.2)
-        : Colors.grey.withOpacity(0.1);
+        ? Colors.black.withValues(alpha: 0.2)
+        : Colors.grey.withValues(alpha: 0.1);
   }
   
   /// === DIALOG & SHEET COLORS ===
@@ -100,8 +100,8 @@ class ColorManager {
   static Color dialogText(BuildContext context) => context.textPrimary;
   static Color barrierColor(BuildContext context) {
     return context.isDarkMode
-        ? Colors.black.withOpacity(0.5)
-        : Colors.black.withOpacity(0.3);
+        ? Colors.black.withValues(alpha: 0.5)
+        : Colors.black.withValues(alpha: 0.3);
   }
   
   /// === CHIP & TAG COLORS ===
@@ -115,22 +115,22 @@ class ColorManager {
       case 'success':
       case 'completed':
         return context.isDarkMode
-            ? const Color(0xFF1B5E20).withOpacity(0.3)
+            ? const Color(0xFF1B5E20).withValues(alpha: 0.3)
             : const Color(0xFFC8E6C9);
       case 'error':
       case 'failed':
         return context.isDarkMode
-            ? const Color(0xFFB71C1C).withOpacity(0.3)
+            ? const Color(0xFFB71C1C).withValues(alpha: 0.3)
             : const Color(0xFFFFCDD2);
       case 'warning':
       case 'pending':
         return context.isDarkMode
-            ? const Color(0xFFF57F17).withOpacity(0.3)
+            ? const Color(0xFFF57F17).withValues(alpha: 0.3)
             : const Color(0xFFFFE0B2);
       case 'info':
       default:
         return context.isDarkMode
-            ? const Color(0xFF01579B).withOpacity(0.3)
+            ? const Color(0xFF01579B).withValues(alpha: 0.3)
             : const Color(0xFFB3E5FC);
     }
   }
@@ -161,13 +161,13 @@ class ColorManager {
   
   static Color shimmerBase(BuildContext context) {
     return context.isDarkMode
-        ? const Color(0xFF263238).withOpacity(0.5)
+        ? const Color(0xFF263238).withValues(alpha: 0.5)
         : Colors.grey[300]!;
   }
   
   static Color shimmerHighlight(BuildContext context) {
     return context.isDarkMode
-        ? const Color(0xFF455A64).withOpacity(0.5)
+        ? const Color(0xFF455A64).withValues(alpha: 0.5)
         : Colors.grey[100]!;
   }
   

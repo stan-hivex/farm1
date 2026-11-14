@@ -1,9 +1,6 @@
 import '/backend/services/api_service.dart';
 
 class PaymentRequestApiService {
-  static String get defaultRequestExpiryIso =>
-      DateTime.now().toUtc().add(const Duration(hours: 12)).toIso8601String();
-
   static Future<Map<String, dynamic>> requestPayment({
     required String recipientIdentifier,
     required double amount,
@@ -16,7 +13,6 @@ class PaymentRequestApiService {
         'recipient_identifier': recipientIdentifier,
         'amount': amount,
         'description': description ?? '',
-        'expires_at': defaultRequestExpiryIso,
       },
       requiresAuth: true,
     );

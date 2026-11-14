@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
@@ -59,6 +60,8 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
   String? _language;
   int _secs = 0;
   Timer? _timer;
+  bool _starting = false;
+  bool _cancelled = false;
 
   @override
   void initState() {
@@ -75,7 +78,7 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
   @override
   void dispose() {
     _timer?.cancel();
-    _rec.dispose();
+    unawaited(_rec.dispose());
     _text.dispose();
     super.dispose();
   }
@@ -89,34 +92,59 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
   }
 
   Future<void> _start() async {
+    if (_starting ||
+        _stage == VoiceStage.recording ||
+        _stage == VoiceStage.uploading) {
+      return;
+    }
+    _starting = true;
+    _cancelled = false;
     setState(() {
       _error = null;
       _secs = 0;
     });
     try {
       if (!await _permission().timeout(const Duration(seconds: 15))) {
-        return _fail(
+        _fail(
           'Microphone permission is needed. Allow it in settings, or type your message.',
         );
+        return;
       }
-      await _rec.start(
-        kIsWeb
-            ? const RecordConfig(encoder: AudioEncoder.opus, numChannels: 1)
-            : const RecordConfig(
-                encoder: AudioEncoder.aacLc,
-                numChannels: 1,
-                bitRate: 64000,
-              ),
-        path: kIsWeb ? '' : '${DateTime.now().millisecondsSinceEpoch}.m4a',
-      ).timeout(const Duration(seconds: 15));
+      if (!mounted || _cancelled) return;
+      final path = kIsWeb
+          ? ''
+          : '${(await getTemporaryDirectory()).path}/mkulima-${DateTime.now().millisecondsSinceEpoch}.m4a';
+      if (!mounted || _cancelled) return;
+      await _rec
+          .start(
+            kIsWeb
+                ? const RecordConfig(encoder: AudioEncoder.opus, numChannels: 1)
+                : const RecordConfig(
+                    encoder: AudioEncoder.aacLc,
+                    numChannels: 1,
+                    bitRate: 64000,
+                  ),
+            path: path,
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted || _cancelled) {
+        await _rec.cancel();
+        return;
+      }
       setState(() => _stage = VoiceStage.recording);
       _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) {
+          t.cancel();
+          return;
+        }
         setState(() => _secs++);
         if (_secs >= voiceMaxSeconds) _stop();
       });
     } catch (e) {
       debugPrint('[voice] start failed: $e');
       _fail('Could not start recording on this device. You can type instead.');
+    } finally {
+      _starting = false;
     }
   }
 
@@ -126,13 +154,16 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
     setState(() => _stage = VoiceStage.uploading);
     try {
       final path = await _rec.stop();
+      if (!mounted || _cancelled) return;
       if (path == null) return _fail('Nothing was recorded.');
       final bytes = await XFile(path).readAsBytes();
+      if (!mounted || _cancelled) return;
       final r = await ApiService.transcribeVoice(
         bytes: bytes,
         filename: kIsWeb ? 'voice.webm' : 'voice.m4a',
         mimeType: kIsWeb ? 'audio/webm' : 'audio/mp4',
       );
+      if (!mounted || _cancelled) return;
       final t = '${r['transcript'] ?? ''}'.trim();
       if (t.isEmpty)
         return _fail(
@@ -173,6 +204,7 @@ class _VoiceInputSheetState extends State<VoiceInputSheet> {
   }
 
   Future<void> _cancel() async {
+    _cancelled = true;
     _timer?.cancel();
     try {
       if (await _rec.isRecording()) await _rec.cancel();

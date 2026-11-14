@@ -15,7 +15,7 @@ String money(dynamic v, [String currency = 'FARM']) {
         RegExp(r'(\d)(?=(\d{3})+\.)'),
         (m) => '${m[1]},',
       );
-  return '$s $currency';
+  return currency.isEmpty ? s : '$s $currency';
 }
 
 String shortDate(dynamic v) {

@@ -250,7 +250,7 @@ class _EscrowItemWidgetState extends State<EscrowItemWidget> {
                                 ),
                           ),
                           Text(
-                            '${widget.amount} FARM',
+                            widget.amount,
                             style: FlutterFlowTheme.of(context)
                                 .titleMedium
                                 .override(

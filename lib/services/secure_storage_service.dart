@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,6 +23,47 @@ class SecureStorageService {
   static const FlutterSecureStorage _legacyStorage = FlutterSecureStorage(
     aOptions: AndroidOptions(resetOnError: false),
   );
+  static const String _installScopeKey = 'farm_auth_install_scope_v1';
+
+  static Future<void> prepareInstallScope() async {
+    if (kIsWeb ||
+        (defaultTargetPlatform != TargetPlatform.android &&
+            defaultTargetPlatform != TargetPlatform.iOS)) {
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final preferenceScope = prefs.getString(_installScopeKey);
+    final secureScope = await _secureStorage.read(key: _installScopeKey);
+    final isReinstall =
+        (preferenceScope == null && secureScope != null) ||
+        (preferenceScope != null && preferenceScope != secureScope);
+
+    if (isReinstall) {
+      await Future.wait([
+        _deleteValue('auth_session_user'),
+        _deleteValue('auth_session_admin'),
+        _deleteValue('auth_session_super_admin'),
+        _deleteValue('active_auth_role'),
+        clearAuthData(),
+        clearBiometricData(),
+      ]);
+    }
+
+    final scope = isReinstall
+        ? _newInstallScope()
+        : preferenceScope ?? secureScope ?? _newInstallScope();
+    await _secureStorage.write(key: _installScopeKey, value: scope);
+    await prefs.setString(_installScopeKey, scope);
+  }
+
+  static String _newInstallScope() {
+    final random = Random.secure();
+    return List.generate(
+      32,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+  }
 
   static Future<String?> _readValue(String key) async {
     if (kIsWeb) {
@@ -89,6 +133,19 @@ class SecureStorageService {
     await _deleteValue('biometric_last_verified');
   }
 
+  static Future<DateTime?> readBiometricBackgroundedAt() async {
+    final stored = await _readValue('biometric_backgrounded_at');
+    return stored == null ? null : DateTime.tryParse(stored);
+  }
+
+  static Future<void> writeBiometricBackgroundedAt(String value) async {
+    await _writeValue('biometric_backgrounded_at', value);
+  }
+
+  static Future<void> clearBiometricBackgroundedAt() async {
+    await _deleteValue('biometric_backgrounded_at');
+  }
+
   static Future<void> writeDeviceFingerprint(String value) async {
     await _writeValue('device_fingerprint', value);
   }
@@ -107,6 +164,7 @@ class SecureStorageService {
 
   static Future<void> clearBiometricData() async {
     await _deleteValue('biometric_last_verified');
+    await _deleteValue('biometric_backgrounded_at');
     await _deleteValue('device_fingerprint');
     await _deleteValue('device_id');
   }
@@ -171,6 +229,20 @@ class SecureStorageService {
     await _writeValue('user_role', role);
   }
 
+  static Future<Map<String, dynamic>?> readUserData() async {
+    final value = await _readValue('user_data');
+    if (value == null || value.isEmpty) return null;
+    final decoded = jsonDecode(value);
+    if (decoded is! Map) {
+      throw const FormatException('Stored user_data must be a JSON object.');
+    }
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  static Future<void> writeUserData(Map<String, dynamic> userData) async {
+    await _writeValue('user_data', jsonEncode(userData));
+  }
+
   static Future<bool> readIsLoggedIn() async {
     final storedValue = await _readValue('isLoggedIn');
     if (storedValue != null) return storedValue.toLowerCase() == 'true';
@@ -229,6 +301,7 @@ class SecureStorageService {
   static Future<void> clearAuthData() async {
     await _deleteValue('auth_token');
     await _deleteValue('refresh_token');
+    await _deleteValue('user_data');
     await _deleteValue('accessToken');
     await _deleteValue('refreshToken');
     await _deleteValue('isLoggedIn');

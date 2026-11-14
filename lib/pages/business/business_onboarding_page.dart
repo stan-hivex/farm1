@@ -33,8 +33,7 @@ const _docTypes = <String, String>{
   'other': 'Other supporting document',
 };
 
-/// Multi-step KYB form. Every step saves a server-side draft; nothing is
-/// approved on the device. Submitting moves the application to Under Review.
+/// Multi-step KYB form. Didit is the sole source of business approval.
 class BusinessOnboardingPage extends StatefulWidget {
   const BusinessOnboardingPage({super.key});
 
@@ -204,9 +203,9 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Submit for verification?'),
+        title: const Text('View verification status?'),
         content: const Text(
-          'Our compliance team will review your business. You will not be able to edit it while it is under review.',
+          'Your completed application is with Didit. Didit will update your business status when verification is complete.',
         ),
         actions: [
           TextButton(
@@ -215,7 +214,7 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(c, true),
-            child: const Text('Submit'),
+            child: const Text('Continue'),
           ),
         ],
       ),
@@ -226,7 +225,6 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
       setState(() => _step = 5);
       return;
     }
-    if (!await _save(quiet: true)) return;
     setState(() => _saving = true);
     try {
       await BusinessApiService.submit();
@@ -258,7 +256,10 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
         elevation: 0,
         title: const Text('Business verification'),
         actions: [
-          if (!_loading && _loadError == null && _editable)
+          if (!_loading &&
+              _loadError == null &&
+              _editable &&
+              !kybAllowsApplicationSubmit(kybStateFor(_kybStatus)))
             TextButton(
               onPressed: _saving ? null : () => _save(),
               child: Text(
@@ -359,6 +360,11 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
                     style: secondaryButtonStyle(context),
                     onPressed: _saving
                         ? null
+                        : (_step >= 5 &&
+                              kybAllowsApplicationSubmit(
+                                kybStateFor(_kybStatus),
+                              ))
+                        ? null
                         : () => setState(() => _step -= 1),
                     child: const Text('Back'),
                   ),
@@ -371,13 +377,15 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
                       ? null
                       : () async {
                           if (_step == 5 &&
-                              !kybAllowsApplicationSubmit(kybStateFor(_kybStatus))) {
+                              !kybAllowsApplicationSubmit(
+                                kybStateFor(_kybStatus),
+                              )) {
                             _snack(kybDiditRequiredMessage);
                             return;
                           }
                           if (_step == _titles.length - 1) {
                             await _submit();
-                          } else if (await _save(quiet: true)) {
+                          } else if (_step == 5 || await _save(quiet: true)) {
                             setState(() => _step += 1);
                           }
                         },
@@ -389,7 +397,7 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
                         )
                       : Text(
                           _step == _titles.length - 1
-                              ? 'Submit for review'
+                              ? 'View verification status'
                               : 'Next',
                         ),
                 ),
@@ -456,7 +464,12 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
       case 4:
         return _documentsStep(context);
       case 5:
-        return BusinessKybStep(initialStatus: _kybStatus);
+        return BusinessKybStep(
+          initialStatus: _kybStatus,
+          onStatusChanged: (status) {
+            if (mounted) setState(() => _kybStatus = status);
+          },
+        );
       default:
         return _reviewStep(context);
     }
@@ -500,7 +513,7 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
   Widget _sectorField(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 14),
     child: DropdownButtonFormField<String>(
-      value: _sectors.containsKey(_sector) ? _sector : null,
+      initialValue: _sectors.containsKey(_sector) ? _sector : null,
       decoration: _decoration('Business sector *'),
       dropdownColor: cardColor(context),
       items: _sectors.entries
@@ -862,7 +875,7 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Still needed before you can submit',
+                  'Still needed before verification',
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
                     color: fgColor(context),
@@ -879,7 +892,7 @@ class _BusinessOnboardingPageState extends State<BusinessOnboardingPage> {
           )
         else
           Text(
-            'By submitting you confirm the information is accurate. Business KYB is completed only with Didit.',
+            'By continuing you confirm the information is accurate. Didit is the only business-verification decision-maker.',
             style: TextStyle(color: mutedColor(context), height: 1.5),
           ),
       ],

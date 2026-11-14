@@ -6,12 +6,14 @@ import '/services/biometric_api_service.dart';
 import '/services/device_fingerprint_service.dart';
 
 class BiometricLockService {
-  static final BiometricLockService _instance = BiometricLockService._internal();
+  static final BiometricLockService _instance =
+      BiometricLockService._internal();
   factory BiometricLockService() => _instance;
   BiometricLockService._internal();
 
   final LocalAuthentication _localAuth = LocalAuthentication();
   bool _isAuthenticating = false;
+  DateTime? _appBackgroundedAt;
 
   bool get _isMobileBiometricSupported {
     return !kIsWeb &&
@@ -89,9 +91,29 @@ class BiometricLockService {
 
   Future<void> markVerified() async {
     final now = DateTime.now();
-    await SecureStorageService.writeBiometricLastVerified(now.toIso8601String());
+    await SecureStorageService.writeBiometricLastVerified(
+      now.toIso8601String(),
+    );
+    await SecureStorageService.clearBiometricBackgroundedAt();
+    _appBackgroundedAt = null;
     FFAppState().biometricLastVerified = now;
     debugPrint('Stored biometric last verified: ${now.toIso8601String()}');
+  }
+
+  Future<void> markAppBackgrounded() async {
+    if (_isAuthenticating ||
+        !FFAppState().isLoggedIn ||
+        !FFAppState().isBiometricAllowed ||
+        !_isMobileBiometricSupported) {
+      return;
+    }
+
+    final now = DateTime.now();
+    await SecureStorageService.writeBiometricBackgroundedAt(
+      now.toIso8601String(),
+    );
+    _appBackgroundedAt = now;
+    debugPrint('Stored biometric background time: ${now.toIso8601String()}');
   }
 
   Future<bool> enableBiometrics({required String pin}) async {
@@ -119,13 +141,19 @@ class BiometricLockService {
       final deviceId = await BiometricApiService.enableBiometrics(
         deviceFingerprint: fingerprint,
         pin: pin,
-        biometricType: available.contains(BiometricType.face) ? 'faceID' : 'fingerprint',
+        biometricType: available.contains(BiometricType.face)
+            ? 'faceID'
+            : 'fingerprint',
       );
 
       // Persist only after backend success
       await SecureStorageService.writeDeviceFingerprint(fingerprint);
       await SecureStorageService.writeDeviceId(deviceId);
-      await SecureStorageService.writeBiometricLastVerified(DateTime.now().toIso8601String());
+      await SecureStorageService.writeBiometricLastVerified(
+        DateTime.now().toIso8601String(),
+      );
+      await SecureStorageService.clearBiometricBackgroundedAt();
+      _appBackgroundedAt = null;
 
       // Update app state
       FFAppState().update(() {
@@ -133,7 +161,9 @@ class BiometricLockService {
         FFAppState().biometricLastVerified = DateTime.now();
       });
 
-      debugPrint('Stored fingerprint and deviceId: $deviceId (fingerprint_len=${fingerprint.length})');
+      debugPrint(
+        'Stored fingerprint and deviceId: $deviceId (fingerprint_len=${fingerprint.length})',
+      );
       return true;
     } catch (e, stack) {
       debugPrint('===== BIOMETRIC ERROR =====');
@@ -167,7 +197,8 @@ class BiometricLockService {
   }
 
   Future<bool> authenticateAndMarkVerified({
-    String localizedReason = 'Confirm your identity to unlock your FARM session.',
+    String localizedReason =
+        'Confirm your identity to unlock your FARM session.',
   }) async {
     try {
       final ok = await authenticate(localizedReason: localizedReason);
@@ -184,6 +215,7 @@ class BiometricLockService {
 
   Future<void> clearBiometricData() async {
     await SecureStorageService.clearBiometricData();
+    _appBackgroundedAt = null;
     debugPrint('Cleared biometric secure storage');
   }
 
@@ -198,19 +230,46 @@ class BiometricLockService {
     return stored;
   }
 
+  Future<DateTime?> getAppBackgroundedAt() async {
+    if (_appBackgroundedAt != null) return _appBackgroundedAt;
+    _appBackgroundedAt =
+        await SecureStorageService.readBiometricBackgroundedAt();
+    return _appBackgroundedAt;
+  }
+
+  @visibleForTesting
+  static bool hasLockTimeoutElapsed({
+    required DateTime since,
+    required int timeoutSeconds,
+    required DateTime now,
+  }) => now.difference(since).inSeconds >= timeoutSeconds;
+
   Future<bool> shouldRequireUnlock() async {
     try {
       if (!await isBiometricEnabled()) return false;
       if (!FFAppState().isLoggedIn) return false;
       if (!_isMobileBiometricSupported) return false;
 
-      final lastVerified = await getLastVerified();
-      if (lastVerified == null) return true;
+      final backgroundedAt = await getAppBackgroundedAt();
+      final lastActivity = backgroundedAt ?? await getLastVerified();
+      if (lastActivity == null) return true;
 
       final lockTimeoutSeconds = FFAppState().biometricLockTimeoutSeconds;
-      final elapsed = DateTime.now().difference(lastVerified).inSeconds;
-      debugPrint('Unlock required check: elapsed=$elapsed timeout=$lockTimeoutSeconds');
-      return elapsed >= lockTimeoutSeconds;
+      final now = DateTime.now();
+      final elapsed = now.difference(lastActivity).inSeconds;
+      debugPrint(
+        'Unlock required check: elapsed=$elapsed timeout=$lockTimeoutSeconds',
+      );
+      final shouldLock = hasLockTimeoutElapsed(
+        since: lastActivity,
+        timeoutSeconds: lockTimeoutSeconds,
+        now: now,
+      );
+      if (!shouldLock && backgroundedAt != null) {
+        await SecureStorageService.clearBiometricBackgroundedAt();
+        _appBackgroundedAt = null;
+      }
+      return shouldLock;
     } catch (e, stack) {
       debugPrint('===== BIOMETRIC ERROR =====');
       debugPrint(e.toString());

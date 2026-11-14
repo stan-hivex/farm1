@@ -422,7 +422,7 @@ class _EscrowManagementPageState extends State<EscrowManagementPage>
                   onPressed: () => _resolve(e['id'], 'seller'),
                   child: Text('Release to Seller',
                       style: GoogleFonts.plusJakartaSans(
-                          color: context.onBackground.withOpacity(0.87))),
+                          color: context.onBackground.withValues(alpha: 0.87))),
                 ),
               ),
             ]),

@@ -43,15 +43,23 @@ class AuthService {
   }
 
   static Map<String, dynamic> normalizeLoginResponse(
-      Map<String, dynamic> response) {
+    Map<String, dynamic> response,
+  ) {
     final rawData = response['data'];
     final data = rawData is Map
         ? Map<String, dynamic>.from(rawData)
         : <String, dynamic>{};
 
     final user = data['user'];
-    final normalizedUser =
-        user is Map ? Map<String, dynamic>.from(user) : <String, dynamic>{};
+    final normalizedUser = user is Map
+        ? Map<String, dynamic>.from(user)
+        : <String, dynamic>{};
+    final userRole = normalizedUser['role'];
+    if (userRole != null) {
+      normalizedUser['role'] = AuthSessionStore.normalizeRole(
+        userRole.toString(),
+      );
+    }
 
     return {
       'success': true,
@@ -67,6 +75,74 @@ class AuthService {
   }
 
   SupabaseClient get _supabase => SupabaseConfig.client;
+
+  Future<void> saveSession({
+    required String authToken,
+    required String refreshToken,
+    required String userRole,
+    required String userId,
+    required Map<String, dynamic> userData,
+  }) async {
+    final token = authToken.trim();
+    if (token.isEmpty) {
+      throw ArgumentError.value(authToken, 'authToken', 'Must not be empty.');
+    }
+
+    final role = AuthSessionStore.normalizeRole(userRole);
+    if (!const {'user', 'admin', 'super_admin'}.contains(role)) {
+      throw ArgumentError.value(userRole, 'userRole', 'Unsupported role.');
+    }
+
+    final normalizedUserData = Map<String, dynamic>.from(userData);
+    final resolvedUserId = userId.trim().isNotEmpty
+        ? userId.trim()
+        : (normalizedUserData['id'] ?? normalizedUserData['user_id'])
+                  ?.toString() ??
+              '';
+    final state = FFAppState();
+    state.accessToken = token;
+    state.refreshToken = refreshToken;
+    state.userId = resolvedUserId;
+    state.role = role;
+    state.userData = normalizedUserData;
+    state.firstName = normalizedUserData['first_name']?.toString() ?? '';
+    state.userName = normalizedUserData['username']?.toString() ?? '';
+    state.phone = normalizedUserData['phone']?.toString() ?? '';
+    state.email = normalizedUserData['email']?.toString() ?? '';
+    state.kycStatus = normalizedUserData['kyc_status']?.toString() ?? '';
+    state.emailVerified = normalizedUserData['email_verified'] == true;
+    state.isLoggedIn = true;
+    state.setAuthStartupState(AuthStartupState.authenticated);
+
+    await AuthSessionStore.saveRoleSession(
+      role: role,
+      accessToken: token,
+      refreshToken: refreshToken,
+      userId: resolvedUserId,
+      userData: normalizedUserData,
+    );
+  }
+
+  Future<AuthSession?> getSession() async {
+    final stateRole = AuthSessionStore.normalizeRole(FFAppState().role);
+    final role = stateRole.isNotEmpty
+        ? stateRole
+        : AuthSessionStore.normalizeRole(
+            await AuthSessionStore.readActiveRole() ?? '',
+          );
+    if (role.isEmpty) return null;
+    return AuthSessionStore.readRoleSession(role);
+  }
+
+  Future<void> clearSession() async {
+    await FFAppState().clearAuthCredentials();
+  }
+
+  Future<bool> isLoggedIn() async {
+    final session = await getSession();
+    return session != null &&
+        (session.accessToken.isNotEmpty || session.refreshToken.isNotEmpty);
+  }
 
   /// Register a new FARM account and start backend phone verification.
   Future<Map<String, dynamic>> signUp({
@@ -136,8 +212,8 @@ class AuthService {
       final backendUser = responseData['user'] is Map<String, dynamic>
           ? responseData['user'] as Map<String, dynamic>
           : (responseData['user'] is Map
-              ? Map<String, dynamic>.from(responseData['user'] as Map)
-              : null);
+                ? Map<String, dynamic>.from(responseData['user'] as Map)
+                : null);
 
       // The backend decides whether this account needs phone verification.
       if (farmJwt.isNotEmpty) {
@@ -146,7 +222,9 @@ class AuthService {
           refreshToken: refreshToken,
           backendUser: backendUser,
         );
-        final role = backendUser?['role']?.toString().toLowerCase() ?? '';
+        final role = AuthSessionStore.normalizeRole(
+          backendUser?['role']?.toString() ?? '',
+        );
         if (role == 'user') {
           NotificationService.resumePushRegistration();
           await NotificationService.registerForCurrentUser();
@@ -283,18 +361,20 @@ class AuthService {
     required String refreshToken,
     required Map<String, dynamic>? backendUser,
   }) async {
-    await _releasePreviousAccount(backendUser?['id']?.toString() ?? '');
+    if (backendUser == null) {
+      throw const FormatException('Login response is missing user data.');
+    }
+    await _releasePreviousAccount(backendUser['id']?.toString() ?? '');
     RefreshManager().reset();
-    final role = backendUser is Map<String, dynamic>
-        ? backendUser['role']?.toString().toLowerCase() ?? ''
-        : '';
-    final normalizedRole = role.isEmpty ? 'user' : role;
+    final normalizedRole = AuthSessionStore.normalizeRole(
+      backendUser['role']?.toString() ?? 'user',
+    );
 
     if (normalizedRole == 'admin') {
       FFAppState().accessToken = farmJwt;
       FFAppState().refreshToken = refreshToken;
       FFAppState().isLoggedIn = true;
-      FFAppState().userId = backendUser?['id']?.toString() ?? '';
+      FFAppState().userId = backendUser['id']?.toString() ?? '';
       FFAppState().role = normalizedRole;
 
       debugPrint('Admin login detected.');
@@ -306,54 +386,23 @@ class AuthService {
         accessToken: farmJwt,
         refreshToken: refreshToken,
         role: normalizedRole,
-        userId: backendUser?['id']?.toString() ?? '',
+        userId: backendUser['id']?.toString() ?? '',
       );
       debugPrint('Skipping biometric setup.');
       return;
     }
-
-    if (normalizedRole == 'super_admin') {
-      FFAppState().accessToken = farmJwt;
-      FFAppState().refreshToken = refreshToken;
-      FFAppState().isLoggedIn = true;
-      FFAppState().userId = backendUser?['id']?.toString() ?? '';
-      FFAppState().role = normalizedRole;
-
-      debugPrint('Super admin login detected.');
-      debugPrint('Saving SuperAdminSession...');
-      debugPrint('Access token length: ${farmJwt.length}');
-      debugPrint('Refresh token length: ${refreshToken.length}');
-      debugPrint('Role: SUPER_ADMIN');
-      await AuthSessionStore.saveSuperAdminSession(
-        accessToken: farmJwt,
-        refreshToken: refreshToken,
-        role: normalizedRole,
-        userId: backendUser?['id']?.toString() ?? '',
-      );
-      debugPrint('Skipping biometric setup.');
-      return;
-    }
-
-    final backendData = backendUser!;
-    FFAppState().accessToken = farmJwt;
-    FFAppState().refreshToken = refreshToken;
-    FFAppState().isLoggedIn = farmJwt.isNotEmpty;
-    FFAppState().userId = backendData['id']?.toString() ?? '';
-    FFAppState().firstName = backendData['first_name']?.toString() ?? '';
-    FFAppState().userName = backendData['username']?.toString() ?? '';
-    FFAppState().phone = backendData['phone']?.toString() ?? '';
-    FFAppState().kycStatus = backendData['kyc_status']?.toString() ?? '';
-    FFAppState().emailVerified = backendData['email_verified'] == true;
-    FFAppState().role = normalizedRole;
-    await AuthSessionStore.saveUserSession(
-      accessToken: farmJwt,
+    await saveSession(
+      authToken: farmJwt,
       refreshToken: refreshToken,
-      role: normalizedRole,
-      userId: backendData['id']?.toString() ?? '',
+      userRole: normalizedRole,
+      userId: (backendUser['id'] ?? backendUser['user_id'])?.toString() ?? '',
+      userData: backendUser,
     );
 
+    if (normalizedRole != 'user') return;
     debugPrint(
-        '[AuthService] Login completed. Starting background user syncNow.');
+      '[AuthService] Login completed. Starting background user syncNow.',
+    );
     Future.microtask(() {
       return AppSessionManager().syncNow().catchError((e) {
         debugPrint('[AuthService] syncNow background refresh failed: $e');
@@ -382,10 +431,9 @@ class AuthService {
           'Authorization': 'Bearer $supabaseToken',
         },
         body: jsonEncode(
-          attachTurnstileToken(
-            {'supabase_token': supabaseToken},
-            turnstileToken: turnstileToken,
-          ),
+          attachTurnstileToken({
+            'supabase_token': supabaseToken,
+          }, turnstileToken: turnstileToken),
         ),
       );
 
@@ -393,7 +441,8 @@ class AuthService {
       if (response.statusCode != 200) {
         final message = bodyData['message'] ?? response.body;
         throw Exception(
-            'Token exchange failed: ${response.statusCode} - $message');
+          'Token exchange failed: ${response.statusCode} - $message',
+        );
       }
 
       final payload = bodyData['data'] is Map<String, dynamic>

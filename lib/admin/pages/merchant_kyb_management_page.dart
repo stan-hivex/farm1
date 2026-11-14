@@ -548,7 +548,7 @@ class _MerchantKybManagementPageState extends State<MerchantKybManagementPage> {
                                         style: GoogleFonts.plusJakartaSans(
                                             fontWeight: FontWeight.bold,
                                             color: context.onBackground
-                                                .withOpacity(0.87)),
+                                                .withValues(alpha: 0.87)),
                                       ),
                                     ),
                                   ),

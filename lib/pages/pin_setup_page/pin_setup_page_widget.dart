@@ -40,6 +40,7 @@ class _PinSetupPageWidgetState
   String _confirmPin = '';
 
   bool _isConfirming = false;
+  bool _isSavingPin = false;
 
   @override
   void initState() {
@@ -70,12 +71,14 @@ class _PinSetupPageWidgetState
       final data = Map<String, dynamic>.from(resp['data'] ?? resp);
       final remoteHasPin = data['has_pin'] ?? false;
       FFAppState().hasPin = remoteHasPin;
+      if (!mounted) return;
       setState(() {
         hasPin = remoteHasPin;
         securityLoading = false;
       });
     } catch (e) {
       print('SECURITY FETCH ERROR: $e');
+      if (!mounted) return;
       setState(() {
         securityLoading = false;
       });
@@ -118,6 +121,16 @@ class _PinSetupPageWidgetState
   }
 
   Future<void> validatePins() async {
+    if (securityLoading || _isSavingPin) return;
+    if (hasPin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A PIN is already set. Use Change PIN to update it.'),
+        ),
+      );
+      return;
+    }
+
     if (_pin.length < 4 ||
         _confirmPin.length < 4) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -152,12 +165,11 @@ class _PinSetupPageWidgetState
   }
 
   Future<void> savePin() async {
+    if (_isSavingPin || hasPin) return;
+    setState(() => _isSavingPin = true);
     try {
-      print(
-        "TOKEN: ${FFAppState().accessToken}",
-      );
-
       await ApiService.setPin(pin: _pin.trim(), confirmPin: _confirmPin.trim());
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -172,8 +184,7 @@ class _PinSetupPageWidgetState
 
       context.pop(true);
     } catch (e) {
-      print(e);
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(
         SnackBar(
@@ -182,6 +193,8 @@ class _PinSetupPageWidgetState
           ),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isSavingPin = false);
     }
   }
 
@@ -403,10 +416,16 @@ class _PinSetupPageWidgetState
                 SizedBox(height: context.responsiveValue(30)),
 
                 FFButtonWidget(
-                  onPressed: () async {
-                    await validatePins();
-                  },
-                  text: 'Verify PIN',
+                  onPressed: securityLoading || hasPin || _isSavingPin
+                      ? null
+                      : () async {
+                          await validatePins();
+                        },
+                  text: _isSavingPin
+                      ? 'Setting PIN...'
+                      : hasPin
+                          ? 'PIN Already Set'
+                          : 'Verify PIN',
                   options: FFButtonOptions(
                     height: context.responsiveValue(55),
                     color: AppTheme.accent,
@@ -433,4 +452,3 @@ class _PinSetupPageWidgetState
     );
   }
 }
-

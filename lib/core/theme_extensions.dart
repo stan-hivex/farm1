@@ -51,17 +51,17 @@ extension ThemeExtension on BuildContext {
   Color get warningColor => AppTheme.warning;
   Color get infoColor => AppTheme.info;
   Color get successColorAccent => Theme.of(this).brightness == Brightness.dark
-      ? AppTheme.darkSuccess.withOpacity(0.9)
-      : AppTheme.success.withOpacity(0.9);
+      ? AppTheme.darkSuccess.withValues(alpha: 0.9)
+      : AppTheme.success.withValues(alpha: 0.9);
   Color get errorColorAccent => Theme.of(this).brightness == Brightness.dark
-      ? AppTheme.darkError.withOpacity(0.9)
-      : AppTheme.error.withOpacity(0.9);
+      ? AppTheme.darkError.withValues(alpha: 0.9)
+      : AppTheme.error.withValues(alpha: 0.9);
   Color get warningColorAccent => Theme.of(this).brightness == Brightness.dark
-      ? AppTheme.darkWarning.withOpacity(0.9)
-      : AppTheme.warning.withOpacity(0.9);
+      ? AppTheme.darkWarning.withValues(alpha: 0.9)
+      : AppTheme.warning.withValues(alpha: 0.9);
   Color get infoColorAccent => Theme.of(this).brightness == Brightness.dark
-      ? AppTheme.darkInfo.withOpacity(0.9)
-      : AppTheme.info.withOpacity(0.9);
+      ? AppTheme.darkInfo.withValues(alpha: 0.9)
+      : AppTheme.info.withValues(alpha: 0.9);
 
   /// Check if dark mode is active
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;

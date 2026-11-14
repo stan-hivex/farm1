@@ -82,6 +82,11 @@ class _BiometricUnlockPageWidgetState extends State<BiometricUnlockPageWidget> {
     }
   }
 
+  void _navigateToLogin() {
+    if (!mounted) return;
+    GoRouter.of(context).go(LoginpageWidget.routePath);
+  }
+
   void _navigateToDestination() {
     if (!mounted) return;
     if (FFAppState().isAdmin) {
@@ -97,76 +102,73 @@ class _BiometricUnlockPageWidgetState extends State<BiometricUnlockPageWidget> {
         : destination);
   }
 
-  void _navigateToLogin() {
-    if (!mounted) return;
-    GoRouter.of(context).go(LoginpageWidget.routePath);
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 24.0),
-              Icon(
-                Icons.fingerprint,
-                size: 96,
-                color: FlutterFlowTheme.of(context).primary,
-              ),
-              const SizedBox(height: 24.0),
-              Text(
-                'Unlock with biometrics',
-                textAlign: TextAlign.center,
-                style: FlutterFlowTheme.of(context)
-                    .titleLarge
-                    .override(fontFamily: 'Poppins', fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12.0),
-              Text(
-                statusMessage,
-                textAlign: TextAlign.center,
-                style: FlutterFlowTheme.of(context).bodyMedium,
-              ),
-              const SizedBox(height: 24.0),
-              if (errorMessage != null) ...[
-                Text(
-                  errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: FlutterFlowTheme.of(context)
-                      .bodyMedium
-                      .override(color: Colors.red),
+    return PopScope<void>(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: FlutterFlowTheme.of(context).primaryBackground,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 24.0,
+              vertical: 32.0,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 24.0),
+                Icon(
+                  Icons.fingerprint,
+                  size: 96,
+                  color: FlutterFlowTheme.of(context).primary,
                 ),
                 const SizedBox(height: 24.0),
-              ],
-              if (isLoading)
-                Center(
-                  child: CircularProgressIndicator(
-                    color: FlutterFlowTheme.of(context).primary,
-                  ),
-                )
-              else ...[
-                ElevatedButton(
-                  onPressed: _attemptUnlock,
-                  style: ElevatedButton.styleFrom(
-  foregroundColor: AppTheme.onAccent,
-                    backgroundColor: AppTheme.accent,
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  ),
-                  child: Text('common.retry'.tr()),
+                Text(
+                  'Unlock with biometrics',
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).titleLarge.override(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
                 const SizedBox(height: 12.0),
-                TextButton(
-                  onPressed: _navigateToLogin,
-                  child: Text('common.use_password'.tr()),
+                Text(
+                  statusMessage,
+                  textAlign: TextAlign.center,
+                  style: FlutterFlowTheme.of(context).bodyMedium,
                 ),
+                const SizedBox(height: 24.0),
+                if (errorMessage != null) ...[
+                  Text(
+                    errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: FlutterFlowTheme.of(context)
+                        .bodyMedium
+                        .override(color: Colors.red),
+                  ),
+                  const SizedBox(height: 24.0),
+                ],
+                if (isLoading)
+                  Center(
+                    child: CircularProgressIndicator(
+                      color: FlutterFlowTheme.of(context).primary,
+                    ),
+                  )
+                else ...[
+                  ElevatedButton(
+                    onPressed: _attemptUnlock,
+                    style: ElevatedButton.styleFrom(
+                      foregroundColor: AppTheme.onAccent,
+                      backgroundColor: AppTheme.accent,
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                    ),
+                    child: Text('common.retry'.tr()),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),

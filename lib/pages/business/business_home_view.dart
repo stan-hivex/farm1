@@ -206,18 +206,21 @@ class _BusinessHomeViewState extends State<BusinessHomeView> {
         const SizedBox(height: 16),
         if (status == BusinessStatus.approved) ...[
           BizCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(
-                'Your business is approved. Open the team to invite people, set roles, and remove access.',
-                style: TextStyle(color: mutedColor(context), height: 1.5),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                style: primaryButtonStyle(context),
-                onPressed: () => pushPage(context, const TeamPage()),
-                child: const Text('Team'),
-              ),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Your business is approved. Open the team to invite people, set roles, and remove access.',
+                  style: TextStyle(color: mutedColor(context), height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  style: primaryButtonStyle(context),
+                  onPressed: () => pushPage(context, const TeamPage()),
+                  child: const Text('Team'),
+                ),
+              ],
+            ),
           ),
         ],
       ],
@@ -227,13 +230,13 @@ class _BusinessHomeViewState extends State<BusinessHomeView> {
   String _statusLine(String? s) {
     switch (s) {
       case BusinessStatus.draft:
-        return 'Finish your business details and submit them for verification.';
+        return 'Finish your business details and verify with Didit.';
       case BusinessStatus.underReview:
-        return 'Your application is with our compliance team. We will notify you when there is a decision.';
+        return 'Didit is verifying your business. Your status updates automatically when a decision is available.';
       case BusinessStatus.moreInfo:
-        return 'Our team needs more information. Update your application and submit again.';
+        return 'Didit needs more information. Update your application and verify again.';
       case BusinessStatus.rejected:
-        return 'Your application was not approved. You can review the reason, update and resubmit.';
+        return 'Didit could not verify your business. Update your application and verify again.';
       case BusinessStatus.approved:
         return 'Verified business account.';
       default:

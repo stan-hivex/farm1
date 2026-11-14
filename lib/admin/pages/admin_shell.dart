@@ -205,7 +205,7 @@ class _AdminShellState extends State<AdminShell> with WidgetsBindingObserver {
                 const SizedBox(width: 8),
                 Text('Admin',
                     style: GoogleFonts.plusJakartaSans(
-                        color: context.onBackground.withOpacity(0.54),
+                        color: context.onBackground.withValues(alpha: 0.54),
                         fontSize: 13)),
               ],
             ),

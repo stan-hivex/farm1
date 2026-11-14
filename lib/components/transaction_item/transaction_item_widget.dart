@@ -15,7 +15,7 @@ class TransactionItemWidget extends StatefulWidget {
     String? subtitle,
     String? title,
     bool? is_negative,
-  })  : amount = amount ?? '-450 FARM',
+  })  : amount = amount ?? '-450',
         status = status ?? 'Pending',
         subtitle = subtitle ?? 'Escrow Purchase',
         title = title ?? 'Organic Seedlings',
@@ -169,7 +169,7 @@ class _TransactionItemWidgetState extends State<TransactionItemWidget> {
                           Text(
                         valueOrDefault<String>(
                           widget.amount,
-                          '-450 FARM',
+                          '-450',
                         ),
                         style: FlutterFlowTheme.of(context).bodyLarge.override(
                               font: GoogleFonts.inter(

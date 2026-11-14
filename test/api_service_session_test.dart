@@ -73,6 +73,49 @@ void main() {
     expect(await AuthSessionStore.readActiveRole(), 'user');
   });
 
+  test('does not rotate a refresh token while the access token is valid',
+      () async {
+    final validToken = _makeJwt(
+      DateTime.now().toUtc().add(const Duration(minutes: 30)),
+    );
+    FFAppState().accessToken = validToken;
+    FFAppState().refreshToken = 'refresh-token';
+    FFAppState().isLoggedIn = true;
+    var refreshCallCount = 0;
+    final mockClient = MockClient((request) async {
+      if (request.url.path.endsWith('/auth/refresh')) {
+        refreshCallCount++;
+      }
+      return http.Response('not found', 404);
+    });
+    RefreshManager.client = mockClient;
+
+    expect(await RefreshManager().refreshIfNeeded(), isTrue);
+    expect(refreshCallCount, 0);
+    expect(FFAppState().refreshToken, 'refresh-token');
+  });
+
+  test('sends the set-PIN payload expected by the backend', () async {
+    final mockClient = MockClient((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, endsWith('/auth/set-pin'));
+      expect(
+        jsonDecode(request.body),
+        {'pin': '2580', 'confirm_pin': '2580'},
+      );
+      return http.Response(
+        jsonEncode({'message': 'PIN set successfully'}),
+        200,
+      );
+    });
+    ApiService.client = mockClient;
+
+    await expectLater(
+      ApiService.setPin(pin: '2580', confirmPin: '2580'),
+      completion({'message': 'PIN set successfully'}),
+    );
+  });
+
   test('retries a protected request after a successful refresh', () async {
     const oldToken = 'old-token';
     const refreshedToken = 'new-token';

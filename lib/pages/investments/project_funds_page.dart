@@ -127,7 +127,7 @@ class _ProjectFundsPageState extends State<ProjectFundsPage> {
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               DropdownButtonFormField<String>(
-                value: mode,
+                initialValue: mode,
                 decoration: bizInput(ctx, 'When'),
                 items: [for (final e in _modeLabels.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
                 onChanged: (v) => setD(() => mode = v ?? 'off'),
